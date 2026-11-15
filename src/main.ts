@@ -541,9 +541,11 @@ async function main() {
 
   // --------------------------------------------------------------- GUI ---
   const gui = new GUI({ title: 'Glass Cube', width: 300 });
+  // Folded to its title bar at first, so the scene is not covered.
+  gui.close();
   const status = { fps: '0', triangles: '0', moving: '0' };
-  /** Settings of the page itself, kept whatever the scene (?stats=0 hides the panel). */
-  const ui = { stats: query.get('stats') !== '0' };
+  /** Settings of the page itself, kept whatever the scene (?stats=1 shows the panel). */
+  const ui = { stats: query.get('stats') === '1' };
 
   /** Keep the address in step, so that reloading or sharing it opens the same scene. */
   const updateAddress = () => {
@@ -787,6 +789,7 @@ async function main() {
     panel.id = 'stats';
     panel.style.cssText =
       'position:fixed;left:12px;bottom:12px;display:grid;grid-template-columns:auto auto;column-gap:16px;padding:8px 10px;font:12px/1.5 ui-monospace,monospace;font-variant-numeric:tabular-nums;color:#eee;background:rgba(20,20,20,0.8);border-radius:6px;pointer-events:none;z-index:10';
+    panel.style.display = ui.stats ? 'grid' : 'none'; // (hidden from the start, not after its first update)
     document.body.append(panel);
     /** The panel's rows: [name, value], or a heading (a name alone, across both columns). */
     const fill = (rows: ([string, string] | [string])[]) => {

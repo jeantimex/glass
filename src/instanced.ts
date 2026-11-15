@@ -117,7 +117,9 @@ type Pass = 'CAUSTIC' | 'GROUND' | 'GLASS' | 'BLUR' | 'SHADE' | 'LENS' | 'PHOTON
 function programFor(pass: Pass): string {
   const kept: string[] = [];
   let keep = true;
-  for (const line of source.split('\n')) {
+  // (Either line ending: with Windows ones, the \r left on each `//#if` line kept it
+  // from being seen, and every pass got every section.)
+  for (const line of source.split(/\r?\n/)) {
     const open = line.match(/^\s*\/\/#if (.+)$/);
     if (open) keep = open[1].trim().split(/\s+/).includes(pass);
     else if (/^\s*\/\/#endif/.test(line)) keep = true;
