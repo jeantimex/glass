@@ -543,1165 +543,1165 @@ var<${n}> ${e} : ${a};`}},HD=new FE,UD=new IE,WD=new Map([[Int8Array,[`sint8`,`s
 `);for(let r of e.messages){let e=r.lineNum>0?` at line ${r.lineNum}${r.linePos>0?`:${r.linePos}`:``}`:``,a=`WebGPURenderer [${t} / ${n.stage} ${r.type}]${e}: ${r.message}`,o=``;r.lineNum>0&&r.lineNum<=i.length&&(o=`\n  ${i[r.lineNum-1]}`,r.linePos>0&&(o+=`\n  ${` `.repeat(r.linePos-1)}^`)),(r.type===`error`?j:A)(a+o)}}}_getBlending(e){let t,n,r=e.blending,i=e.blendSrc,a=e.blendDst,o=e.blendEquation;if(r===5){let r=e.blendSrcAlpha===null?i:e.blendSrcAlpha,s=e.blendDstAlpha===null?a:e.blendDstAlpha,c=e.blendEquationAlpha===null?o:e.blendEquationAlpha;t={srcFactor:this._getBlendFactor(i),dstFactor:this._getBlendFactor(a),operation:this._getBlendOperation(o)},n={srcFactor:this._getBlendFactor(r),dstFactor:this._getBlendFactor(s),operation:this._getBlendOperation(c)}}else{let i=e.premultipliedAlpha,a=(e,r,i,a)=>{t={srcFactor:e,dstFactor:r,operation:mE.Add},n={srcFactor:i,dstFactor:a,operation:mE.Add}};if(i)switch(r){case 1:a(pE.One,pE.OneMinusSrcAlpha,pE.One,pE.OneMinusSrcAlpha);break;case 2:a(pE.One,pE.One,pE.One,pE.One);break;case 3:a(pE.Zero,pE.OneMinusSrc,pE.Zero,pE.One);break;case 4:a(pE.Dst,pE.OneMinusSrcAlpha,pE.Zero,pE.One)}else switch(r){case 1:a(pE.SrcAlpha,pE.OneMinusSrcAlpha,pE.One,pE.OneMinusSrcAlpha);break;case 2:a(pE.SrcAlpha,pE.One,pE.One,pE.One);break;case 3:j(`WebGPURenderer: "SubtractiveBlending" requires "${e.isMaterial?`material`:`blendMode`}.premultipliedAlpha = true".`);break;case 4:j(`WebGPURenderer: "MultiplyBlending" requires "${e.isMaterial?`material`:`blendMode`}.premultipliedAlpha = true".`)}}if(t!==void 0&&n!==void 0)return{color:t,alpha:n};j(`WebGPURenderer: Invalid blending: `,r)}_getBlendFactor(e){let t;switch(e){case 200:t=pE.Zero;break;case 201:t=pE.One;break;case 202:t=pE.Src;break;case 203:t=pE.OneMinusSrc;break;case 204:t=pE.SrcAlpha;break;case 205:t=pE.OneMinusSrcAlpha;break;case 208:t=pE.Dst;break;case 209:t=pE.OneMinusDst;break;case 206:t=pE.DstAlpha;break;case 207:t=pE.OneMinusDstAlpha;break;case 210:t=pE.SrcAlphaSaturated;break;case 211:case 213:t=pE.Constant;break;case 212:case 214:t=pE.OneMinusConstant;break;default:j(`WebGPURenderer: Blend factor not supported.`,e)}return t}_getStencilCompare(e){let t,n=e.stencilFunc;switch(n){case 512:t=aE.Never;break;case 519:t=aE.Always;break;case 513:t=aE.Less;break;case 515:t=aE.LessEqual;break;case 514:t=aE.Equal;break;case 518:t=aE.GreaterEqual;break;case 516:t=aE.Greater;break;case 517:t=aE.NotEqual;break;default:j(`WebGPURenderer: Invalid stencil function.`,n)}return t}_getStencilOperation(e){let t;switch(e){case $e:t=gE.Keep;break;case 0:t=gE.Zero;break;case et:t=gE.Replace;break;case at:t=gE.Invert;break;case tt:t=gE.IncrementClamp;break;case nt:t=gE.DecrementClamp;break;case rt:t=gE.IncrementWrap;break;case it:t=gE.DecrementWrap;break;default:j(`WebGPURenderer: Invalid stencil operation.`,t)}return t}_getBlendOperation(e){let t;switch(e){case 100:t=mE.Add;break;case 101:t=mE.Subtract;break;case 102:t=mE.ReverseSubtract;break;case 103:t=mE.Min;break;case 104:t=mE.Max;break;default:j(`WebGPUPipelineUtils: Blend equation not supported.`,e)}return t}_getPrimitiveState(e,t,n){let r={},i=this.backend.utils;r.topology=i.getPrimitiveTopology(e,n),r.stripIndexFormat=i.getStripIndexFormat(e,t);let a=n.side===1;return e.isMesh&&e.matrixWorld.determinantAffine()<0&&(a=!a),r.frontFace=a===!0?cE.CW:cE.CCW,r.cullMode=n.side===2?lE.None:lE.Back,r}_getColorWriteMask(e){return e.colorWrite===!0?hE.All:hE.None}_getDepthCompare(e){let t;if(e.depthTest===!1)t=aE.Always;else{let n=this.backend.parameters.reversedDepthBuffer?St[e.depthFunc]:e.depthFunc;switch(n){case 0:t=aE.Never;break;case 1:t=aE.Always;break;case 2:t=aE.Less;break;case 3:t=aE.LessEqual;break;case 4:t=aE.Equal;break;case 5:t=aE.GreaterEqual;break;case 6:t=aE.Greater;break;case 7:t=aE.NotEqual;break;default:j(`WebGPUPipelineUtils: Invalid depth function.`,n)}}return t}},lO=class{constructor(){this.label=``,this.type=void 0,this.count=0}reset(){this.label=``,this.type=void 0,this.count=0}},uO=new FE,dO=new IE,fO=new lO,pO=class extends $T{constructor(e,t,n=2048){super(n),this.device=e,this.type=t,fO.label=`queryset_global_timestamp_${t}`,fO.type=`timestamp`,fO.count=this.maxQueries,this.querySet=this.device.createQuerySet(fO),fO.reset();let r=this.maxQueries*8;uO.label=`buffer_timestamp_resolve_${t}`,uO.size=r,uO.usage=GPUBufferUsage.QUERY_RESOLVE|GPUBufferUsage.COPY_SRC,this.resolveBuffer=this.device.createBuffer(uO),uO.reset(),uO.label=`buffer_timestamp_result_${t}`,uO.size=r,uO.usage=GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ,this.resultBuffer=this.device.createBuffer(uO),uO.reset()}allocateQueriesForContext(e){if(!this.trackTimestamp||this.isDisposed)return null;this.currentQueryIndex+2>this.maxQueries&&(this.resolveQueriesAsync(),this.currentQueryIndex=0,this.queryOffsets.clear());let t=this.currentQueryIndex;return this.currentQueryIndex+=2,this.queryOffsets.set(e,t),t}async resolveQueriesAsync(){if(!this.trackTimestamp||this.currentQueryIndex===0||this.isDisposed)return this.lastValue;if(this.pendingResolve)return this.pendingResolve;this.pendingResolve=this._resolveQueries();try{return await this.pendingResolve}finally{this.pendingResolve=null}}async _resolveQueries(){if(this.isDisposed)return this.lastValue;try{if(this.resultBuffer.mapState!==`unmapped`)return this.lastValue;let e=new Map(this.queryOffsets),t=this.currentQueryIndex,n=t*8;this.currentQueryIndex=0,this.queryOffsets.clear();let r=this.device.createCommandEncoder(dO);r.resolveQuerySet(this.querySet,0,t,this.resolveBuffer,0),r.copyBufferToBuffer(this.resolveBuffer,0,this.resultBuffer,0,n);let i=r.finish();if(NE(this.device,i),this.resultBuffer.mapState!==`unmapped`)return this.lastValue;if(await this.resultBuffer.mapAsync(GPUMapMode.READ,0,n),this.isDisposed)return this.resultBuffer.mapState===`mapped`&&this.resultBuffer.unmap(),this.lastValue;let a=new BigUint64Array(this.resultBuffer.getMappedRange(0,n)),o={},s=[];this.timestamps.clear();for(let[t,n]of e){let e=t.match(/^(.*):f(\d+)$/),r=parseInt(e[2]);s.includes(r)===!1&&s.push(r),o[r]===void 0&&(o[r]=0);let i=a[n],c=a[n+1],l=Number(c-i)/1e6;this.timestamps.set(t,l),o[r]+=l}let c=o[s[s.length-1]];return this.resultBuffer.unmap(),this.lastValue=c,this.frames=s,c}catch(e){return j(`Error resolving queries:`,e),this.resultBuffer.mapState===`mapped`&&this.resultBuffer.unmap(),this.lastValue}}async dispose(){if(!this.isDisposed){if(this.isDisposed=!0,this.pendingResolve)try{await this.pendingResolve}catch(e){j(`Error waiting for pending resolve:`,e)}if(this.resultBuffer&&this.resultBuffer.mapState===`mapped`)try{this.resultBuffer.unmap()}catch(e){j(`Error unmapping buffer:`,e)}this.querySet&&=(this.querySet.destroy(),null),this.resolveBuffer&&=(this.resolveBuffer.destroy(),null),this.resultBuffer&&=(this.resultBuffer.destroy(),null),this.queryOffsets.clear(),this.timestamps.clear(),this.frames=[],this.pendingResolve=null}}},mO=class{constructor(){this.label=``,this.timestampWrites=void 0}reset(){this.label=``,this.timestampWrites=void 0}},hO=class{constructor(){this.view=null,this.depthLoadOp=void 0,this.depthStoreOp=void 0,this.depthClearValue=void 0,this.depthReadOnly=!1,this.stencilLoadOp=void 0,this.stencilStoreOp=void 0,this.stencilClearValue=0,this.stencilReadOnly=!1}reset(){this.view=null,this.depthLoadOp=void 0,this.depthStoreOp=void 0,this.depthClearValue=void 0,this.depthReadOnly=!1,this.stencilLoadOp=void 0,this.stencilStoreOp=void 0,this.stencilClearValue=0,this.stencilReadOnly=!1}},gO=class{constructor(){this.querySet=null,this.beginningOfPassWriteIndex=void 0,this.endOfPassWriteIndex=void 0}reset(){this.querySet=null,this.beginningOfPassWriteIndex=void 0,this.endOfPassWriteIndex=void 0}},_O={r:0,g:0,b:0,a:1},vO={r:0,g:0,b:0,a:0},yO=new FE,bO=new IE,xO=new mO,SO=new lO,CO=new HE,wO=new gO,TO=new rD,EO=new rD,DO=new UE,OO=new WE,kO=new cD,AO=class extends PT{constructor(e={}){super(e),this.isWebGPUBackend=!0,this.parameters.alpha=e.alpha===void 0||e.alpha,this.parameters.requiredLimits=e.requiredLimits===void 0?{}:e.requiredLimits,this.compatibilityMode=null,this.device=null,this.defaultRenderPassdescriptor=null,this.utils=new ME(this),this.attributeUtils=new YD(this),this.bindingUtils=new eO(this),this.capabilities=new tO(this),this.pipelineUtils=new cO(this),this.textureUtils=new SD(this),this.occludedResolveCache=new Map;let t=typeof navigator>`u`||/Android/.test(navigator.userAgent)===!1;this._compatibility={[dt.TEXTURE_COMPARE]:t}}async init(e){await super.init(e);let t=this.parameters,n;if(t.device===void 0){let r={powerPreference:t.powerPreference,featureLevel:`compatibility`,xrCompatible:e.xr.enabled},i=typeof navigator<`u`?await navigator.gpu.requestAdapter(r):null;if(i===null)throw Error(`THREE.WebGPUBackend: Unable to create WebGPU adapter.`);let a=Object.values(TE),o=[];for(let e of a)i.features.has(e)&&o.push(e);let s={requiredFeatures:o,requiredLimits:t.requiredLimits};n=await i.requestDevice(s)}else n=t.device;this.compatibilityMode=!n.features.has(`core-features-and-limits`),this.compatibilityMode&&(e._samples=0),n.lost.then(t=>{if(t.reason===`destroyed`)return;let n={api:`WebGPU`,message:t.message||`Unknown reason`,reason:t.reason||null,originalEvent:t};e.onDeviceLost(n)}),n.onuncapturederror=t=>{let n=t.error,r=n&&n.constructor?n.constructor.name:`GPUError`,i=n&&n.message||`Unknown uncaptured GPU error`;e.onError({api:`WebGPU`,type:r,message:i,originalEvent:t})},this.device=n,this.trackTimestamp=this.trackTimestamp&&this.hasFeature(TE.TimestampQuery),this.updateSize()}setXRRenderTargetTextures(e,t,n=null){let r=this.get(e.texture);r.texture=t,r.format=t.format,r.externalTexture=!0,r.xrViewDescriptors=n,r.initialized=!0}get context(){let e=this.renderer.getCanvasTarget(),t=this.get(e),n=t.context;if(n===void 0){let r=this.parameters;n=e.isDefaultCanvasTarget===!0&&r.context!==void 0?r.context:e.domElement.getContext(`webgpu`),`setAttribute`in e.domElement&&e.domElement.setAttribute(`data-engine`,`three.js r187 webgpu`);let i=r.alpha?`premultiplied`:`opaque`,a=r.outputType===1016?`extended`:`standard`;n.configure({device:this.device,format:this.utils.getPreferredCanvasFormat(),usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC,alphaMode:i,toneMapping:{mode:a}}),t.context=n}return n}get coordinateSystem(){return lt}get hasTimestamp(){return!0}async getArrayBufferAsync(e,t=null,n=0,r=-1){return await this.attributeUtils.getArrayBufferAsync(e,t,n,r)}getContext(){return this.context}_getDefaultRenderPassDescriptor(){let e=this.renderer,t=e.getCanvasTarget(),n=this.get(t),r=e.currentSamples,i=n.descriptor;if(i===void 0||n.samples!==r){if(i=new zE,i.colorAttachments.push(new RE),e.depth===!0||e.stencil===!0){let t=new hO;t.view=this.textureUtils.getDepthBuffer(e.depth,e.stencil).createView(),i.depthStencilAttachment=t}let t=i.colorAttachments[0];r>0?t.view=this.textureUtils.getColorBuffer().createView():t.resolveTarget=void 0,n.descriptor=i,n.samples=r}let a=i.colorAttachments[0];return r>0?a.resolveTarget=this.context.getCurrentTexture().createView():a.view=this.context.getCurrentTexture().createView(),i}_isRenderCameraDepthArray(e){let t=e.camera;return e.depthTexture&&e.depthTexture.isArrayTexture===!0&&t!==null&&t.isArrayCamera===!0}_hasExternalTexture(e){let t=e.textures;if(t===null)return!1;for(let e=0;e<t.length;e++)if(this.get(t[e]).externalTexture===!0)return!0;return!1}_getExternalMSAATextures(e,t,n){let r=this.utils.getSampleCount(e.sampleCount);if(r===1){if(t.msaaTextures!==void 0){for(let e of t.msaaTextures)e.destroy();t.msaaTextures=void 0}return null}let i=e.renderTarget,a=i.width,o=i.height,s=t.format;if(t.msaaTextures===void 0||t.msaaTextures.length!==n||t.msaaWidth!==a||t.msaaHeight!==o||t.msaaSamples!==r||t.msaaFormat!==s){if(t.msaaTextures!==void 0)for(let e of t.msaaTextures)e.destroy();DO.size.width=a,DO.size.height=o,DO.sampleCount=r,DO.format=s,DO.usage=GPUTextureUsage.RENDER_ATTACHMENT,t.msaaTextures=[];for(let e=0;e<n;e++)DO.label=i.texture.name+`-msaa-`+e,t.msaaTextures.push(this.device.createTexture(DO));DO.reset(),t.msaaWidth=a,t.msaaHeight=o,t.msaaSamples=r,t.msaaFormat=s}return t.msaaTextures}_createExternalTextureViews(e,t){let n=[],r=e.camera,i=t.xrViewDescriptors,a=Math.max(i?.length||0,e.activeCubeFace+1,1),o=this._getExternalMSAATextures(e,t,a);if(i&&r!==null&&r.isArrayCamera===!0)for(let r=0;r<i.length;r++){let a=t.texture.createView(i[r]);n.push({view:o===null?a:o[r].createView(),resolveTarget:o!==null&&e.renderTarget.resolveColorBuffer===!0?a:void 0,depthSlice:void 0})}else{let r=e.activeCubeFace,i=t.texture.createView({dimension:SE.TwoD,baseArrayLayer:r,arrayLayerCount:1});n.push({view:o===null?i:o[r].createView(),resolveTarget:o!==null&&e.renderTarget.resolveColorBuffer===!0?i:void 0,depthSlice:void 0})}return n}_getRenderPassDescriptor(e,t={}){let n=e.renderTarget,r=this.get(n),i=this._hasExternalTexture(e),a=r.descriptors;(a===void 0||r.width!==n.width||r.height!==n.height||r.samples!==n.samples||i)&&(a={},r.descriptors=a);let o=e.getCacheKey(),s=a[o];if(s===void 0||i){let t=e.textures,i=[],c,l=this._isRenderCameraDepthArray(e);for(let r=0;r<t.length;r++){let a=this.get(t[r]);if(a.externalTexture===!0)i.push(...this._createExternalTextureViews(e,a));else{if(OO.label=`colorAttachment_${r}`,OO.baseMipLevel=e.activeMipmapLevel,OO.mipLevelCount=1,OO.baseArrayLayer=e.activeCubeFace,OO.arrayLayerCount=1,OO.dimension=SE.TwoD,n.isRenderTarget3D)c=e.activeCubeFace,OO.baseArrayLayer=0,OO.dimension=SE.ThreeD;else if(n.isRenderTarget&&t[r].image.depth>1){if(l===!0){let t=e.camera.cameras;for(let e=0;e<t.length;e++){OO.baseArrayLayer=e,OO.arrayLayerCount=1,OO.dimension=SE.TwoD;let t=a.texture.createView(OO),r=a.msaaTextures?.[e];i.push({view:r===void 0?t:r.createView(),resolveTarget:r!==void 0&&n.resolveColorBuffer===!0?t:void 0,depthSlice:void 0})}}else OO.dimension=SE.TwoDArray}if(l!==!0){let t=a.texture.createView(OO),r,o;a.msaaTexture===void 0?a.msaaTextures===void 0?(r=t,o=void 0):(r=a.msaaTextures[e.activeCubeFace].createView(),o=n.resolveColorBuffer===!0?t:void 0):(r=a.msaaTexture.createView(),o=n.resolveColorBuffer===!0?t:void 0),i.push({view:r,resolveTarget:o,depthSlice:c})}OO.reset()}}let u=[];for(let e=0;e<i.length;e++){let t=i[e],n=new RE;n.view=t.view,n.depthSlice=t.depthSlice,n.resolveTarget=t.resolveTarget,u.push(n)}if(s={textureViews:i,colorAttachments:u,descriptor:new zE},e.depth){let t=this.get(e.depthTexture);(e.depthTexture.isArrayTexture||e.depthTexture.isCubeTexture)&&(OO.dimension=SE.TwoD,OO.arrayLayerCount=1,OO.baseArrayLayer=e.activeCubeFace);let n=new hO,r=t.msaaTextures?.[e.activeCubeFace];n.view=r===void 0?t.texture.createView(OO):r.createView(),s.depthStencilAttachment=n,OO.reset()}a[o]=s,r.width=n.width,r.height=n.height,r.samples=n.samples,r.activeMipmapLevel=e.activeMipmapLevel,r.activeCubeFace=e.activeCubeFace}let c=s.descriptor;c.reset();for(let e=0;e<s.colorAttachments.length;e++){let n=s.colorAttachments[e],r={r:0,g:0,b:0,a:1};e===0&&t.clearValue&&(r=t.clearValue),n.loadOp=t.loadOp||sE.Load,n.storeOp=t.storeOp||oE.Store,n.clearValue=r,c.colorAttachments.push(n)}return s.depthStencilAttachment&&(c.depthStencilAttachment=s.depthStencilAttachment),c}beginRender(e){let t=this.get(e),n=this.device,r=e.occlusionQueryCount,i=this.getOcclusionData(e),a;r>0?(i.currentOcclusionQuerySet&&i.currentOcclusionQuerySet.destroy(),i.currentOcclusionQueryBuffer&&i.currentOcclusionQueryBuffer.destroy(),i.currentOcclusionQuerySet=i.occlusionQuerySet,i.currentOcclusionQueryBuffer=i.occlusionQueryBuffer,i.currentOcclusionQueryObjects=i.occlusionQueryObjects,SO.label=`occlusionQuerySet_${e.id}`,SO.type=`occlusion`,SO.count=r,a=n.createQuerySet(SO),SO.reset(),i.occlusionQuerySet=a,i.occlusionQueryIndex=0,i.occlusionQueryObjects=Array(r),i.lastOcclusionObject=null):i.lastOcclusionObject!==void 0&&(i.lastOcclusionObject=void 0,i.occlusionQuerySet.destroy(),i.occlusionQuerySet=void 0);let o;o=e.textures===null?this._getDefaultRenderPassDescriptor():this._getRenderPassDescriptor(e,{loadOp:sE.Load}),this.initTimestampQuery(ut.RENDER,this.getTimestampUID(e),o),o.occlusionQuerySet=a;let s=o.depthStencilAttachment,c=e.renderTarget,l=e.sampleCount>1&&c?.storeMultisampledColorBuffer===!1,u=e.sampleCount>1&&c?.storeMultisampledDepthBuffer===!1,d=e.sampleCount>1&&c?.storeMultisampledStencilBuffer===!1,f=e.fullscreenPass===!0&&this._hasExternalTexture(e);if(e.textures!==null){let t=o.colorAttachments;for(let n=0;n<t.length;n++){let r=t[n];if(e.clearColor||l||f){let t=e.mrt?e.mrt.getClearColor(e.textures[n].name):null;t===null?n===0?r.clearValue=e.clearColorValue:(_O.r=0,_O.g=0,_O.b=0,_O.a=1,r.clearValue=_O):r.clearValue=t,r.loadOp=sE.Clear}else r.loadOp=sE.Load;r.storeOp=l?oE.Discard:oE.Store}}else{let t=o.colorAttachments[0];e.clearColor?(t.clearValue=e.clearColorValue,t.loadOp=sE.Clear):t.loadOp=sE.Load,t.storeOp=oE.Store}e.depth&&(e.clearDepth||u?(s.depthClearValue=e.clearDepthValue,s.depthLoadOp=sE.Clear):s.depthLoadOp=sE.Load,s.depthStoreOp=u?oE.Discard:oE.Store),e.stencil&&(e.clearStencil||d?(s.stencilClearValue=e.clearStencilValue,s.stencilLoadOp=sE.Clear):s.stencilLoadOp=sE.Load,s.stencilStoreOp=d?oE.Discard:oE.Store),bO.label=`renderContext_`+e.id;let p=n.createCommandEncoder(bO);if(bO.reset(),this._isRenderCameraDepthArray(e)===!0){let n=e.camera.cameras,r=this.get(e.depthTexture).texture;!t.layerDescriptors||t.layerDescriptors.length!==n.length||t.layerDepthTexture!==r?(this._createArrayCameraLayerDescriptors(e,t,o,n),t.layerDepthTexture=r):this._updateArrayCameraLayerDescriptors(e,t,o,n),this._createArrayCameraBundleEncoders(e,t),t.arrayCameraRenderStages=[],t.currentPass=null}else t.bundleEncoders=void 0,t.bundleSets=void 0,t.arrayCameraRenderStages=void 0,t.currentPass=p.beginRenderPass(o),e.viewport&&this.updateViewport(e),e.scissor&&this.updateScissor(e);t.descriptor=o,t.encoder=p,t.renderBundles=[],this._resetRenderContextData(t)}_resetRenderContextData(e){e.currentSets={attributes:{},bindingGroups:[],pipeline:null,index:null},e.currentBlendColor===void 0&&(e.currentBlendColor=new nr),e.currentBlendColor.setRGB(0,0,0),e.currentBlendAlpha=0,e.currentStencilRef=0}_createArrayCameraBundleEncoders(e,t){let n=e.camera.cameras;t.bundleEncoders=[],t.bundleSets=[];for(let r=0;r<n.length;r++){let n=this.pipelineUtils.createBundleEncoder(e,`renderBundleArrayCamera_`+r);t.bundleEncoders.push(n),t.bundleSets.push({attributes:{},bindingGroups:[],pipeline:null,index:null})}}_finishArrayCameraBundleEncoders(e){let t=[];for(let n of e.bundleEncoders)t.push(n.finish());return t}_createArrayCameraLayerDescriptors(e,t,n,r){let i=n.depthStencilAttachment;t.layerDescriptors=[];let a=this.get(e.depthTexture);a.viewCache||=[];for(let o=0;o<r.length;o++){let r=new zE;if(r.label=n.label,r.occlusionQuerySet=n.occlusionQuerySet,r.timestampWrites=n.timestampWrites,n.colorAttachments.length>0){let e=n.colorAttachments[0],t=n.colorAttachments[o],i=new RE;i.view=t.view,i.depthSlice=t.depthSlice,i.resolveTarget=t.resolveTarget,i.loadOp=e.loadOp,i.storeOp=e.storeOp,i.clearValue=e.clearValue,r.colorAttachments.push(i)}if(n.depthStencilAttachment){let t=o;if(!a.viewCache[t]){let e=a.msaaTextures?.[t];e===void 0?(OO.dimension=SE.TwoD,OO.baseArrayLayer=o,OO.arrayLayerCount=1,a.viewCache[t]=a.texture.createView(OO)):a.viewCache[t]=e.createView(),OO.reset()}let n=new hO;n.view=a.viewCache[t],n.depthLoadOp=i.depthLoadOp||sE.Clear,n.depthStoreOp=i.depthStoreOp||oE.Store,n.depthClearValue=i.depthClearValue??1,e.stencil&&(n.stencilLoadOp=i.stencilLoadOp,n.stencilStoreOp=i.stencilStoreOp,n.stencilClearValue=i.stencilClearValue),r.depthStencilAttachment=n}else{let e=new hO;e.view=i.view,e.depthLoadOp=i.depthLoadOp,e.depthStoreOp=i.depthStoreOp,e.depthClearValue=i.depthClearValue,e.depthReadOnly=i.depthReadOnly,e.stencilLoadOp=i.stencilLoadOp,e.stencilStoreOp=i.stencilStoreOp,e.stencilClearValue=i.stencilClearValue,e.stencilReadOnly=i.stencilReadOnly,r.depthStencilAttachment=e}t.layerDescriptors.push(r)}}_updateArrayCameraLayerDescriptors(e,t,n,r){let i=e.renderTarget,a=e.sampleCount>1&&i?.storeMultisampledDepthBuffer===!1,o=e.sampleCount>1&&i?.storeMultisampledStencilBuffer===!1;for(let i=0;i<r.length;i++){let r=t.layerDescriptors[i];if(r.timestampWrites=n.timestampWrites,n.colorAttachments.length>0){let e=n.colorAttachments[0],t=n.colorAttachments[i],a=r.colorAttachments[0];a.view=t.view,a.resolveTarget=t.resolveTarget,a.depthSlice=t.depthSlice,a.loadOp=e.loadOp,a.storeOp=e.storeOp,a.clearValue=e.clearValue}if(r.depthStencilAttachment){let t=r.depthStencilAttachment;e.depth&&(e.clearDepth||a?(t.depthClearValue=e.clearDepthValue,t.depthLoadOp=sE.Clear):t.depthLoadOp=sE.Load),e.stencil&&(e.clearStencil||o?(t.stencilClearValue=e.clearStencilValue,t.stencilLoadOp=sE.Clear):t.stencilLoadOp=sE.Load)}}}finishRender(e){let t=this.get(e),n=e.occlusionQueryCount,r=this.getOcclusionData(e);t.renderBundles.length>0&&t.currentPass.executeBundles(t.renderBundles);let i=r.lastOcclusionObject;i&&i.occlusionTest===!0&&t.currentPass.endOcclusionQuery();let a=t.encoder;if(this._isRenderCameraDepthArray(e)===!0){let n=this._finishArrayCameraBundleEncoders(t),r=t.arrayCameraRenderStages;r.push({bundles:n});for(let n=0;n<t.layerDescriptors.length;n++){let i=t.layerDescriptors[n],o=i.colorAttachments.map(e=>e.loadOp),s=i.colorAttachments.map(e=>e.storeOp),c=i.depthStencilAttachment?.depthLoadOp,l=i.depthStencilAttachment?.depthStoreOp,u=i.depthStencilAttachment?.stencilLoadOp,d=i.depthStencilAttachment?.stencilStoreOp;for(let t=0;t<r.length;t++){let f=r[t],p=f.bundles[n],m=t===r.length-1;for(let e=0;e<i.colorAttachments.length;e++){let n=i.colorAttachments[e];n.loadOp=t===0?o[e]:sE.Load,n.storeOp=m?s[e]:oE.Store}e.depth&&(i.depthStencilAttachment.depthLoadOp=t===0?c:sE.Load,i.depthStencilAttachment.depthStoreOp=m?l:oE.Store),e.stencil&&(i.depthStencilAttachment.stencilLoadOp=t===0?u:sE.Load,i.depthStencilAttachment.stencilStoreOp=m?d:oE.Store);let h=a.beginRenderPass(i);if(e.viewport){let{x:t,y:n,width:r,height:i,minDepth:a,maxDepth:o}=e.viewportValue;h.setViewport(t,n,r,i,a,o)}if(e.scissor){let{x:t,y:n,width:r,height:i}=e.scissorValue;h.setScissorRect(t,n,r,i)}if(h.executeBundles([p]),h.end(),f.framebufferCopy!==void 0){let{texture:e,sourceGPU:t,destinationGPU:r,rectangle:i,generateMipmaps:o}=f.framebufferCopy;this._copyFramebufferToTexture(a,e,t,r,i,n,o)}}for(let e=0;e<i.colorAttachments.length;e++)i.colorAttachments[e].loadOp=o[e],i.colorAttachments[e].storeOp=s[e];e.depth&&(i.depthStencilAttachment.depthLoadOp=c,i.depthStencilAttachment.depthStoreOp=l),e.stencil&&(i.depthStencilAttachment.stencilLoadOp=u,i.depthStencilAttachment.stencilStoreOp=d)}}else t.currentPass&&t.currentPass.end();if(n>0){let i=n*8,a=this.occludedResolveCache.get(i);a===void 0&&(yO.size=i,yO.usage=GPUBufferUsage.QUERY_RESOLVE|GPUBufferUsage.COPY_SRC,a=this.device.createBuffer(yO),yO.reset(),this.occludedResolveCache.set(i,a)),yO.size=i,yO.usage=GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ;let o=this.device.createBuffer(yO);yO.reset(),t.encoder.resolveQuerySet(r.occlusionQuerySet,0,n,a,0),t.encoder.copyBufferToBuffer(a,0,o,0,i),r.occlusionQueryBuffer=o,this.resolveOccludedAsync(e)}if(NE(this.device,t.encoder.finish()),t.currentPass=null,t.encoder=null,e.textures!==null){let t=e.textures;for(let e=0;e<t.length;e++){let n=t[e];n.generateMipmaps===!0&&n.mipmapsAutoUpdate===!0&&this.textureUtils.generateMipmaps(n)}}}isOccluded(e,t){let n=this.getOcclusionData(e);return n.occluded&&n.occluded.has(t)}async resolveOccludedAsync(e){let t=this.getOcclusionData(e),{currentOcclusionQueryBuffer:n,currentOcclusionQueryObjects:r}=t;if(n&&r){let e=new WeakSet;t.currentOcclusionQueryObjects=null,t.currentOcclusionQueryBuffer=null,await n.mapAsync(GPUMapMode.READ);let i=n.getMappedRange(),a=new BigUint64Array(i);for(let t=0;t<r.length;t++){let n=r[t];n!==void 0&&a[t]===BigInt(0)&&e.add(n)}n.destroy(),t.occluded=e}}updateViewport(e){let{currentPass:t}=this.get(e),{x:n,y:r,width:i,height:a,minDepth:o,maxDepth:s}=e.viewportValue;t.setViewport(n,r,i,a,o,s)}updateScissor(e){let{currentPass:t}=this.get(e),{x:n,y:r,width:i,height:a}=e.scissorValue;t.setScissorRect(n,r,i,a)}getClearColor(){let e=super.getClearColor();return this.renderer.alpha===!0&&(e.r*=e.a,e.g*=e.a,e.b*=e.a),e}clear(e,t,n,r=null){let i=this.device,a=this.renderer,o=[],s,c,l;if(e){let e=this.getClearColor();_O.r=e.r,_O.g=e.g,_O.b=e.b,_O.a=e.a}if(r===null){c=a.depth,l=a.stencil;let t=this._getDefaultRenderPassDescriptor();if(e){o=t.colorAttachments;let e=o[0];e.clearValue=_O,e.loadOp=sE.Clear,e.storeOp=oE.Store}(c||l)&&(s=t.depthStencilAttachment)}else{c=r.depth,l=r.stencil;let i={loadOp:e?sE.Clear:sE.Load,clearValue:e?_O:void 0};c&&(i.depthLoadOp=t?sE.Clear:sE.Load,i.depthClearValue=t?a.getClearDepth():void 0,i.depthStoreOp=oE.Store),l&&(i.stencilLoadOp=n?sE.Clear:sE.Load,i.stencilClearValue=n?a.getClearStencil():void 0,i.stencilStoreOp=oE.Store);let u=this._getRenderPassDescriptor(r,i);o=u.colorAttachments,s=u.depthStencilAttachment}c&&s&&(t?(s.depthLoadOp=sE.Clear,s.depthClearValue=a.getClearDepth(),s.depthStoreOp=oE.Store):(s.depthLoadOp=sE.Load,s.depthStoreOp=oE.Store)),l&&s&&(n?(s.stencilLoadOp=sE.Clear,s.stencilClearValue=a.getClearStencil(),s.stencilStoreOp=oE.Store):(s.stencilLoadOp=sE.Load,s.stencilStoreOp=oE.Store)),bO.label=`clear`;let u=i.createCommandEncoder(bO);bO.reset(),u.beginRenderPass({colorAttachments:o,depthStencilAttachment:s}).end(),NE(i,u.finish())}beginCompute(e){let t=this.get(e),n=`computeGroup_`+e.id;xO.label=n,bO.label=n,this.initTimestampQuery(ut.COMPUTE,this.getTimestampUID(e),xO),t.cmdEncoderGPU=this.device.createCommandEncoder(bO),t.passEncoderGPU=t.cmdEncoderGPU.beginComputePass(xO),t.currentPipeline=null,bO.reset(),xO.reset()}compute(e,t,n,r,i=null){let a=this.get(t),o=this.get(e),{passEncoderGPU:s}=o,c=this.get(r).pipeline;o.currentPipeline!==c&&(s.setPipeline(c),o.currentPipeline=c);for(let e=0,t=n.length;e<t;e++){let t=n[e],r=this.get(t);s.setBindGroup(e,r.group)}if(i===null&&(i=t.dispatchSize||t.count),i&&i.isIndirectStorageBufferAttribute){let e=this.get(i).buffer;s.dispatchWorkgroupsIndirect(e,0)}else{if(typeof i==`number`){let e=i;if(a.dispatchSize===void 0||a.count!==e){a.dispatchSize=[0,1,1],a.count=e;let n=t.workgroupSize,r=n[0];for(let e=1;e<n.length;e++)r*=n[e];let o=Math.ceil(e/r),s=this.device.limits.maxComputeWorkgroupsPerDimension;i=[o,1,1],o>s&&(i[0]=Math.min(o,s),i[1]=Math.ceil(o/s)),a.dispatchSize=i}i=a.dispatchSize}s.dispatchWorkgroups(i[0],i[1]||1,i[2]||1)}}finishCompute(e){let t=this.get(e);t.passEncoderGPU.end(),NE(this.device,t.cmdEncoderGPU.finish())}_draw(e,t,n,r,i,a,o,s,c,l=-1){let{object:u,material:d,context:f}=e,p=e.getIndex(),m=p!==null;c.pipeline!==r&&(s.setPipeline(r),c.pipeline=r);let h=c.bindingGroups;for(let e=0,t=i.length;e<t;e++){if(e===l)continue;let t=i[e],n=this.get(t).group;h[e]!==n&&(s.setBindGroup(e,n),h[e]=n)}if(m===!0&&c.index!==p){let e=this.get(p).buffer,t=p.array instanceof Uint16Array?uE.Uint16:uE.Uint32;s.setIndexBuffer(e,t),c.index=p}for(let e=0,t=a.length;e<t;e++){let t=a[e];if(c.attributes[e]!==t){let n=this.get(t).buffer;s.setVertexBuffer(e,n),c.attributes[e]=t}}if(f.stencil===!0&&d.stencilWrite===!0&&n.currentStencilRef!==d.stencilRef&&(s.setStencilReference(d.stencilRef),n.currentStencilRef=d.stencilRef),d.blending===5&&s.setBlendConstant!==void 0){let e=d.blendColor,t=d.blendAlpha;(e.equals(n.currentBlendColor)===!1||t!==n.currentBlendAlpha)&&(vO.r=e.r,vO.g=e.g,vO.b=e.b,vO.a=t,s.setBlendConstant(vO),n.currentBlendColor.copy(e),n.currentBlendAlpha=t)}if(u.isBatchedMesh===!0){let e=u._mergedDrawStarts,n=u._mergedDrawCounts,r=u._mergedDrawInstanceCounts,i=u._mergedDrawCount,a=u._multiDrawBytesPerElement,o=0;for(let c=0;c<i;c++){let i=r[c];m===!0?s.drawIndexed(n[c],i,e[c]/a,0,o):s.draw(n[c],i,e[c],o),t.update(u,n[c],i),o+=i}}else if(m===!0){let{vertexCount:n,instanceCount:r,firstVertex:i}=o,a=e.getIndirect();if(a!==null){let t=this.get(a).buffer,n=e.getIndirectOffset(),r=Array.isArray(n)?n:[n];for(let e=0;e<r.length;e++)s.drawIndexedIndirect(t,r[e])}else s.drawIndexed(n,r,i,0,0),t.update(u,n,r)}else{let{vertexCount:n,instanceCount:r,firstVertex:i}=o,a=e.getIndirect();if(a!==null){let t=this.get(a).buffer,n=e.getIndirectOffset(),r=Array.isArray(n)?n:[n];for(let e=0;e<r.length;e++)s.drawIndirect(t,r[e])}else s.draw(n,r,i,0),t.update(u,n,r)}}draw(e,t){let{object:n,context:r,pipeline:i}=e,a=this.get(r),o=this.get(i),s=o.pipeline;if(o.error===!0)return;let c=e.getDrawParameters();if(c===null)return;let l=e.getBindings(),u=e.getVertexBuffers();if(e.camera.isArrayCamera&&e.camera.cameras.length>0){let i=this.get(e.camera),o=e.camera.cameras,d=e.getBindingGroup(`cameraIndex`);if(i.indexesGPU===void 0||i.indexesGPU.length!==o.length){let e=this.get(d),t=[],n=new Uint32Array([0,0,0,0]);for(let r=0,i=o.length;r<i;r++){n[0]=r;let{layoutGPU:i}=e.layout,a=this.bindingUtils.createBindGroupIndex(n,i);t.push(a)}i.indexesGPU=t}let f=r.renderTarget,p=f===null||f.isPostProcessingRenderTarget===!0?this.renderer.getPixelRatio():1,m=d?l.indexOf(d):-1,h=r.frustumArray;for(let d=0,f=o.length;d<f;d++){let f=o[d];if(n.layers.test(f.layers)&&(e.camera.perCameraFrustumCulled===!1||n.frustumCulled===!1||n.intersectsFrustum(h.getFrustum(d)))){let n=f.viewport,o=a.currentPass,h=a.currentSets,g=a.bundleEncoders!==void 0;if(g){let e=a.bundleEncoders[d],t=a.bundleSets[d];o=e,h=t}if(n&&!g&&o.setViewport(Math.floor(n.x*p),Math.floor(n.y*p),Math.floor(n.width*p),Math.floor(n.height*p),r.viewportValue.minDepth,r.viewportValue.maxDepth),m!==-1&&i.indexesGPU){let e=i.indexesGPU[d];h.bindingGroups[m]!==e&&(o.setBindGroup(m,e),h.bindingGroups[m]=e)}this._draw(e,t,a,s,l,u,c,o,h,m)}}}else if(a.currentPass){if(a.currentPass instanceof GPURenderBundleEncoder)n.occlusionTest===!0&&bt(`WebGPUBackend: Occlusion queries can not be recorded into render bundles.`);else if(r.occlusionQueryCount>0){let e=this.getOcclusionData(r),t=e.lastOcclusionObject;t!==n&&(t!==null&&t.occlusionTest===!0&&(a.currentPass.endOcclusionQuery(),e.occlusionQueryIndex++),n.occlusionTest===!0&&(a.currentPass.beginOcclusionQuery(e.occlusionQueryIndex),e.occlusionQueryObjects[e.occlusionQueryIndex]=n),e.lastOcclusionObject=n)}this._draw(e,t,a,s,l,u,c,a.currentPass,a.currentSets)}}needsRenderUpdate(e){let t=this.get(e),{object:n,material:r,geometry:i}=e,a=this.utils,o=a.getSampleCountRenderContext(e.context),s=a.getCurrentColorSpace(e.context),c=a.getCurrentColorFormat(e.context),l=a.getCurrentDepthStencilFormat(e.context),u=a.getPrimitiveTopology(n,r),d=a.getStripIndexFormat(n,i),f=n.isMesh&&n.matrixWorld.determinantAffine()<0,p=!1;return(t.material!==r||t.materialVersion!==r.version||t.transparent!==r.transparent||t.blending!==r.blending||t.premultipliedAlpha!==r.premultipliedAlpha||t.blendSrc!==r.blendSrc||t.blendDst!==r.blendDst||t.blendEquation!==r.blendEquation||t.blendSrcAlpha!==r.blendSrcAlpha||t.blendDstAlpha!==r.blendDstAlpha||t.blendEquationAlpha!==r.blendEquationAlpha||t.colorWrite!==r.colorWrite||t.depthWrite!==r.depthWrite||t.depthTest!==r.depthTest||t.depthFunc!==r.depthFunc||t.stencilWrite!==r.stencilWrite||t.stencilFunc!==r.stencilFunc||t.stencilFail!==r.stencilFail||t.stencilZFail!==r.stencilZFail||t.stencilZPass!==r.stencilZPass||t.stencilFuncMask!==r.stencilFuncMask||t.stencilWriteMask!==r.stencilWriteMask||t.polygonOffset!==r.polygonOffset||t.polygonOffsetFactor!==r.polygonOffsetFactor||t.polygonOffsetUnits!==r.polygonOffsetUnits||t.side!==r.side||t.alphaToCoverage!==r.alphaToCoverage||t.sampleCount!==o||t.colorSpace!==s||t.colorFormat!==c||t.depthStencilFormat!==l||t.primitiveTopology!==u||t.stripIndexFormat!==d||t.frontFaceCW!==f||t.geometryVersion!==e.geometryVersion||t.clippingContextCacheKey!==e.clippingContextCacheKey)&&(t.material=r,t.materialVersion=r.version,t.transparent=r.transparent,t.blending=r.blending,t.premultipliedAlpha=r.premultipliedAlpha,t.blendSrc=r.blendSrc,t.blendDst=r.blendDst,t.blendEquation=r.blendEquation,t.blendSrcAlpha=r.blendSrcAlpha,t.blendDstAlpha=r.blendDstAlpha,t.blendEquationAlpha=r.blendEquationAlpha,t.colorWrite=r.colorWrite,t.depthWrite=r.depthWrite,t.depthTest=r.depthTest,t.depthFunc=r.depthFunc,t.stencilWrite=r.stencilWrite,t.stencilFunc=r.stencilFunc,t.stencilFail=r.stencilFail,t.stencilZFail=r.stencilZFail,t.stencilZPass=r.stencilZPass,t.stencilFuncMask=r.stencilFuncMask,t.stencilWriteMask=r.stencilWriteMask,t.polygonOffset=r.polygonOffset,t.polygonOffsetFactor=r.polygonOffsetFactor,t.polygonOffsetUnits=r.polygonOffsetUnits,t.side=r.side,t.alphaToCoverage=r.alphaToCoverage,t.sampleCount=o,t.colorSpace=s,t.colorFormat=c,t.depthStencilFormat=l,t.primitiveTopology=u,t.stripIndexFormat=d,t.frontFaceCW=f,t.geometryVersion=e.geometryVersion,t.clippingContextCacheKey=e.clippingContextCacheKey,p=!0),p}getRenderCacheKey(e){let{object:t,material:n,geometry:r}=e,i=this.utils,a=e.context,o=t.isMesh&&t.matrixWorld.determinantAffine()<0;return[n.transparent,n.blending,n.premultipliedAlpha,n.blendSrc,n.blendDst,n.blendEquation,n.blendSrcAlpha,n.blendDstAlpha,n.blendEquationAlpha,n.colorWrite,n.depthWrite,n.depthTest,n.depthFunc,n.stencilWrite,n.stencilFunc,n.stencilFail,n.stencilZFail,n.stencilZPass,n.stencilFuncMask,n.stencilWriteMask,n.polygonOffset,n.polygonOffsetFactor,n.polygonOffsetUnits,n.side,n.alphaToCoverage,o,i.getSampleCountRenderContext(a),i.getCurrentColorSpace(a),i.getCurrentColorFormat(a),i.getCurrentDepthStencilFormat(a),i.getPrimitiveTopology(t,n),i.getStripIndexFormat(t,r),this.attributeUtils.getVertexBufferLayoutCacheKey(e),e.clippingContextCacheKey].join()}updateSampler(e){return this.textureUtils.updateSampler(e)}destroySampler(e){this.textureUtils.destroySampler(e)}createDefaultTexture(e){return this.textureUtils.createDefaultTexture(e)}createTexture(e,t){this.textureUtils.createTexture(e,t)}updateTexture(e,t){this.textureUtils.updateTexture(e,t)}generateMipmaps(e){this.textureUtils.generateMipmaps(e)}destroyTexture(e,t=!1){this.textureUtils.destroyTexture(e,t)}async copyTextureToBuffer(e,t,n,r,i,a){return this.textureUtils.copyTextureToBuffer(e,t,n,r,i,a)}initTimestampQuery(e,t,n){if(!this.trackTimestamp){n.timestampWrites=void 0;return}this.timestampQueryPool[e]||(this.timestampQueryPool[e]=new pO(this.device,e,2048));let r=this.timestampQueryPool[e],i=r.allocateQueriesForContext(t);wO.querySet=r.querySet,wO.beginningOfPassWriteIndex=i,wO.endOfPassWriteIndex=i+1,n.timestampWrites=wO}createNodeBuilder(e,t){return new VD(e,t)}createProgram(e){let t=this.get(e);CO.label=e.stage+(e.name===``?``:`_${e.name}`),CO.code=e.code,t.module={module:this.device.createShaderModule(CO),entryPoint:`main`},CO.reset()}destroyProgram(e){this.delete(e)}createRenderPipeline(e,t){this.pipelineUtils.createRenderPipeline(e,t)}createComputePipeline(e,t,n=null){this.pipelineUtils.createComputePipeline(e,t,n)}beginBundle(e){let t=this.get(e);t._currentPass=t.currentPass,t._currentSets=t.currentSets,t.currentSets={attributes:{},bindingGroups:[],pipeline:null,index:null},t.currentPass=this.pipelineUtils.createBundleEncoder(e)}finishBundle(e,t){let n=this.get(e),r=n.currentPass.finish();this.get(t).bundleGPU=r,n.currentSets=n._currentSets,n.currentPass=n._currentPass,n._currentPass=null,n._currentSets=null}addBundle(e,t){this.get(e).renderBundles.push(this.get(t).bundleGPU)}createUniformBuffer(e){let t=this.get(e);if(t.buffer===void 0){let n=e.byteLength,r=GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST,i=[];e.visibility&iE.VERTEX&&i.push(`vertex`),e.visibility&iE.FRAGMENT&&i.push(`fragment`),e.visibility&iE.COMPUTE&&i.push(`compute`);let a=`(${i.join(`,`)})`;yO.label=`bindingBuffer${e.id}_${e.name}_${a}`,yO.size=n,yO.usage=r;let o=this.device.createBuffer(yO);yO.reset(),t.buffer=o}}destroyUniformBuffer(e){this.get(e).buffer.destroy(),this.delete(e)}createBindings(e,t,n,r){this.bindingUtils.createBindings(e,t,n,r)}updateBindings(e,t,n,r){this.bindingUtils.createBindings(e,t,n,r)}updateBinding(e){this.bindingUtils.updateBinding(e)}deleteBindGroupData(e){this.bindingUtils.deleteBindGroupData(e)}createIndexAttribute(e){let t=GPUBufferUsage.INDEX|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST;(e.isStorageBufferAttribute||e.isStorageInstancedBufferAttribute)&&(t|=GPUBufferUsage.STORAGE),this.attributeUtils.createAttribute(e,t)}createAttribute(e){this.attributeUtils.createAttribute(e,GPUBufferUsage.VERTEX|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST)}createStorageAttribute(e){this.attributeUtils.createAttribute(e,GPUBufferUsage.STORAGE|GPUBufferUsage.VERTEX|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST)}createIndirectStorageAttribute(e){this.attributeUtils.createAttribute(e,GPUBufferUsage.STORAGE|GPUBufferUsage.INDIRECT|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST)}updateAttribute(e){this.attributeUtils.updateAttribute(e)}destroyAttribute(e){this.attributeUtils.destroyAttribute(e)}updateSize(){this.delete(this.renderer.getCanvasTarget())}destroyCanvasTarget(e){this.destroyTexture(e.colorTexture),this.destroyTexture(e.depthTexture),this.delete(e)}hasFeature(e){return EE[e]!==void 0&&(e=EE[e]),this.device.features.has(e)}copyTextureToTexture(e,t,n=null,r=null,i=0,a=0){let o=0,s=0,c=0,l=0,u=0,d=0,f=e.image.width,p=e.image.height,m=1;n!==null&&(n.isBox3===!0?(l=n.min.x,u=n.min.y,d=n.min.z,f=n.max.x-n.min.x,p=n.max.y-n.min.y,m=n.max.z-n.min.z):(l=n.min.x,u=n.min.y,f=n.max.x-n.min.x,p=n.max.y-n.min.y,m=1)),r!==null&&(o=r.x,s=r.y,c=r.z||0),bO.label=`copyTextureToTexture_`+e.id+`_`+t.id;let h=this.device.createCommandEncoder(bO);bO.reset();let g=this.get(e).texture,_=this.get(t).texture;TO.texture=g,TO.mipLevel=i,TO.origin.x=l,TO.origin.y=u,TO.origin.z=d,EO.texture=_,EO.mipLevel=a,EO.origin.x=o,EO.origin.y=s,EO.origin.z=c,kO.width=f,kO.height=p,kO.depthOrArrayLayers=m,h.copyTextureToTexture(TO,EO,kO),TO.reset(),EO.reset(),kO.reset(),NE(this.device,h.finish()),a===0&&t.generateMipmaps===!0&&t.mipmapsAutoUpdate===!0&&this.textureUtils.generateMipmaps(t)}copyFramebufferToTexture(e,t,n){let r=this.get(t),i=null;i=t.renderTarget?e.isDepthTexture?this.get(t.depthTexture).texture:this.get(t.textures[0]).texture:e.isDepthTexture?this.textureUtils.getDepthBuffer(t.depth,t.stencil):this.context.getCurrentTexture();let a=this.get(e).texture;if(i.format!==a.format){j(`WebGPUBackend: copyFramebufferToTexture: Source and destination formats do not match.`,i.format,a.format);return}let o=e.generateMipmaps===!0&&e.mipmapsAutoUpdate===!0&&a.mipLevelCount>1;if(r.encoder&&this._isRenderCameraDepthArray(t)===!0){let s=this._finishArrayCameraBundleEncoders(r);r.arrayCameraRenderStages.push({bundles:s,framebufferCopy:{texture:e,sourceGPU:i,destinationGPU:a,rectangle:{x:n.x,y:n.y,z:n.z,w:n.w},generateMipmaps:o}}),this._createArrayCameraBundleEncoders(t,r);return}let s;if(r.currentPass?(r.currentPass.end(),s=r.encoder):(bO.label=`copyFramebufferToTexture_`+e.id,s=this.device.createCommandEncoder(bO),bO.reset()),this._copyFramebufferToTexture(s,e,i,a,n,0,o),r.currentPass){let{descriptor:e}=r;for(let t=0;t<e.colorAttachments.length;t++)e.colorAttachments[t].loadOp=sE.Load;t.depth&&(e.depthStencilAttachment.depthLoadOp=sE.Load),t.stencil&&(e.depthStencilAttachment.stencilLoadOp=sE.Load),r.currentPass=s.beginRenderPass(e),this._resetRenderContextData(r),t.viewport&&this.updateViewport(t),t.scissor&&this.updateScissor(t)}else NE(this.device,s.finish())}_copyFramebufferToTexture(e,t,n,r,i,a=0,o=t.generateMipmaps){TO.texture=n,TO.origin.x=i.x,TO.origin.y=i.y,TO.origin.z=a,EO.texture=r,kO.width=i.z,kO.height=i.w,e.copyTextureToTexture(TO,EO,kO),TO.reset(),EO.reset(),kO.reset(),o===!0&&r.mipLevelCount>1&&this.textureUtils.generateMipmaps(t,e)}hasCompatibility(e){return this._compatibility[e]===void 0?super.hasCompatibility(e):this._compatibility[e]}async dispose(){if(await super.dispose(),this.bindingUtils.dispose(),this.textureUtils.dispose(),this.occludedResolveCache){for(let e of this.occludedResolveCache.values())e.destroy();this.occludedResolveCache.clear()}this.parameters.device===void 0&&this.device!==null&&this.device.destroy()}},jO=class extends ps{constructor(e,t,n,r,i,a){super(e,t,n,r,i,a),this.iesMap=null}copy(e,t){return super.copy(e,t),this.iesMap=e.iesMap,this}},MO=class extends ps{constructor(e,t,n,r,i,a){super(e,t,n,r,i,a),this.aspect=null}copy(e,t){return super.copy(e,t),this.aspect=e.aspect,this}};hs.registerNode(Xy),vs.registerNode(sw),bs.registerNode(gw),ps.registerNode(lw),ys.registerNode(ow),$o.registerNode(cw),Ss.registerNode(dw),jO.registerNode(uw),MO.registerNode(pw);var NO=class extends Fw{constructor(){super(),this.addMaterial(Fx,`MeshPhongMaterial`),this.addMaterial(iS,`MeshStandardMaterial`),this.addMaterial(oS,`MeshPhysicalMaterial`),this.addMaterial(uS,`MeshToonMaterial`),this.addMaterial(Dx,`MeshBasicMaterial`),this.addMaterial(Nx,`MeshLambertMaterial`),this.addMaterial(hx,`MeshNormalMaterial`),this.addMaterial(fS,`MeshMatcapMaterial`),this.addMaterial(ax,`LineBasicMaterial`),this.addMaterial(sx,`LineDashedMaterial`),this.addMaterial(_S,`PointsMaterial`),this.addMaterial(mS,`SpriteMaterial`),this.addMaterial(xS,`ShadowMaterial`),this.addToneMapping(Mv,1),this.addToneMapping(Nv,2),this.addToneMapping(Pv,3),this.addToneMapping(Iv,4),this.addToneMapping(Bv,6),this.addToneMapping(Vv,7)}},PO=class extends aT{constructor(e={}){let t;e.forceWebGL?t=nE:(t=AO,e.getFallback=()=>(A(`WebGPURenderer: WebGPU is not available, running under WebGL2 backend.`),new nE(e)));let n=new t(e);super(n,e),this.library=new NO,this.isWebGPURenderer=!0,typeof __THREE_DEVTOOLS__<`u`&&__THREE_DEVTOOLS__.dispatchEvent(new CustomEvent(`observe`,{detail:this}))}};hs.registerNode(Xy),vs.registerNode(sw),bs.registerNode(gw),ps.registerNode(lw),ys.registerNode(ow),$o.registerNode(cw),Ss.registerNode(dw),jO.registerNode(uw),MO.registerNode(pw);var FO={type:`change`},IO={type:`start`},LO={type:`end`},RO=new yi,zO=new di,BO=Math.cos(70*Xt.DEG2RAD),VO=new P,HO=2*Math.PI,UO={NONE:-1,ROTATE:0,DOLLY:1,PAN:2,TOUCH_ROTATE:3,TOUCH_PAN:4,TOUCH_DOLLY_PAN:5,TOUCH_DOLLY_ROTATE:6},WO=1e-6,GO=class extends Hs{constructor(e,r=null){super(e,r),this.state=UO.NONE,this.target=new P,this.cursor=new P,this.minDistance=0,this.maxDistance=1/0,this.minZoom=0,this.maxZoom=1/0,this.minTargetRadius=0,this.maxTargetRadius=1/0,this.minPolarAngle=0,this.maxPolarAngle=Math.PI,this.minAzimuthAngle=-1/0,this.maxAzimuthAngle=1/0,this.enableDamping=!1,this.dampingFactor=.05,this.enableZoom=!0,this.zoomSpeed=1,this.enableRotate=!0,this.rotateSpeed=1,this.keyRotateSpeed=1,this.enablePan=!0,this.panSpeed=1,this.screenSpacePanning=!0,this.keyPanSpeed=7,this.zoomToCursor=!1,this.autoRotate=!1,this.autoRotateSpeed=2,this.keys={LEFT:`ArrowLeft`,UP:`ArrowUp`,RIGHT:`ArrowRight`,BOTTOM:`ArrowDown`},this.mouseButtons={LEFT:t.ROTATE,MIDDLE:t.DOLLY,RIGHT:t.PAN},this.touches={ONE:n.ROTATE,TWO:n.DOLLY_PAN},this.target0=this.target.clone(),this.position0=this.object.position.clone(),this.zoom0=this.object.zoom,this._cursorStyle=`auto`,this._domElementKeyEvents=null,this._lastPosition=new P,this._lastQuaternion=new Zt,this._lastTargetPosition=new P,this._quat=new Zt().setFromUnitVectors(e.up,new P(0,1,0)),this._quatInverse=this._quat.clone().invert(),this._spherical=new Bs,this._sphericalDelta=new Bs,this._scale=1,this._panOffset=new P,this._rotateStart=new N,this._rotateEnd=new N,this._rotateDelta=new N,this._panStart=new N,this._panEnd=new N,this._panDelta=new N,this._dollyStart=new N,this._dollyEnd=new N,this._dollyDelta=new N,this._dollyDirection=new P,this._mouse=new N,this._performCursorZoom=!1,this._pointers=[],this._pointerPositions={},this._controlActive=!1,this._onPointerMove=qO.bind(this),this._onPointerDown=KO.bind(this),this._onPointerUp=JO.bind(this),this._onContextMenu=tk.bind(this),this._onMouseWheel=ZO.bind(this),this._onKeyDown=QO.bind(this),this._onTouchStart=$O.bind(this),this._onTouchMove=ek.bind(this),this._onMouseDown=YO.bind(this),this._onMouseMove=XO.bind(this),this._interceptControlDown=nk.bind(this),this._interceptControlUp=rk.bind(this),this.domElement!==null&&this.connect(this.domElement),this.update()}set cursorStyle(e){this._cursorStyle=e,e===`grab`?this.domElement.style.cursor=`grab`:this.domElement.style.cursor=`auto`}get cursorStyle(){return this._cursorStyle}connect(e){super.connect(e),this.domElement.addEventListener(`pointerdown`,this._onPointerDown),this.domElement.addEventListener(`pointercancel`,this._onPointerUp),this.domElement.addEventListener(`contextmenu`,this._onContextMenu),this.domElement.addEventListener(`wheel`,this._onMouseWheel,{passive:!1}),this.domElement.ownerDocument.addEventListener(`keydown`,this._interceptControlDown,{passive:!0,capture:!0}),this.domElement.style.touchAction=`none`}disconnect(){this.state=UO.NONE,this.domElement.removeEventListener(`pointerdown`,this._onPointerDown),this.domElement.ownerDocument.removeEventListener(`pointermove`,this._onPointerMove),this.domElement.ownerDocument.removeEventListener(`pointerup`,this._onPointerUp),this.domElement.removeEventListener(`pointercancel`,this._onPointerUp),this.domElement.removeEventListener(`wheel`,this._onMouseWheel),this.domElement.removeEventListener(`contextmenu`,this._onContextMenu),this.stopListenToKeyEvents(),this.domElement.ownerDocument.removeEventListener(`keydown`,this._interceptControlDown,{capture:!0}),this.domElement.ownerDocument.removeEventListener(`keyup`,this._interceptControlUp,{capture:!0}),this._controlActive=!1,this._pointers.length=0,this._pointerPositions={},this.domElement.style.touchAction=``,this.domElement.style.cursor=`auto`}dispose(){this.disconnect()}getPolarAngle(){return this._spherical.phi}getAzimuthalAngle(){return this._spherical.theta}getDistance(){return this.object.position.distanceTo(this.target)}listenToKeyEvents(e){e.addEventListener(`keydown`,this._onKeyDown),this._domElementKeyEvents=e}stopListenToKeyEvents(){this._domElementKeyEvents!==null&&(this._domElementKeyEvents.removeEventListener(`keydown`,this._onKeyDown),this._domElementKeyEvents=null)}saveState(){this.target0.copy(this.target),this.position0.copy(this.object.position),this.zoom0=this.object.zoom}reset(){this.target.copy(this.target0),this.object.position.copy(this.position0),this.object.zoom=this.zoom0,this.object.updateProjectionMatrix(),this.dispatchEvent(FO),this.update(),this.state=UO.NONE}pan(e,t){this._pan(e,t),this.update()}dollyIn(e){this._dollyIn(e),this.update()}dollyOut(e){this._dollyOut(e),this.update()}rotateLeft(e){this._rotateLeft(e),this.update()}rotateUp(e){this._rotateUp(e),this.update()}update(e=null){let t=this.object.position;VO.copy(t).sub(this.target),VO.applyQuaternion(this._quat),this._spherical.setFromVector3(VO),this.autoRotate&&this.state===UO.NONE&&this._rotateLeft(this._getAutoRotationAngle(e)),this.enableDamping?(this._spherical.theta+=this._sphericalDelta.theta*this.dampingFactor,this._spherical.phi+=this._sphericalDelta.phi*this.dampingFactor):(this._spherical.theta+=this._sphericalDelta.theta,this._spherical.phi+=this._sphericalDelta.phi);let n=this.minAzimuthAngle,r=this.maxAzimuthAngle;isFinite(n)&&isFinite(r)&&(n<-Math.PI?n+=HO:n>Math.PI&&(n-=HO),r<-Math.PI?r+=HO:r>Math.PI&&(r-=HO),n<=r?this._spherical.theta=Math.max(n,Math.min(r,this._spherical.theta)):this._spherical.theta=this._spherical.theta>(n+r)/2?Math.max(n,this._spherical.theta):Math.min(r,this._spherical.theta)),this._spherical.phi=Math.max(this.minPolarAngle,Math.min(this.maxPolarAngle,this._spherical.phi)),this._spherical.makeSafe(),this.enableDamping===!0?this.target.addScaledVector(this._panOffset,this.dampingFactor):this.target.add(this._panOffset),this.target.sub(this.cursor),this.target.clampLength(this.minTargetRadius,this.maxTargetRadius),this.target.add(this.cursor);let i=!1;if(this.zoomToCursor&&this._performCursorZoom||this.object.isOrthographicCamera)this._spherical.radius=this._clampDistance(this._spherical.radius);else{let e=this._spherical.radius;this._spherical.radius=this._clampDistance(this._spherical.radius*this._scale),i=e!=this._spherical.radius}if(VO.setFromSpherical(this._spherical),VO.applyQuaternion(this._quatInverse),t.copy(this.target).add(VO),this.object.lookAt(this.target),this.enableDamping===!0?(this._sphericalDelta.theta*=1-this.dampingFactor,this._sphericalDelta.phi*=1-this.dampingFactor,this._panOffset.multiplyScalar(1-this.dampingFactor)):(this._sphericalDelta.set(0,0,0),this._panOffset.set(0,0,0)),this.zoomToCursor&&this._performCursorZoom){let e=null;if(this.object.isPerspectiveCamera){let t=VO.length();e=this._clampDistance(t*this._scale);let n=t-e;this.object.position.addScaledVector(this._dollyDirection,n),this.object.updateMatrixWorld(),i=!!n}else if(this.object.isOrthographicCamera){let t=new P(this._mouse.x,this._mouse.y,0);t.unproject(this.object);let n=this.object.zoom;this.object.zoom=Math.max(this.minZoom,Math.min(this.maxZoom,this.object.zoom/this._scale)),this.object.updateProjectionMatrix(),i=n!==this.object.zoom;let r=new P(this._mouse.x,this._mouse.y,0);r.unproject(this.object),this.object.position.sub(r).add(t),this.object.updateMatrixWorld(),e=VO.length()}else console.warn(`WARNING: OrbitControls.js encountered an unknown camera type - zoom to cursor disabled.`),this.zoomToCursor=!1;e!==null&&(this.screenSpacePanning?this.target.set(0,0,-1).transformDirection(this.object.matrix).multiplyScalar(e).add(this.object.position):(RO.origin.copy(this.object.position),RO.direction.set(0,0,-1).transformDirection(this.object.matrix),Math.abs(this.object.up.dot(RO.direction))<BO?this.object.lookAt(this.target):(zO.setFromNormalAndCoplanarPoint(this.object.up,this.target),RO.intersectPlane(zO,this.target))))}else if(this.object.isOrthographicCamera){let e=this.object.zoom;this.object.zoom=Math.max(this.minZoom,Math.min(this.maxZoom,this.object.zoom/this._scale)),e!==this.object.zoom&&(this.object.updateProjectionMatrix(),i=!0)}return this._scale=1,this._performCursorZoom=!1,i||this._lastPosition.distanceToSquared(this.object.position)>WO||8*(1-this._lastQuaternion.dot(this.object.quaternion))>WO||this._lastTargetPosition.distanceToSquared(this.target)>WO?(this.dispatchEvent(FO),this._lastPosition.copy(this.object.position),this._lastQuaternion.copy(this.object.quaternion),this._lastTargetPosition.copy(this.target),!0):!1}_getAutoRotationAngle(e){return e===null?HO/60/60*this.autoRotateSpeed:HO/60*this.autoRotateSpeed*e}_getZoomScale(e){let t=Math.abs(e*.01);return .95**(this.zoomSpeed*t)}_rotateLeft(e){this._sphericalDelta.theta-=e}_rotateUp(e){this._sphericalDelta.phi-=e}_panLeft(e,t){VO.setFromMatrixColumn(t,0),VO.multiplyScalar(-e),this._panOffset.add(VO)}_panUp(e,t){this.screenSpacePanning===!0?VO.setFromMatrixColumn(t,1):(VO.setFromMatrixColumn(t,0),VO.crossVectors(this.object.up,VO)),VO.multiplyScalar(e),this._panOffset.add(VO)}_pan(e,t){let n=this.domElement;if(this.object.isPerspectiveCamera){let r=this.object.position;VO.copy(r).sub(this.target);let i=VO.length();i*=Math.tan(this.object.fov/2*Math.PI/180),this._panLeft(2*e*i/n.clientHeight,this.object.matrix),this._panUp(2*t*i/n.clientHeight,this.object.matrix)}else this.object.isOrthographicCamera?(this._panLeft(e*(this.object.right-this.object.left)/this.object.zoom/n.clientWidth,this.object.matrix),this._panUp(t*(this.object.top-this.object.bottom)/this.object.zoom/n.clientHeight,this.object.matrix)):(console.warn(`WARNING: OrbitControls.js encountered an unknown camera type - pan disabled.`),this.enablePan=!1)}_dollyOut(e){this.object.isPerspectiveCamera||this.object.isOrthographicCamera?this._scale/=e:(console.warn(`WARNING: OrbitControls.js encountered an unknown camera type - dolly/zoom disabled.`),this.enableZoom=!1)}_dollyIn(e){this.object.isPerspectiveCamera||this.object.isOrthographicCamera?this._scale*=e:(console.warn(`WARNING: OrbitControls.js encountered an unknown camera type - dolly/zoom disabled.`),this.enableZoom=!1)}_updateZoomParameters(e,t){if(!this.zoomToCursor)return;this._performCursorZoom=!0;let n=this.domElement.getBoundingClientRect(),r=e-n.left,i=t-n.top,a=n.width,o=n.height;this._mouse.x=r/a*2-1,this._mouse.y=-(i/o)*2+1,this._dollyDirection.set(this._mouse.x,this._mouse.y,1).unproject(this.object).sub(this.object.position).normalize()}_clampDistance(e){return Math.max(this.minDistance,Math.min(this.maxDistance,e))}_handleMouseDownRotate(e){this._rotateStart.set(e.clientX,e.clientY)}_handleMouseDownDolly(e){this._updateZoomParameters(e.clientX,e.clientY),this._dollyStart.set(e.clientX,e.clientY)}_handleMouseDownPan(e){this._panStart.set(e.clientX,e.clientY)}_handleMouseMoveRotate(e){this._rotateEnd.set(e.clientX,e.clientY),this._rotateDelta.subVectors(this._rotateEnd,this._rotateStart).multiplyScalar(this.rotateSpeed);let t=this.domElement;this._rotateLeft(HO*this._rotateDelta.x/t.clientHeight),this._rotateUp(HO*this._rotateDelta.y/t.clientHeight),this._rotateStart.copy(this._rotateEnd),this.update()}_handleMouseMoveDolly(e){this._dollyEnd.set(e.clientX,e.clientY),this._dollyDelta.subVectors(this._dollyEnd,this._dollyStart),this._dollyDelta.y>0?this._dollyOut(this._getZoomScale(this._dollyDelta.y)):this._dollyDelta.y<0&&this._dollyIn(this._getZoomScale(this._dollyDelta.y)),this._dollyStart.copy(this._dollyEnd),this.zoomToCursor&&(this._performCursorZoom=!0,this._dollyDirection.set(this._mouse.x,this._mouse.y,1).unproject(this.object).sub(this.object.position).normalize()),this.update()}_handleMouseMovePan(e){this._panEnd.set(e.clientX,e.clientY),this._panDelta.subVectors(this._panEnd,this._panStart).multiplyScalar(this.panSpeed),this._pan(this._panDelta.x,this._panDelta.y),this._panStart.copy(this._panEnd),this.update()}_handleMouseWheel(e){this._updateZoomParameters(e.clientX,e.clientY),e.deltaY<0?this._dollyIn(this._getZoomScale(e.deltaY)):e.deltaY>0&&this._dollyOut(this._getZoomScale(e.deltaY)),this.update()}_handleKeyDown(e){let t=!1;switch(e.code){case this.keys.UP:e.ctrlKey||e.metaKey||e.shiftKey?this.enableRotate&&this._rotateUp(HO*this.keyRotateSpeed/this.domElement.clientHeight):this.enablePan&&this._pan(0,this.keyPanSpeed),t=!0;break;case this.keys.BOTTOM:e.ctrlKey||e.metaKey||e.shiftKey?this.enableRotate&&this._rotateUp(-HO*this.keyRotateSpeed/this.domElement.clientHeight):this.enablePan&&this._pan(0,-this.keyPanSpeed),t=!0;break;case this.keys.LEFT:e.ctrlKey||e.metaKey||e.shiftKey?this.enableRotate&&this._rotateLeft(HO*this.keyRotateSpeed/this.domElement.clientHeight):this.enablePan&&this._pan(this.keyPanSpeed,0),t=!0;break;case this.keys.RIGHT:e.ctrlKey||e.metaKey||e.shiftKey?this.enableRotate&&this._rotateLeft(-HO*this.keyRotateSpeed/this.domElement.clientHeight):this.enablePan&&this._pan(-this.keyPanSpeed,0),t=!0}t&&(e.preventDefault(),this.update())}_handleTouchStartRotate(e){if(this._pointers.length===1)this._rotateStart.set(e.pageX,e.pageY);else{let t=this._getSecondPointerPosition(e),n=.5*(e.pageX+t.x),r=.5*(e.pageY+t.y);this._rotateStart.set(n,r)}}_handleTouchStartPan(e){if(this._pointers.length===1)this._panStart.set(e.pageX,e.pageY);else{let t=this._getSecondPointerPosition(e),n=.5*(e.pageX+t.x),r=.5*(e.pageY+t.y);this._panStart.set(n,r)}}_handleTouchStartDolly(e){let t=this._getSecondPointerPosition(e),n=e.pageX-t.x,r=e.pageY-t.y,i=Math.sqrt(n*n+r*r);this._dollyStart.set(0,i)}_handleTouchStartDollyPan(e){this.enableZoom&&this._handleTouchStartDolly(e),this.enablePan&&this._handleTouchStartPan(e)}_handleTouchStartDollyRotate(e){this.enableZoom&&this._handleTouchStartDolly(e),this.enableRotate&&this._handleTouchStartRotate(e)}_handleTouchMoveRotate(e){if(this._pointers.length==1)this._rotateEnd.set(e.pageX,e.pageY);else{let t=this._getSecondPointerPosition(e),n=.5*(e.pageX+t.x),r=.5*(e.pageY+t.y);this._rotateEnd.set(n,r)}this._rotateDelta.subVectors(this._rotateEnd,this._rotateStart).multiplyScalar(this.rotateSpeed);let t=this.domElement;this._rotateLeft(HO*this._rotateDelta.x/t.clientHeight),this._rotateUp(HO*this._rotateDelta.y/t.clientHeight),this._rotateStart.copy(this._rotateEnd)}_handleTouchMovePan(e){if(this._pointers.length===1)this._panEnd.set(e.pageX,e.pageY);else{let t=this._getSecondPointerPosition(e),n=.5*(e.pageX+t.x),r=.5*(e.pageY+t.y);this._panEnd.set(n,r)}this._panDelta.subVectors(this._panEnd,this._panStart).multiplyScalar(this.panSpeed),this._pan(this._panDelta.x,this._panDelta.y),this._panStart.copy(this._panEnd)}_handleTouchMoveDolly(e){let t=this._getSecondPointerPosition(e),n=e.pageX-t.x,r=e.pageY-t.y,i=Math.sqrt(n*n+r*r);this._dollyEnd.set(0,i),this._dollyDelta.set(0,(this._dollyEnd.y/this._dollyStart.y)**+this.zoomSpeed),this._dollyOut(this._dollyDelta.y),this._dollyStart.copy(this._dollyEnd);let a=(e.pageX+t.x)*.5,o=(e.pageY+t.y)*.5;this._updateZoomParameters(a,o)}_handleTouchMoveDollyPan(e){this.enableZoom&&this._handleTouchMoveDolly(e),this.enablePan&&this._handleTouchMovePan(e)}_handleTouchMoveDollyRotate(e){this.enableZoom&&this._handleTouchMoveDolly(e),this.enableRotate&&this._handleTouchMoveRotate(e)}_addPointer(e){this._pointers.push(e.pointerId)}_removePointer(e){delete this._pointerPositions[e.pointerId];for(let t=0;t<this._pointers.length;t++)if(this._pointers[t]==e.pointerId){this._pointers.splice(t,1);return}}_isTrackingPointer(e){for(let t=0;t<this._pointers.length;t++)if(this._pointers[t]==e.pointerId)return!0;return!1}_trackPointer(e){let t=this._pointerPositions[e.pointerId];t===void 0&&(t=new N,this._pointerPositions[e.pointerId]=t),t.set(e.pageX,e.pageY)}_getSecondPointerPosition(e){let t=e.pointerId===this._pointers[0]?this._pointers[1]:this._pointers[0];return this._pointerPositions[t]}_customWheelEvent(e){let t=e.deltaMode,n={clientX:e.clientX,clientY:e.clientY,deltaY:e.deltaY};switch(t){case 1:n.deltaY*=16;break;case 2:n.deltaY*=100}return e.ctrlKey&&!this._controlActive&&(n.deltaY*=10),n}};function KO(e){this.enabled!==!1&&(this._pointers.length===0&&(this.domElement.setPointerCapture(e.pointerId),this.domElement.ownerDocument.addEventListener(`pointermove`,this._onPointerMove),this.domElement.ownerDocument.addEventListener(`pointerup`,this._onPointerUp)),this._isTrackingPointer(e)||(this._addPointer(e),e.pointerType===`touch`?this._onTouchStart(e):this._onMouseDown(e),this._cursorStyle===`grab`&&(this.domElement.style.cursor=`grabbing`)))}function qO(e){this.enabled!==!1&&(e.pointerType===`touch`?this._onTouchMove(e):this._onMouseMove(e))}function JO(e){switch(this._removePointer(e),this._pointers.length){case 0:this.domElement.releasePointerCapture(e.pointerId),this.domElement.ownerDocument.removeEventListener(`pointermove`,this._onPointerMove),this.domElement.ownerDocument.removeEventListener(`pointerup`,this._onPointerUp),this.dispatchEvent(LO),this.state=UO.NONE,this._cursorStyle===`grab`&&(this.domElement.style.cursor=`grab`);break;case 1:let t=this._pointers[0],n=this._pointerPositions[t];this._onTouchStart({pointerId:t,pageX:n.x,pageY:n.y})}}function YO(e){let n;switch(e.button){case 0:n=this.mouseButtons.LEFT;break;case 1:n=this.mouseButtons.MIDDLE;break;case 2:n=this.mouseButtons.RIGHT;break;default:n=-1}switch(n){case t.DOLLY:if(this.enableZoom===!1)return;this._handleMouseDownDolly(e),this.state=UO.DOLLY;break;case t.ROTATE:if(e.ctrlKey||e.metaKey||e.shiftKey){if(this.enablePan===!1)return;this._handleMouseDownPan(e),this.state=UO.PAN}else{if(this.enableRotate===!1)return;this._handleMouseDownRotate(e),this.state=UO.ROTATE}break;case t.PAN:if(e.ctrlKey||e.metaKey||e.shiftKey){if(this.enableRotate===!1)return;this._handleMouseDownRotate(e),this.state=UO.ROTATE}else{if(this.enablePan===!1)return;this._handleMouseDownPan(e),this.state=UO.PAN}break;default:this.state=UO.NONE}this.state!==UO.NONE&&this.dispatchEvent(IO)}function XO(e){switch(this.state){case UO.ROTATE:if(this.enableRotate===!1)return;this._handleMouseMoveRotate(e);break;case UO.DOLLY:if(this.enableZoom===!1)return;this._handleMouseMoveDolly(e);break;case UO.PAN:if(this.enablePan===!1)return;this._handleMouseMovePan(e)}}function ZO(e){this.enabled!==!1&&this.enableZoom!==!1&&this.state===UO.NONE&&(e.preventDefault(),this.dispatchEvent(IO),this._handleMouseWheel(this._customWheelEvent(e)),this.dispatchEvent(LO))}function QO(e){this.enabled!==!1&&this._handleKeyDown(e)}function $O(e){switch(this._trackPointer(e),this._pointers.length){case 1:switch(this.touches.ONE){case n.ROTATE:if(this.enableRotate===!1){this.state=UO.NONE;break}this._handleTouchStartRotate(e),this.state=UO.TOUCH_ROTATE;break;case n.PAN:if(this.enablePan===!1){this.state=UO.NONE;break}this._handleTouchStartPan(e),this.state=UO.TOUCH_PAN;break;default:this.state=UO.NONE}break;case 2:switch(this.touches.TWO){case n.DOLLY_PAN:if(this.enableZoom===!1&&this.enablePan===!1)return;this._handleTouchStartDollyPan(e),this.state=UO.TOUCH_DOLLY_PAN;break;case n.DOLLY_ROTATE:if(this.enableZoom===!1&&this.enableRotate===!1)return;this._handleTouchStartDollyRotate(e),this.state=UO.TOUCH_DOLLY_ROTATE;break;default:this.state=UO.NONE}break;default:this.state=UO.NONE}this.state!==UO.NONE&&this.dispatchEvent(IO)}function ek(e){switch(this._trackPointer(e),this.state){case UO.TOUCH_ROTATE:if(this.enableRotate===!1)return;this._handleTouchMoveRotate(e),this.update();break;case UO.TOUCH_PAN:if(this.enablePan===!1)return;this._handleTouchMovePan(e),this.update();break;case UO.TOUCH_DOLLY_PAN:if(this.enableZoom===!1&&this.enablePan===!1)return;this._handleTouchMoveDollyPan(e),this.update();break;case UO.TOUCH_DOLLY_ROTATE:if(this.enableZoom===!1&&this.enableRotate===!1)return;this._handleTouchMoveDollyRotate(e),this.update();break;default:this.state=UO.NONE}}function tk(e){this.enabled!==!1&&e.preventDefault()}function nk(e){e.key===`Control`&&(this._controlActive=!0,this.domElement.ownerDocument.addEventListener(`keyup`,this._interceptControlUp,{passive:!0,capture:!0}))}function rk(e){e.key===`Control`&&(this._controlActive=!1,this.domElement.ownerDocument.removeEventListener(`keyup`,this._interceptControlUp,{passive:!0,capture:!0}))}var ik=class e{constructor(t,n,r,i,a=`div`){this.parent=t,this.object=n,this.property=r,this._disabled=!1,this._hidden=!1,this.initialValue=this.getValue(),this.domElement=document.createElement(`div`),this.domElement.classList.add(`controller`),this.domElement.classList.add(i),this.$name=document.createElement(`div`),this.$name.classList.add(`name`),e.nextNameID=e.nextNameID||0,this.$name.id=`lil-gui-name-`+ ++e.nextNameID,this.$widget=document.createElement(a),this.$widget.classList.add(`widget`),this.$disable=this.$widget,this.domElement.appendChild(this.$name),this.domElement.appendChild(this.$widget),this.parent.children.push(this),this.parent.controllers.push(this),this.parent.$children.appendChild(this.domElement),this._listenCallback=this._listenCallback.bind(this),this.name(r)}name(e){return this._name=e,this.$name.innerHTML=e,this}onChange(e){return this._onChange=e,this}_callOnChange(){this.parent._callOnChange(this),this._onChange!==void 0&&this._onChange.call(this,this.getValue()),this._changed=!0}onFinishChange(e){return this._onFinishChange=e,this}_callOnFinishChange(){this._changed&&(this.parent._callOnFinishChange(this),this._onFinishChange!==void 0&&this._onFinishChange.call(this,this.getValue())),this._changed=!1}reset(){return this.setValue(this.initialValue),this._callOnFinishChange(),this}enable(e=!0){return this.disable(!e)}disable(e=!0){return e===this._disabled||(this._disabled=e,this.domElement.classList.toggle(`disabled`,e),this.$disable.toggleAttribute(`disabled`,e)),this}show(e=!0){return this._hidden=!e,this.domElement.style.display=this._hidden?`none`:``,this}hide(){return this.show(!1)}options(e){let t=this.parent.add(this.object,this.property,e);return t.name(this._name),this.destroy(),t}min(e){return this}max(e){return this}step(e){return this}decimals(e){return this}listen(e=!0){return this._listening=e,this._listenCallbackID!==void 0&&(cancelAnimationFrame(this._listenCallbackID),this._listenCallbackID=void 0),this._listening&&this._listenCallback(),this}_listenCallback(){this._listenCallbackID=requestAnimationFrame(this._listenCallback);let e=this.save();e!==this._listenPrevValue&&this.updateDisplay(),this._listenPrevValue=e}getValue(){return this.object[this.property]}setValue(e){return this.object[this.property]=e,this._callOnChange(),this.updateDisplay(),this}updateDisplay(){return this}load(e){return this.setValue(e),this._callOnFinishChange(),this}save(){return this.getValue()}destroy(){this.listen(!1),this.parent.children.splice(this.parent.children.indexOf(this),1),this.parent.controllers.splice(this.parent.controllers.indexOf(this),1),this.parent.$children.removeChild(this.domElement)}},ak=class extends ik{constructor(e,t,n){super(e,t,n,`boolean`,`label`),this.$input=document.createElement(`input`),this.$input.setAttribute(`type`,`checkbox`),this.$input.setAttribute(`aria-labelledby`,this.$name.id),this.$widget.appendChild(this.$input),this.$input.addEventListener(`change`,()=>{this.setValue(this.$input.checked),this._callOnFinishChange()}),this.$disable=this.$input,this.updateDisplay()}updateDisplay(){return this.$input.checked=this.getValue(),this}};function ok(e){let t,n;return(t=e.match(/(#|0x)?([a-f0-9]{6})/i))?n=t[2]:(t=e.match(/rgb\(\s*(\d*)\s*,\s*(\d*)\s*,\s*(\d*)\s*\)/))?n=parseInt(t[1]).toString(16).padStart(2,0)+parseInt(t[2]).toString(16).padStart(2,0)+parseInt(t[3]).toString(16).padStart(2,0):(t=e.match(/^#?([a-f0-9])([a-f0-9])([a-f0-9])$/i))&&(n=t[1]+t[1]+t[2]+t[2]+t[3]+t[3]),!!n&&`#`+n}var sk={isPrimitive:!0,match:e=>typeof e==`string`,fromHexString:ok,toHexString:ok},ck={isPrimitive:!0,match:e=>typeof e==`number`,fromHexString:e=>parseInt(e.substring(1),16),toHexString:e=>`#`+e.toString(16).padStart(6,0)},lk=[sk,ck,{isPrimitive:!1,match:Array.isArray,fromHexString(e,t,n=1){let r=ck.fromHexString(e);t[0]=(r>>16&255)/255*n,t[1]=(r>>8&255)/255*n,t[2]=(255&r)/255*n},toHexString:([e,t,n],r=1)=>ck.toHexString(e*(r=255/r)<<16^t*r<<8^(n*r|0))},{isPrimitive:!1,match:e=>Object(e)===e,fromHexString(e,t,n=1){let r=ck.fromHexString(e);t.r=(r>>16&255)/255*n,t.g=(r>>8&255)/255*n,t.b=(255&r)/255*n},toHexString:({r:e,g:t,b:n},r=1)=>ck.toHexString(e*(r=255/r)<<16^t*r<<8^(n*r|0))}],uk=class extends ik{constructor(e,t,n,r){var i;super(e,t,n,`color`),this.$input=document.createElement(`input`),this.$input.setAttribute(`type`,`color`),this.$input.setAttribute(`tabindex`,-1),this.$input.setAttribute(`aria-labelledby`,this.$name.id),this.$text=document.createElement(`input`),this.$text.setAttribute(`type`,`text`),this.$text.setAttribute(`spellcheck`,`false`),this.$text.setAttribute(`aria-labelledby`,this.$name.id),this.$display=document.createElement(`div`),this.$display.classList.add(`display`),this.$display.appendChild(this.$input),this.$widget.appendChild(this.$display),this.$widget.appendChild(this.$text),this._format=(i=this.initialValue,lk.find(e=>e.match(i))),this._rgbScale=r,this._initialValueHexString=this.save(),this._textFocused=!1,this.$input.addEventListener(`input`,()=>{this._setValueFromHexString(this.$input.value)}),this.$input.addEventListener(`blur`,()=>{this._callOnFinishChange()}),this.$text.addEventListener(`input`,()=>{let e=ok(this.$text.value);e&&this._setValueFromHexString(e)}),this.$text.addEventListener(`focus`,()=>{this._textFocused=!0,this.$text.select()}),this.$text.addEventListener(`blur`,()=>{this._textFocused=!1,this.updateDisplay(),this._callOnFinishChange()}),this.$disable=this.$text,this.updateDisplay()}reset(){return this._setValueFromHexString(this._initialValueHexString),this}_setValueFromHexString(e){if(this._format.isPrimitive){let t=this._format.fromHexString(e);this.setValue(t)}else this._format.fromHexString(e,this.getValue(),this._rgbScale),this._callOnChange(),this.updateDisplay()}save(){return this._format.toHexString(this.getValue(),this._rgbScale)}load(e){return this._setValueFromHexString(e),this._callOnFinishChange(),this}updateDisplay(){return this.$input.value=this._format.toHexString(this.getValue(),this._rgbScale),this._textFocused||(this.$text.value=this.$input.value.substring(1)),this.$display.style.backgroundColor=this.$input.value,this}},dk=class extends ik{constructor(e,t,n){super(e,t,n,`function`),this.$button=document.createElement(`button`),this.$button.appendChild(this.$name),this.$widget.appendChild(this.$button),this.$button.addEventListener(`click`,e=>{e.preventDefault(),this.getValue().call(this.object)}),this.$button.addEventListener(`touchstart`,()=>{},{passive:!0}),this.$disable=this.$button}},fk=class extends ik{constructor(e,t,n,r,i,a){super(e,t,n,`number`),this._initInput(),this.min(r),this.max(i);let o=a!==void 0;this.step(o?a:this._getImplicitStep(),o),this.updateDisplay()}decimals(e){return this._decimals=e,this.updateDisplay(),this}min(e){return this._min=e,this._onUpdateMinMax(),this}max(e){return this._max=e,this._onUpdateMinMax(),this}step(e,t=!0){return this._step=e,this._stepExplicit=t,this}updateDisplay(){let e=this.getValue();if(this._hasSlider){let t=(e-this._min)/(this._max-this._min);t=Math.max(0,Math.min(t,1)),this.$fill.style.width=100*t+`%`}return this._inputFocused||(this.$input.value=this._decimals===void 0?e:e.toFixed(this._decimals)),this}_initInput(){this.$input=document.createElement(`input`),this.$input.setAttribute(`type`,`number`),this.$input.setAttribute(`step`,`any`),this.$input.setAttribute(`aria-labelledby`,this.$name.id),this.$widget.appendChild(this.$input),this.$disable=this.$input;let e=e=>{let t=parseFloat(this.$input.value);isNaN(t)||(this._snapClampSetValue(t+e),this.$input.value=this.getValue())},t,n,r,i,a,o=!1,s=e=>{if(o){let r=e.clientX-t,i=e.clientY-n;Math.abs(i)>5?(e.preventDefault(),this.$input.blur(),o=!1,this._setDraggingStyle(!0,`vertical`)):Math.abs(r)>5&&c()}if(!o){let t=e.clientY-r;a-=t*this._step*this._arrowKeyMultiplier(e),i+a>this._max?a=this._max-i:i+a<this._min&&(a=this._min-i),this._snapClampSetValue(i+a)}r=e.clientY},c=()=>{this._setDraggingStyle(!1,`vertical`),this._callOnFinishChange(),window.removeEventListener(`mousemove`,s),window.removeEventListener(`mouseup`,c)};this.$input.addEventListener(`input`,()=>{let e=parseFloat(this.$input.value);isNaN(e)||(this._stepExplicit&&(e=this._snap(e)),this.setValue(this._clamp(e)))}),this.$input.addEventListener(`keydown`,t=>{t.code===`Enter`&&this.$input.blur(),t.code===`ArrowUp`&&(t.preventDefault(),e(this._step*this._arrowKeyMultiplier(t))),t.code===`ArrowDown`&&(t.preventDefault(),e(this._step*this._arrowKeyMultiplier(t)*-1))}),this.$input.addEventListener(`wheel`,t=>{this._inputFocused&&(t.preventDefault(),e(this._step*this._normalizeMouseWheel(t)))},{passive:!1}),this.$input.addEventListener(`mousedown`,e=>{t=e.clientX,n=r=e.clientY,o=!0,i=this.getValue(),a=0,window.addEventListener(`mousemove`,s),window.addEventListener(`mouseup`,c)}),this.$input.addEventListener(`focus`,()=>{this._inputFocused=!0}),this.$input.addEventListener(`blur`,()=>{this._inputFocused=!1,this.updateDisplay(),this._callOnFinishChange()})}_initSlider(){this._hasSlider=!0,this.$slider=document.createElement(`div`),this.$slider.classList.add(`slider`),this.$fill=document.createElement(`div`),this.$fill.classList.add(`fill`),this.$slider.appendChild(this.$fill),this.$widget.insertBefore(this.$slider,this.$input),this.domElement.classList.add(`hasSlider`);let e=e=>{let t=this.$slider.getBoundingClientRect(),n=(r=e,i=t.left,a=t.right,o=this._min,s=this._max,(r-i)/(a-i)*(s-o)+o);var r,i,a,o,s;this._snapClampSetValue(n)},t=t=>{e(t.clientX)},n=()=>{this._callOnFinishChange(),this._setDraggingStyle(!1),window.removeEventListener(`mousemove`,t),window.removeEventListener(`mouseup`,n)},r,i,a=!1,o=t=>{t.preventDefault(),this._setDraggingStyle(!0),e(t.touches[0].clientX),a=!1},s=t=>{if(a){let e=t.touches[0].clientX-r,n=t.touches[0].clientY-i;Math.abs(e)>Math.abs(n)?o(t):(window.removeEventListener(`touchmove`,s),window.removeEventListener(`touchend`,c))}else t.preventDefault(),e(t.touches[0].clientX)},c=()=>{this._callOnFinishChange(),this._setDraggingStyle(!1),window.removeEventListener(`touchmove`,s),window.removeEventListener(`touchend`,c)},l=this._callOnFinishChange.bind(this),u;this.$slider.addEventListener(`mousedown`,r=>{this._setDraggingStyle(!0),e(r.clientX),window.addEventListener(`mousemove`,t),window.addEventListener(`mouseup`,n)}),this.$slider.addEventListener(`touchstart`,e=>{e.touches.length>1||(this._hasScrollBar?(r=e.touches[0].clientX,i=e.touches[0].clientY,a=!0):o(e),window.addEventListener(`touchmove`,s,{passive:!1}),window.addEventListener(`touchend`,c))},{passive:!1}),this.$slider.addEventListener(`wheel`,e=>{if(Math.abs(e.deltaX)<Math.abs(e.deltaY)&&this._hasScrollBar)return;e.preventDefault();let t=this._normalizeMouseWheel(e)*this._step;this._snapClampSetValue(this.getValue()+t),this.$input.value=this.getValue(),clearTimeout(u),u=setTimeout(l,400)},{passive:!1})}_setDraggingStyle(e,t=`horizontal`){this.$slider&&this.$slider.classList.toggle(`active`,e),document.body.classList.toggle(`lil-gui-dragging`,e),document.body.classList.toggle(`lil-gui-`+t,e)}_getImplicitStep(){return this._hasMin&&this._hasMax?(this._max-this._min)/1e3:.1}_onUpdateMinMax(){!this._hasSlider&&this._hasMin&&this._hasMax&&(this._stepExplicit||this.step(this._getImplicitStep(),!1),this._initSlider(),this.updateDisplay())}_normalizeMouseWheel(e){let{deltaX:t,deltaY:n}=e;return Math.floor(e.deltaY)!==e.deltaY&&e.wheelDelta&&(t=0,n=-e.wheelDelta/120,n*=this._stepExplicit?1:10),t+-n}_arrowKeyMultiplier(e){let t=this._stepExplicit?1:10;return e.shiftKey?t*=10:e.altKey&&(t/=10),t}_snap(e){let t=Math.round(e/this._step)*this._step;return parseFloat(t.toPrecision(15))}_clamp(e){return e<this._min&&(e=this._min),e>this._max&&(e=this._max),e}_snapClampSetValue(e){this.setValue(this._clamp(this._snap(e)))}get _hasScrollBar(){let e=this.parent.root.$children;return e.scrollHeight>e.clientHeight}get _hasMin(){return this._min!==void 0}get _hasMax(){return this._max!==void 0}},pk=class extends ik{constructor(e,t,n,r){super(e,t,n,`option`),this.$select=document.createElement(`select`),this.$select.setAttribute(`aria-labelledby`,this.$name.id),this.$display=document.createElement(`div`),this.$display.classList.add(`display`),this._values=Array.isArray(r)?r:Object.values(r),this._names=Array.isArray(r)?r:Object.keys(r),this._names.forEach(e=>{let t=document.createElement(`option`);t.innerHTML=e,this.$select.appendChild(t)}),this.$select.addEventListener(`change`,()=>{this.setValue(this._values[this.$select.selectedIndex]),this._callOnFinishChange()}),this.$select.addEventListener(`focus`,()=>{this.$display.classList.add(`focus`)}),this.$select.addEventListener(`blur`,()=>{this.$display.classList.remove(`focus`)}),this.$widget.appendChild(this.$select),this.$widget.appendChild(this.$display),this.$disable=this.$select,this.updateDisplay()}updateDisplay(){let e=this.getValue(),t=this._values.indexOf(e);return this.$select.selectedIndex=t,this.$display.innerHTML=t===-1?e:this._names[t],this}},mk=class extends ik{constructor(e,t,n){super(e,t,n,`string`),this.$input=document.createElement(`input`),this.$input.setAttribute(`type`,`text`),this.$input.setAttribute(`aria-labelledby`,this.$name.id),this.$input.addEventListener(`input`,()=>{this.setValue(this.$input.value)}),this.$input.addEventListener(`keydown`,e=>{e.code===`Enter`&&this.$input.blur()}),this.$input.addEventListener(`blur`,()=>{this._callOnFinishChange()}),this.$widget.appendChild(this.$input),this.$disable=this.$input,this.updateDisplay()}updateDisplay(){return this.$input.value=this.getValue(),this}},hk=!1,gk=class e{constructor({parent:e,autoPlace:t=e===void 0,container:n,width:r,title:i=`Controls`,injectStyles:a=!0,touchStyles:o=!0}={}){if(this.parent=e,this.root=e?e.root:this,this.children=[],this.controllers=[],this.folders=[],this._closed=!1,this._hidden=!1,this.domElement=document.createElement(`div`),this.domElement.classList.add(`lil-gui`),this.$title=document.createElement(`div`),this.$title.classList.add(`title`),this.$title.setAttribute(`role`,`button`),this.$title.setAttribute(`aria-expanded`,!0),this.$title.setAttribute(`tabindex`,0),this.$title.addEventListener(`click`,()=>this.openAnimated(this._closed)),this.$title.addEventListener(`keydown`,e=>{e.code!==`Enter`&&e.code!==`Space`||(e.preventDefault(),this.$title.click())}),this.$title.addEventListener(`touchstart`,()=>{},{passive:!0}),this.$children=document.createElement(`div`),this.$children.classList.add(`children`),this.domElement.appendChild(this.$title),this.domElement.appendChild(this.$children),this.title(i),o&&this.domElement.classList.add(`allow-touch-styles`),this.parent)return this.parent.children.push(this),this.parent.folders.push(this),void this.parent.$children.appendChild(this.domElement);this.domElement.classList.add(`root`),!hk&&a&&(function(e){let t=document.createElement(`style`);t.innerHTML=e;let n=document.querySelector(`head link[rel=stylesheet], head style`);n?document.head.insertBefore(t,n):document.head.appendChild(t)}(`.lil-gui{--background-color:#1f1f1f;--text-color:#ebebeb;--title-background-color:#111;--title-text-color:#ebebeb;--widget-color:#424242;--hover-color:#4f4f4f;--focus-color:#595959;--number-color:#2cc9ff;--string-color:#a2db3c;--font-size:11px;--input-font-size:11px;--font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;--font-family-mono:Menlo,Monaco,Consolas,"Droid Sans Mono",monospace;--padding:4px;--spacing:4px;--widget-height:20px;--name-width:45%;--slider-knob-width:2px;--slider-input-width:27%;--color-input-width:27%;--slider-input-min-width:45px;--color-input-min-width:45px;--folder-indent:7px;--widget-padding:0 0 0 3px;--widget-border-radius:2px;--checkbox-size:calc(var(--widget-height)*0.75);--scrollbar-width:5px;background-color:var(--background-color);color:var(--text-color);font-family:var(--font-family);font-size:var(--font-size);font-style:normal;font-weight:400;line-height:1;text-align:left;touch-action:manipulation;user-select:none;-webkit-user-select:none}.lil-gui,.lil-gui *{box-sizing:border-box;margin:0;padding:0}.lil-gui.root{display:flex;flex-direction:column;width:var(--width,245px)}.lil-gui.root>.title{background:var(--title-background-color);color:var(--title-text-color)}.lil-gui.root>.children{overflow-x:hidden;overflow-y:auto}.lil-gui.root>.children::-webkit-scrollbar{background:var(--background-color);height:var(--scrollbar-width);width:var(--scrollbar-width)}.lil-gui.root>.children::-webkit-scrollbar-thumb{background:var(--focus-color);border-radius:var(--scrollbar-width)}.lil-gui.force-touch-styles{--widget-height:28px;--padding:6px;--spacing:6px;--font-size:13px;--input-font-size:16px;--folder-indent:10px;--scrollbar-width:7px;--slider-input-min-width:50px;--color-input-min-width:65px}.lil-gui.autoPlace{max-height:100%;position:fixed;right:15px;top:0;z-index:1001}.lil-gui .controller{align-items:center;display:flex;margin:var(--spacing) 0;padding:0 var(--padding)}.lil-gui .controller.disabled{opacity:.5}.lil-gui .controller.disabled,.lil-gui .controller.disabled *{pointer-events:none!important}.lil-gui .controller>.name{flex-shrink:0;line-height:var(--widget-height);min-width:var(--name-width);padding-right:var(--spacing);white-space:pre}.lil-gui .controller .widget{align-items:center;display:flex;min-height:var(--widget-height);position:relative;width:100%}.lil-gui .controller.string input{color:var(--string-color)}.lil-gui .controller.boolean .widget{cursor:pointer}.lil-gui .controller.color .display{border-radius:var(--widget-border-radius);height:var(--widget-height);position:relative;width:100%}.lil-gui .controller.color input[type=color]{cursor:pointer;height:100%;opacity:0;width:100%}.lil-gui .controller.color input[type=text]{flex-shrink:0;font-family:var(--font-family-mono);margin-left:var(--spacing);min-width:var(--color-input-min-width);width:var(--color-input-width)}.lil-gui .controller.option select{max-width:100%;opacity:0;position:absolute;width:100%}.lil-gui .controller.option .display{background:var(--widget-color);border-radius:var(--widget-border-radius);height:var(--widget-height);line-height:var(--widget-height);max-width:100%;overflow:hidden;padding-left:.55em;padding-right:1.75em;pointer-events:none;position:relative;word-break:break-all}.lil-gui .controller.option .display.active{background:var(--focus-color)}.lil-gui .controller.option .display:after{bottom:0;content:"↕";font-family:lil-gui;padding-right:.375em;position:absolute;right:0;top:0}.lil-gui .controller.option .widget,.lil-gui .controller.option select{cursor:pointer}.lil-gui .controller.number input{color:var(--number-color)}.lil-gui .controller.number.hasSlider input{flex-shrink:0;margin-left:var(--spacing);min-width:var(--slider-input-min-width);width:var(--slider-input-width)}.lil-gui .controller.number .slider{background-color:var(--widget-color);border-radius:var(--widget-border-radius);cursor:ew-resize;height:var(--widget-height);overflow:hidden;padding-right:var(--slider-knob-width);touch-action:pan-y;width:100%}.lil-gui .controller.number .slider.active{background-color:var(--focus-color)}.lil-gui .controller.number .slider.active .fill{opacity:.95}.lil-gui .controller.number .fill{border-right:var(--slider-knob-width) solid var(--number-color);box-sizing:content-box;height:100%}.lil-gui-dragging .lil-gui{--hover-color:var(--widget-color)}.lil-gui-dragging *{cursor:ew-resize!important}.lil-gui-dragging.lil-gui-vertical *{cursor:ns-resize!important}.lil-gui .title{--title-height:calc(var(--widget-height) + var(--spacing)*1.25);-webkit-tap-highlight-color:transparent;text-decoration-skip:objects;cursor:pointer;font-weight:600;height:var(--title-height);line-height:calc(var(--title-height) - 4px);outline:none;padding:0 var(--padding)}.lil-gui .title:before{content:"▾";display:inline-block;font-family:lil-gui;padding-right:2px}.lil-gui .title:active{background:var(--title-background-color);opacity:.75}.lil-gui.root>.title:focus{text-decoration:none!important}.lil-gui.closed>.title:before{content:"▸"}.lil-gui.closed>.children{opacity:0;transform:translateY(-7px)}.lil-gui.closed:not(.transition)>.children{display:none}.lil-gui.transition>.children{overflow:hidden;pointer-events:none;transition-duration:.3s;transition-property:height,opacity,transform;transition-timing-function:cubic-bezier(.2,.6,.35,1)}.lil-gui .children:empty:before{content:"Empty";display:block;font-style:italic;height:var(--widget-height);line-height:var(--widget-height);margin:var(--spacing) 0;opacity:.5;padding:0 var(--padding)}.lil-gui.root>.children>.lil-gui>.title{border-width:0;border-bottom:1px solid var(--widget-color);border-left:0 solid var(--widget-color);border-right:0 solid var(--widget-color);border-top:1px solid var(--widget-color);transition:border-color .3s}.lil-gui.root>.children>.lil-gui.closed>.title{border-bottom-color:transparent}.lil-gui+.controller{border-top:1px solid var(--widget-color);margin-top:0;padding-top:var(--spacing)}.lil-gui .lil-gui .lil-gui>.title{border:none}.lil-gui .lil-gui .lil-gui>.children{border:none;border-left:2px solid var(--widget-color);margin-left:var(--folder-indent)}.lil-gui .lil-gui .controller{border:none}.lil-gui input{-webkit-tap-highlight-color:transparent;background:var(--widget-color);border:0;border-radius:var(--widget-border-radius);color:var(--text-color);font-family:var(--font-family);font-size:var(--input-font-size);height:var(--widget-height);outline:none;width:100%}.lil-gui input:disabled{opacity:1}.lil-gui input[type=number],.lil-gui input[type=text]{padding:var(--widget-padding)}.lil-gui input[type=number]:focus,.lil-gui input[type=text]:focus{background:var(--focus-color)}.lil-gui input::-webkit-inner-spin-button,.lil-gui input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}.lil-gui input[type=number]{-moz-appearance:textfield}.lil-gui input[type=checkbox]{appearance:none;-webkit-appearance:none;border-radius:var(--widget-border-radius);cursor:pointer;height:var(--checkbox-size);text-align:center;width:var(--checkbox-size)}.lil-gui input[type=checkbox]:checked:before{content:"✓";font-family:lil-gui;font-size:var(--checkbox-size);line-height:var(--checkbox-size)}.lil-gui button{-webkit-tap-highlight-color:transparent;background:var(--widget-color);border:1px solid var(--widget-color);border-radius:var(--widget-border-radius);color:var(--text-color);cursor:pointer;font-family:var(--font-family);font-size:var(--font-size);height:var(--widget-height);line-height:calc(var(--widget-height) - 4px);outline:none;text-align:center;text-transform:none;width:100%}.lil-gui button:active{background:var(--focus-color)}@font-face{font-family:lil-gui;src:url("data:application/font-woff;charset=utf-8;base64,d09GRgABAAAAAAUsAAsAAAAACJwAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAABHU1VCAAABCAAAAH4AAADAImwmYE9TLzIAAAGIAAAAPwAAAGBKqH5SY21hcAAAAcgAAAD0AAACrukyyJBnbHlmAAACvAAAAF8AAACEIZpWH2hlYWQAAAMcAAAAJwAAADZfcj2zaGhlYQAAA0QAAAAYAAAAJAC5AHhobXR4AAADXAAAABAAAABMAZAAAGxvY2EAAANsAAAAFAAAACgCEgIybWF4cAAAA4AAAAAeAAAAIAEfABJuYW1lAAADoAAAASIAAAIK9SUU/XBvc3QAAATEAAAAZgAAAJCTcMc2eJxVjbEOgjAURU+hFRBK1dGRL+ALnAiToyMLEzFpnPz/eAshwSa97517c/MwwJmeB9kwPl+0cf5+uGPZXsqPu4nvZabcSZldZ6kfyWnomFY/eScKqZNWupKJO6kXN3K9uCVoL7iInPr1X5baXs3tjuMqCtzEuagm/AAlzQgPAAB4nGNgYRBlnMDAysDAYM/gBiT5oLQBAwuDJAMDEwMrMwNWEJDmmsJwgCFeXZghBcjlZMgFCzOiKOIFAB71Bb8AeJy1kjFuwkAQRZ+DwRAwBtNQRUGKQ8OdKCAWUhAgKLhIuAsVSpWz5Bbkj3dEgYiUIszqWdpZe+Z7/wB1oCYmIoboiwiLT2WjKl/jscrHfGg/pKdMkyklC5Zs2LEfHYpjcRoPzme9MWWmk3dWbK9ObkWkikOetJ554fWyoEsmdSlt+uR0pCJR34b6t/TVg1SY3sYvdf8vuiKrpyaDXDISiegp17p7579Gp3p++y7HPAiY9pmTibljrr85qSidtlg4+l25GLCaS8e6rRxNBmsnERunKbaOObRz7N72ju5vdAjYpBXHgJylOAVsMseDAPEP8LYoUHicY2BiAAEfhiAGJgZWBgZ7RnFRdnVJELCQlBSRlATJMoLV2DK4glSYs6ubq5vbKrJLSbGrgEmovDuDJVhe3VzcXFwNLCOILB/C4IuQ1xTn5FPilBTj5FPmBAB4WwoqAHicY2BkYGAA4sk1sR/j+W2+MnAzpDBgAyEMQUCSg4EJxAEAwUgFHgB4nGNgZGBgSGFggJMhDIwMqEAYAByHATJ4nGNgAIIUNEwmAABl3AGReJxjYAACIQYlBiMGJ3wQAEcQBEV4nGNgZGBgEGZgY2BiAAEQyQWEDAz/wXwGAAsPATIAAHicXdBNSsNAHAXwl35iA0UQXYnMShfS9GPZA7T7LgIu03SSpkwzYTIt1BN4Ak/gKTyAeCxfw39jZkjymzcvAwmAW/wgwHUEGDb36+jQQ3GXGot79L24jxCP4gHzF/EIr4jEIe7wxhOC3g2TMYy4Q7+Lu/SHuEd/ivt4wJd4wPxbPEKMX3GI5+DJFGaSn4qNzk8mcbKSR6xdXdhSzaOZJGtdapd4vVPbi6rP+cL7TGXOHtXKll4bY1Xl7EGnPtp7Xy2n00zyKLVHfkHBa4IcJ2oD3cgggWvt/V/FbDrUlEUJhTn/0azVWbNTNr0Ens8de1tceK9xZmfB1CPjOmPH4kitmvOubcNpmVTN3oFJyjzCvnmrwhJTzqzVj9jiSX911FjeAAB4nG3HMRKCMBBA0f0giiKi4DU8k0V2GWbIZDOh4PoWWvq6J5V8If9NVNQcaDhyouXMhY4rPTcG7jwYmXhKq8Wz+p762aNaeYXom2n3m2dLTVgsrCgFJ7OTmIkYbwIbC6vIB7WmFfAAAA==") format("woff")}@media (pointer:coarse){.lil-gui.allow-touch-styles{--widget-height:28px;--padding:6px;--spacing:6px;--font-size:13px;--input-font-size:16px;--folder-indent:10px;--scrollbar-width:7px;--slider-input-min-width:50px;--color-input-min-width:65px}}@media (hover:hover){.lil-gui .controller.color .display:hover:before{border:1px solid #fff9;border-radius:var(--widget-border-radius);bottom:0;content:" ";display:block;left:0;position:absolute;right:0;top:0}.lil-gui .controller.option .display.focus{background:var(--focus-color)}.lil-gui .controller.option .widget:hover .display{background:var(--hover-color)}.lil-gui .controller.number .slider:hover{background-color:var(--hover-color)}body:not(.lil-gui-dragging) .lil-gui .title:hover{background:var(--title-background-color);opacity:.85}.lil-gui .title:focus{text-decoration:underline var(--focus-color)}.lil-gui input:hover{background:var(--hover-color)}.lil-gui input:active{background:var(--focus-color)}.lil-gui input[type=checkbox]:focus{box-shadow:inset 0 0 0 1px var(--focus-color)}.lil-gui button:hover{background:var(--hover-color);border-color:var(--hover-color)}.lil-gui button:focus{border-color:var(--focus-color)}}`),hk=!0),n?n.appendChild(this.domElement):t&&(this.domElement.classList.add(`autoPlace`),document.body.appendChild(this.domElement)),r&&this.domElement.style.setProperty(`--width`,r+`px`),this.domElement.addEventListener(`keydown`,e=>e.stopPropagation()),this.domElement.addEventListener(`keyup`,e=>e.stopPropagation())}add(e,t,n,r,i){if(Object(n)===n)return new pk(this,e,t,n);let a=e[t];switch(typeof a){case`number`:return new fk(this,e,t,n,r,i);case`boolean`:return new ak(this,e,t);case`string`:return new mk(this,e,t);case`function`:return new dk(this,e,t)}console.error(`gui.add failed
 	property:`,t,`
 	object:`,e,`
-	value:`,a)}addColor(e,t,n=1){return new uk(this,e,t,n)}addFolder(t){return new e({parent:this,title:t})}load(e,t=!0){return e.controllers&&this.controllers.forEach(t=>{t instanceof dk||t._name in e.controllers&&t.load(e.controllers[t._name])}),t&&e.folders&&this.folders.forEach(t=>{t._title in e.folders&&t.load(e.folders[t._title])}),this}save(e=!0){let t={controllers:{},folders:{}};return this.controllers.forEach(e=>{if(!(e instanceof dk)){if(e._name in t.controllers)throw Error(`Cannot save GUI with duplicate property "${e._name}"`);t.controllers[e._name]=e.save()}}),e&&this.folders.forEach(e=>{if(e._title in t.folders)throw Error(`Cannot save GUI with duplicate folder "${e._title}"`);t.folders[e._title]=e.save()}),t}open(e=!0){return this._closed=!e,this.$title.setAttribute(`aria-expanded`,!this._closed),this.domElement.classList.toggle(`closed`,this._closed),this}close(){return this.open(!1)}show(e=!0){return this._hidden=!e,this.domElement.style.display=this._hidden?`none`:``,this}hide(){return this.show(!1)}openAnimated(e=!0){return this._closed=!e,this.$title.setAttribute(`aria-expanded`,!this._closed),requestAnimationFrame(()=>{let t=this.$children.clientHeight;this.$children.style.height=t+`px`,this.domElement.classList.add(`transition`);let n=e=>{e.target===this.$children&&(this.$children.style.height=``,this.domElement.classList.remove(`transition`),this.$children.removeEventListener(`transitionend`,n))};this.$children.addEventListener(`transitionend`,n);let r=e?this.$children.scrollHeight:0;this.domElement.classList.toggle(`closed`,!e),requestAnimationFrame(()=>{this.$children.style.height=r+`px`})}),this}title(e){return this._title=e,this.$title.innerHTML=e,this}reset(e=!0){return(e?this.controllersRecursive():this.controllers).forEach(e=>e.reset()),this}onChange(e){return this._onChange=e,this}_callOnChange(e){this.parent&&this.parent._callOnChange(e),this._onChange!==void 0&&this._onChange.call(this,{object:e.object,property:e.property,value:e.getValue(),controller:e})}onFinishChange(e){return this._onFinishChange=e,this}_callOnFinishChange(e){this.parent&&this.parent._callOnFinishChange(e),this._onFinishChange!==void 0&&this._onFinishChange.call(this,{object:e.object,property:e.property,value:e.getValue(),controller:e})}destroy(){this.parent&&(this.parent.children.splice(this.parent.children.indexOf(this),1),this.parent.folders.splice(this.parent.folders.indexOf(this),1)),this.domElement.parentElement&&this.domElement.parentElement.removeChild(this.domElement),Array.from(this.children).forEach(e=>e.destroy())}controllersRecursive(){let e=Array.from(this.controllers);return this.folders.forEach(t=>{e=e.concat(t.controllersRecursive())}),e}foldersRecursive(){let e=Array.from(this.folders);return this.folders.forEach(t=>{e=e.concat(t.foldersRecursive())}),e}},_k=1.0823922,vk=.56,yk=Math.tan(Xt.degToRad(34.5)),bk=Math.tan(Xt.degToRad(40.75)),xk=.03,Sk=.759,Ck=.25,wk=(e,t,n)=>{let r=Xt.degToRad(n);return[e*Math.cos(r)*_k,t*_k,e*Math.sin(r)*_k]},Tk=xk+.43999999999999995*yk,Ek=Math.cos(Math.PI/8),Dk=e=>wk(vk,Tk,45*e),Ok=e=>wk(1,xk,22.5*e),kk=e=>wk(1,-.03,22.5*e),Ak=e=>wk(Sk,xk+(1-Sk*Ek)*yk,45*e+22.5),jk=e=>wk(Ck,-.03-(1-Ck*Ek)*bk,45*e+22.5),Mk=[0,(-.03-bk)*_k,0];function Nk(e,t,n){let r=[t[0]-e[0],t[1]-e[1],t[2]-e[2]],i=[n[0]-e[0],n[1]-e[1],n[2]-e[2]],a=[r[1]*i[2]-r[2]*i[1],r[2]*i[0]-r[0]*i[2],r[0]*i[1]-r[1]*i[0]],o=Math.hypot(a[0],a[1],a[2]);a=a.map(e=>e/o);let s=a[0]*e[0]+a[1]*e[1]+a[2]*e[2];return s<0&&(a=a.map(e=>-e),s=-s),[a[0],a[1],a[2],s]}var Pk=(()=>{let e=[0,1,0,Tk*_k];for(let t=0;t<8;t++)e.push(...Nk(Dk(t),Ak(t),Ok(2*t))),e.push(...Nk(Dk(t),Dk(t+1),Ak(t))),e.push(...Nk(Ak(t),Ok(2*t),Ok(2*t+1))),e.push(...Nk(Ak(t),Ok(2*t+1),Ok(2*t+2))),e.push(...Nk(jk(t),kk(2*t),kk(2*t+1))),e.push(...Nk(jk(t),kk(2*t+1),kk(2*t+2))),e.push(...Nk(kk(2*t),Mk,jk(t)));for(let t=0;t<16;t++)e.push(...Nk(Ok(t),Ok(t+1),kk(t)));return e})(),Fk=Pk.length/4,Ik=(()=>{let e=[Mk];for(let t=0;t<8;t++)e.push(Dk(t),Ak(t),jk(t));for(let t=0;t<16;t++)e.push(Ok(t),kk(t));return e})();for(let e of Ik)for(let t=0;t<Fk;t++){let n=Pk[t*4]*e[0]+Pk[t*4+1]*e[1]+Pk[t*4+2]*e[2]-Pk[t*4+3];n>1e-6&&console.warn(`diamond: corner ${e} is ${n.toFixed(4)} outside facet ${t}`)}function Lk(e){return`const ${e}_N = ${Fk};\nvar<private> ${e}: array<vec4f, ${Fk}> = array<vec4f, ${Fk}>(\n  ${Array.from({length:Fk},(e,t)=>`vec4f(${Pk.slice(t*4,t*4+4).map(e=>e.toFixed(7)).join(`, `)})`).join(`,
-  `)});`}function Rk(e){let t=[];for(let e=0;e<8;e++)t.push(...Dk(e),...Ok(2*e),...kk(2*e));return t.push(...Mk),t.map(t=>t*e)}var zk=Pk[31],Bk=Math.atan2(Pk[28],-Pk[29]);function Vk(){let e=[],t=[];for(let n=0;n<Fk;n++){let r=new P(Pk[n*4],Pk[n*4+1],Pk[n*4+2]),i=Ik.filter(e=>Math.abs(r.x*e[0]+r.y*e[1]+r.z*e[2]-Pk[n*4+3])<1e-5).map(e=>new P(...e));if(i.length<3)continue;let a=i.reduce((e,t)=>e.add(t),new P).divideScalar(i.length),o=i[0].clone().sub(a).normalize(),s=r.clone().cross(o),c=e=>Math.atan2(e.clone().sub(a).dot(s),e.clone().sub(a).dot(o));i.sort((e,t)=>c(e)-c(t));for(let n=1;n+1<i.length;n++)for(let a of[i[0],i[n],i[n+1]])e.push(a.x,a.y,a.z),t.push(r.x,r.y,r.z)}let n=new ri;return n.setAttribute(`position`,new Gr(e,3)),n.setAttribute(`normal`,new Gr(t,3)),n}var Hk=`// Real-time glass for thousands of objects of every shape the app supports.
-//
-// Nothing is ray-marched and nothing is random. Objects are drawn as instanced
-// triangles; each fragment follows the light through its own
-// object with exact ray/shape formulas (only the torus and the baked mesh take a
-// few steps along the ray), and whatever the light sees
-// after leaving is looked up (sky, ground, or the picture of what is behind).
-//
-// The app builds three programs from this file by keeping only the lines between
-// the matching \`//#if\` and \`//#endif\` markers:
-//   CAUSTIC  objects drawn from the main lamp's direction into the caustic map
-//   GROUND   the ground and sky
-//   GLASS    the glass objects
-//   BLUR     one direction of the blur that softens the shadows (and makes the glow)
-//   SHADE    contact shadows, over the finished picture
-//   LENS     depth of field, glow and tones: the last pass, onto the screen
-//   PHOTON   real caustics: where each ray of the lamp's light lands on the floor
-//#if BLUR
-// A Gaussian blur along \`dir\` (in texture coordinates, out to its full length).
-// Only what is brighter than \`cut\` is kept (0 keeps everything).
-fn icBlur(uv: vec2f, dir: vec2f, cut: f32, reach: f32, src: texture_2d<f32>, srcSamp: sampler) -> vec4f {
-  // \`reach\` samples each side of the middle: as many as the blur is texels wide.
-  var sum = vec4f(0.0);
-  var total = 0.0;
-  let n = i32(reach);
-  for (var i = -n; i <= n; i++) {
-    let x = 2.0 * f32(i) / reach;
-    let w = exp(-0.5 * x * x);
-    sum += w * max(textureSampleLevel(src, srcSamp, uv + dir * (f32(i) / reach), 0.0) - vec4f(cut), vec4f(0.0));
-    total += w;
-  }
-  return sum / total;
-}
-//#endif
-//#if SHADE
-// First finishing pass: contact shadows. The picture so far carries, in its alpha,
-// how far each pixel is from the camera; from that, each pixel looks at the
-// surfaces around it and darkens where they crowd in over it - under an object
-// where it meets the floor, and in the gaps between objects. p = strength,
-// radius (m), exposure.
-fn icShade(fragCoord: vec2f, res: vec2f, camPos: vec3f, camRight: vec4f, camUp: vec3f, camFwd: vec4f, p: vec4f, src: texture_2d<f32>, srcSamp: sampler) -> vec4f {
-  gRes = res; gCamPos = camPos; gCamRight = camRight; gCamUp = camUp; gCamFwd = camFwd;
-  let uv = fragCoord / res;
-  let here = textureSampleLevel(src, srcSamp, uv, 0.0);
-  let dist = here.a;
-  var shade = 1.0;
-  if (p.x > 0.0 && dist < 900.0) {
-    let px = 1.0 / res;
-    let at = icPointAt(uv, dist);
-    // The surface's direction, from its neighbours (on each axis, the one nearer in depth).
-    let right = textureSampleLevel(src, srcSamp, uv + vec2f(px.x, 0.0), 0.0).a;
-    let left = textureSampleLevel(src, srcSamp, uv - vec2f(px.x, 0.0), 0.0).a;
-    let below = textureSampleLevel(src, srcSamp, uv + vec2f(0.0, px.y), 0.0).a;
-    let above = textureSampleLevel(src, srcSamp, uv - vec2f(0.0, px.y), 0.0).a;
-    var alongX = icPointAt(uv + vec2f(px.x, 0.0), right) - at;
-    if (abs(left - dist) < abs(right - dist)) { alongX = at - icPointAt(uv - vec2f(px.x, 0.0), left); }
-    var alongY = icPointAt(uv + vec2f(0.0, px.y), below) - at;
-    if (abs(above - dist) < abs(below - dist)) { alongY = at - icPointAt(uv - vec2f(0.0, px.y), above); }
-    var n = normalize(cross(alongY, alongX));
-    if (dot(n, camPos - at) < 0.0) { n = -n; }
-    // The floor takes the full shadow; glass, being clear, only a little.
-    let onFloor = abs(at.y) < 0.02 + 0.002 * dist;
-    if (onFloor) { n = vec3f(0.0, 1.0, 0.0); }
-
-    // Points round about, in a spiral turned differently at every pixel.
-    let reach = p.y / (dist * 2.0 * camFwd.w);   // the radius on screen, as a share of its height
-    let turn = 6.2831853 * fract(52.9829189 * fract(dot(fragCoord, vec2f(0.06711056, 0.00583715))));
-    var crowded = 0.0;
-    for (var k = 0; k < 24; k++) {
-      let a = turn + f32(k) * 2.3999632;
-      let r = reach * sqrt((f32(k) + 0.5) / 24.0);
-      let suv = uv + vec2f(cos(a) * r * res.y / res.x, sin(a) * r);
-      let sd = textureSampleLevel(src, srcSamp, suv, 0.0).a;
-      let point = icPointAt(suv, sd);
-      // The floor never shades the floor. (Its depth is stored only roughly, so
-      // nearby floor would read as tiny bumps, and leave a fine grain over it.)
-      if (onFloor && abs(point.y) < 0.02 + 0.002 * sd) { continue; }
-      // On the floor only what is close above it counts: the spot where an object
-      // meets it. (Its shadow proper comes from the lamp. Counting all of an object
-      // gave a wide, grainy halo round it, the samples falling on it or not at random.)
-      if (onFloor && point.y > 0.1 * p.y) { continue; }
-      let there = point - at;
-      let far = length(there);
-      crowded += max(dot(n, there) / (far + 1e-4) - 0.1, 0.0) * (1.0 - smoothstep(0.7 * p.y, 1.6 * p.y, far));
-    }
-    shade = 1.0 - p.x * select(0.3, 1.0, onFloor) * clamp(crowded / 24.0 * 2.6, 0.0, 1.0);
-  }
-  return vec4f(here.rgb * shade * p.z, dist);
-}
-
-var<private> gRes: vec2f;
-var<private> gCamPos: vec3f;
-var<private> gCamRight: vec4f;
-var<private> gCamUp: vec3f;
-var<private> gCamFwd: vec4f;
-
-// The point in the world seen at a place on screen, that far from the camera.
-fn icPointAt(uv: vec2f, dist: f32) -> vec3f {
-  let ndc = (uv * 2.0 - 1.0) * vec2f(1.0, -1.0);
-  let rd = normalize(gCamFwd.xyz + gCamRight.xyz * (ndc.x * gCamFwd.w * gCamRight.w) + gCamUp * (ndc.y * gCamFwd.w));
-  return gCamPos + rd * dist;
-}
-//#endif
-//#if LENS
-// Last finishing pass: the camera. Depth of field (what is nearer or farther than
-// the focus goes soft), the glow round the brightest glints, and film-like tones.
-// p = focus distance to fall back on (m), aperture, glow, tones on.
-fn icLens(fragCoord: vec2f, res: vec2f, p: vec4f, src: texture_2d<f32>, srcSamp: sampler, glowTex: texture_2d<f32>, glowSamp: sampler) -> vec4f {
-  let uv = fragCoord / res;
-  let here = textureSampleLevel(src, srcSamp, uv, 0.0);
-  var col = here.rgb;
-  // Autofocus: on whatever is in the middle of the picture (a few points round the
-  // centre, in case one falls in a gap). Only if all of them see the backdrop does
-  // it fall back on the distance it was given.
-  var focus = 0.0;
-  var found = 0.0;
-  for (var k = 0; k < 5; k++) {
-    let a = f32(k) * 1.2566371;
-    let offset = select(vec2f(cos(a), sin(a)) * 0.03, vec2f(0.0), k == 0);
-    let d = textureSampleLevel(src, srcSamp, vec2f(0.5) + offset * vec2f(res.y / res.x, 1.0), 0.0).a;
-    if (d < 900.0) {
-      focus += d;
-      found += 1.0;
-    }
-  }
-  focus = select(p.x, focus / max(found, 1.0), found > 0.0);
-  let blur = icSoftness(here.a, focus, p.y);
-  if (blur * res.y > 0.75) {
-    // Gather from a disc as wide as this pixel is soft. A point in front of this
-    // one only spills over it as far as it is soft itself.
-    let turn = 6.2831853 * fract(52.9829189 * fract(dot(fragCoord, vec2f(0.06711056, 0.00583715))));
-    var sum = here.rgb;
-    var weight = 1.0;
-    for (var k = 0; k < 24; k++) {
-      let a = turn + f32(k) * 2.3999632;
-      let r = blur * sqrt((f32(k) + 0.5) / 24.0);
-      let there = textureSampleLevel(src, srcSamp, uv + vec2f(cos(a) * r * res.y / res.x, sin(a) * r), 0.0);
-      var w = 1.0;
-      if (there.a < here.a - 0.05) { w = clamp(icSoftness(there.a, focus, p.y) / max(r, 1e-5), 0.0, 1.0); }
-      sum += there.rgb * w;
-      weight += w;
-    }
-    col = sum / weight;
-  }
-  col += textureSampleLevel(glowTex, glowSamp, uv, 0.0).rgb * p.z;
-  if (p.w > 0.5) { col = icTones(col); }
-  return vec4f(col, 1.0);
-}
-
-// How soft a point at that distance is: the radius of its blur, as a share of the
-// height of the picture.
-fn icSoftness(dist: f32, focus: f32, aperture: f32) -> f32 {
-  return min(aperture * 0.05 * abs(dist - focus) / max(dist, 0.1), 0.02);
-}
-
-// Film-like tones: left alone up to fairly bright, then eased toward white
-// instead of clipping, losing a little colour on the way (the Khronos "neutral"
-// curve).
-fn icTones(cIn: vec3f) -> vec3f {
-  var c = cIn;
-  let low = min(c.r, min(c.g, c.b));
-  c -= select(0.04, low - 6.25 * low * low, low < 0.08);
-  let peak = max(c.r, max(c.g, c.b));
-  let start = 0.76;
-  if (peak < start) { return c; }
-  let d = 1.0 - start;
-  let newPeak = 1.0 - d * d / (peak + d - start);
-  c *= newPeak / peak;
-  let grey = 1.0 - 1.0 / (0.15 * (peak - newPeak) + 1.0);
-  return mix(c, vec3f(newPeak), grey);
-}
-//#endif
-//#if PHOTON
-// Real caustics, first half. Objects are drawn from the main lamp's direction, so
-// every pixel here is one ray of its light. Each is followed through its object
-// (in at this point, round the inside for as long as it cannot get out, then out)
-// and on down to the floor. The answer is how far from its straight path the ray
-// lands, in the units of the caustic map (xy), and how much of the light is left
-// (z). The second half moves every one of these rays to where it lands and adds
-// them up, which is bright wherever the glass gathers them together.
-fn icPhoton(worldPos: vec3f, nrmW: vec3f, center: vec3f, quat: vec4f, size: vec3f, vary: vec3f, tintAll: vec4f, tintOwn: vec3f, sunDir: vec3f, lightR: vec3f, lightU: vec3f, glassP: vec4f, cmyAll: f32, bevel: f32, raysAcross: f32, meshEntry: f32, sdfTex: texture_3d<f32>) -> vec4f {
-  // sdfTex is only listed so three.js binds the baked mesh volume (see icGlass).
-  // raysAcross: how many rays there are each way (the width of this picture).
-  gBevel = bevel;
-  gMeshEntry = meshEntry;
-  let cmy = max(cmyAll, vary.z);
-  let shape = IC_SHAPE;
-  let d0 = icToLocal(-sunDir, quat);
-  let entry = icEntry(shape, icToLocal(worldPos - center, quat), size, icToLocal(normalize(nrmW), quat));
-  var n0 = entry.nrm;
-  if (dot(d0, n0) > 0.0) { n0 = -n0; }
-  let ior = max(glassP.x + vary.x, 1.02);
-  var left = 1.0 - icFresnel(dot(d0, n0), ior);
-  // Light that only grazes the surface is thrown wide in a thin, faint streak:
-  // it is faded out, which keeps the pool of light clean.
-  left *= smoothstep(0.05, 0.4, -dot(d0, n0));
-  // The colour of the glass: the setting for all of it times the object's own,
-  // faded toward clear by the setting's alpha.
-  var tint = mix(vec3f(1.0), tintAll.rgb * tintOwn, tintAll.a);
-  if (shape == 0 && cmy > 0.0) { tint *= icCmyTint(n0, cmy); }
-  var dir = refract(d0, n0, 1.0 / ior);
-  var pos = entry.pos;
-  var leaving = vec3f(0.0);
-  var escaped = false;
-  if (dot(dir, dir) > 1e-6) {
-    for (var e = 0; e < 8; e++) {
-      let hit = icExit(shape, pos, dir, size);
-      pos = hit.pos;
-      if (shape == 0 && cmy > 0.0) { tint *= icCmyTint(hit.nrm, cmy); }
-      let through = refract(dir, -hit.nrm, ior);
-      if (dot(through, through) > 1e-6) {
-        left *= 1.0 - icFresnel(dot(dir, hit.nrm), 1.0 / ior);
-        leaving = through;
-        escaped = true;
-        break;
-      }
-      dir = reflect(dir, -hit.nrm);   // cannot get out here: it bounces back inside
-    }
-  }
-  var thrown = vec2f(0.0);   // how far from its straight path the ray lands
-  var light = 0.0;           // and how much light it still carries
-  if (escaped) {
-    let exitAt = center + icToWorld(pos, quat);
-    let down = icToWorld(leaving, quat);
-    if (down.y < -0.02) {
-      let moved = exitAt + down * (-exitAt.y / down.y) - worldPos;
-      thrown = vec2f(dot(moved, lightR), dot(moved, lightU));
-      light = left * dot(tint, vec3f(0.333333));
-    }
-  }
-  // Rays that the glass fans out land far apart, and one ray on its own would show
-  // as a bright dot. How far apart is the area a little square of rays covers when
-  // it lands, against the area it started with: found from how differently this
-  // ray's neighbours are thrown. A fanned-out ray is then spread over that larger
-  // area (up to a limit), and dimmed by as much; where neighbours are thrown
-  // completely differently (across the edge of a facet) there is next to nothing left.
-  let across = dpdx(thrown) * (0.5 * raysAcross);
-  let downward = dpdy(thrown) * (0.5 * raysAcross);
-  let spread = max(abs((1.0 + across.x) * (1.0 - downward.y) + downward.x * across.y), 1.0);
-  // Alpha: above 0 marks the pixel as covered by glass (whether or not its ray
-  // reaches the floor); beyond 1, it is how wide (in rays) to draw this one.
-  return vec4f(thrown, light / spread, 1.0 + min(sqrt(spread), 6.0));
-}
-//#endif
-//#if CAUSTIC
-fn icCaustic(normalW: vec3f, worldPos: vec3f, size: vec3f, quat: vec4f, cmyAll: f32, vary: vec3f, tintAll: vec4f, tintOwn: vec3f) -> vec4f {
-  // A CMY cube: every box when the whole pile is, or just the objects marked as one.
-  let cmy = max(cmyAll, vary.z);
-  // Every surface the lamp's light crosses multiplies it; multiplicative blending
-  // builds up the product over all surfaces. The upper part of an object shades
-  // the floor; the part resting on it gathers light there instead, the bright
-  // patch at the foot of a cut stone.
-  let n = normalize(normalW);
-  let height = worldPos.y / (0.9 * max(size.x, max(size.y, size.z)));
-  var c = vec3f(mix(1.32, 0.79, smoothstep(0.0, 1.0, height)));
-  // Coloured glass colours the light that passes through it. Light crosses two
-  // surfaces of an object (in and out), so each takes half of the colouring.
-  c *= sqrt(mix(vec3f(1.0), tintAll.rgb * tintOwn, tintAll.a));
-  // CMY cubes also colour the light, on every face it crosses.
-  if (cmy > 0.0) {
-    let local = n + 2.0 * cross(-quat.xyz, cross(-quat.xyz, n) + quat.w * n);
-    c *= icCmyTint(local, cmy);
-  }
-  return vec4f(c, 1.0);
-}
-//#endif
-//#if GROUND
-fn icGround(fragCoord: vec2f, res: vec2f, camPos: vec3f, camRight: vec4f, camUp: vec3f, camFwd: vec4f, room: f32, skyE: vec3f, sunE: vec3f, albedo: vec3f, lightC: vec3f, lightR: vec3f, lightU: vec3f, floorP: vec4f, spot: vec4f, lamp: vec3f, lightTex: texture_2d<f32>, lightSamp: sampler, mirrorTex: texture_2d<f32>, mirrorSamp: sampler, shadeTex: texture_2d<f32>, shadeSamp: sampler, shadeFarTex: texture_2d<f32>, shadeFarSamp: sampler) -> vec4f {
-  // shadeTex and shadeFarTex are only listed so three.js binds them; icSoftShade
-  // reads them through their global names.
-  gFloorP = floorP;
-  // room: 1 if there is a floor, plus 2 for the dark studio.
-  gDark = floor(room / 2.0); gGroundOn = room - 2.0 * gDark;
-  gSpot = spot;
-  gLamp = lamp;
-  gSkyE = skyE; gSunE = sunE; gAlbedo = albedo;
-  gLightC = lightC; gLightR = lightR; gLightU = lightU;
-  let ndc = (fragCoord / res * 2.0 - 1.0) * vec2f(1.0, -1.0);
-  let rd = normalize(camFwd.xyz + camRight.xyz * (ndc.x * camFwd.w * camRight.w) + camUp * (ndc.y * camFwd.w));
-  gBackdrop = true;
-  var col = icScene(camPos, rd);
-  // The studio backdrop is lit a little unevenly: brighter up and to the left.
-  col *= 1.0 + 0.07 * (0.8 * ndc.y - 0.5 * ndc.x);
-  let onFloor = gGroundOn > 0.5 && rd.y < -1e-5;
-  let floorT = -camPos.y / min(rd.y, -1e-5);
-  // An endless grid on the floor: a line every metre, a heavier one every five metres.
-  if (onFloor && floorP.z > 0.5) {
-    let g = camPos.xz + rd.xz * floorT;
-    // How much floor one pixel covers there (it stretches away from the camera).
-    let pixel = floorT * (2.0 * camFwd.w / res.y) / max(-rd.y, 0.02);
-    let near1 = abs(fract(g - 0.5) - 0.5);
-    let near5 = abs(fract(g / 5.0 - 0.5) - 0.5) * 5.0;
-    let fine = icGridLine(min(near1.x, near1.y), 0.009, pixel);
-    let heavy = icGridLine(min(near5.x, near5.y), 0.02, pixel);
-    let lines = min(0.38 * fine + 0.5 * heavy, 0.62);
-    // Dark lines on the white floor, pale ones on the dark one.
-    if (gDark > 0.5) { col += vec3f(0.035) * lines; } else { col *= 1.0 - lines; }
-  }
-  // A polished floor: the picture of the objects mirrored in it (drawn before this
-  // pass), stronger at grazing angles and slightly blurred.
-  if (floorP.x > 0.0 && onFloor) {
-    let uv = fragCoord / res;
-    // The mirror picture's alpha falls with height above the floor: a polished
-    // (not mirror) floor shows what touches it clearly, and what is higher up
-    // fainter and more blurred.
-    var m = textureSampleLevel(mirrorTex, mirrorSamp, uv, 0.0);
-    let px = mix(9.0, 1.0, clamp(m.a * 1.3, 0.0, 1.0)) / res;
-    for (var k = 0; k < 12; k++) {
-      let a = f32(k) * 2.3999632;
-      m += textureSampleLevel(mirrorTex, mirrorSamp, uv + vec2f(cos(a), sin(a)) * sqrt((f32(k) + 0.5) / 12.0) * px, 0.0);
-    }
-    m /= 13.0;
-    let grazing = 1.0 - clamp(-rd.y, 0.0, 1.0);
-    // (A black floor shows its reflections the more clearly: twice as strong in the dark studio.)
-    let k = min(floorP.x * select(1.0, 2.0, gDark > 0.5) * (0.35 + 0.65 * grazing * grazing), 1.0) * m.a;
-    if (m.a > 1e-4) { col = mix(col, m.rgb / m.a, k); }
-  }
-  // The beam of the spotlight, made visible by the dust in the air.
-  if (gSpot.x > 0.0) {
-    let inBeam = icBeam(camPos, rd, select(1e4, floorT, onFloor));
-    col += vec3f(0.07, 0.07, 0.075) * (1.0 - exp(-0.3 * inBeam));
-  }
-  // Fog: the floor fades into a pale haze with distance, and the haze hangs along
-  // the horizon.
-  if (floorP.w > 0.0) {
-    let haze = icEnv(normalize(vec3f(rd.x, 0.03, rd.z))) * 1.07;
-    if (onFloor) {
-      col = mix(col, haze, 1.0 - exp(-0.05 * floorP.w * floorT));
-    } else {
-      col = mix(col, haze, exp(-max(rd.y, 0.0) * 5.0 / floorP.w));
-    }
-  }
-  // (Alpha: how far away this pixel is, for the finishing passes.)
-  return vec4f(col, select(1000.0, floorT, onFloor));
-}
-
-// How far a ray travels inside the cone of the spotlight (from the lamp, gSpot.y
-// away toward gLamp, to the middle of the floor, where the beam is gSpot.x
-// in radius), up to distance tEnd.
-fn icBeam(o: vec3f, d: vec3f, tEnd: f32) -> f32 {
-  let axis = -gLamp;
-  let k = gSpot.x / gSpot.y;
-  let cos2 = 1.0 / (1.0 + k * k);         // squared cosine of the half-angle of the cone
-  let fromLamp = o - gLamp * gSpot.y;
-  let dAxis = dot(d, axis);
-  let oAxis = dot(fromLamp, axis);
-  let a = dAxis * dAxis - cos2;
-  let b = 2.0 * (dAxis * oAxis - dot(d, fromLamp) * cos2);
-  let c = oAxis * oAxis - dot(fromLamp, fromLamp) * cos2;
-  let disc = b * b - 4.0 * a * c;
-  // Where along the ray it may count: in front of the camera, short of tEnd, and
-  // on the lamp's side of the cone's tip that the light goes out from (the
-  // cone's equation has a mirror half behind the lamp too).
-  var lo = 0.0;
-  var hi = tEnd;
-  if (abs(dAxis) < 1e-6) {
-    if (oAxis <= 0.0) { return 0.0; }
-  } else if (dAxis > 0.0) {
-    lo = max(lo, -oAxis / dAxis);
-  } else {
-    hi = min(hi, -oAxis / dAxis);
-  }
-  if (hi <= lo) { return 0.0; }
-  // Inside the (double) cone where a t^2 + b t + c >= 0. A ray running more across
-  // the beam than the cone opens (a < 0) is inside between the two crossings; one
-  // running more along it (a > 0, as when looking down the beam from inside it)
-  // is inside before the first crossing and after the second, or all the way if
-  // it never crosses. (Leaving those rays out drew a hard-edged circle on the
-  // floor round the point straight below a camera inside the beam.)
-  if (abs(a) < 1e-7) {
-    // Parallel to the cone's side: inside on one side of a single crossing.
-    if (abs(b) < 1e-9) { return select(0.0, hi - lo, c >= 0.0); }
-    let t = -c / b;
-    if (b > 0.0) { return max(hi - max(lo, t), 0.0); }
-    return max(min(hi, t) - lo, 0.0);
-  }
-  if (disc <= 0.0) { return select(0.0, hi - lo, a > 0.0); }
-  let root = sqrt(disc);
-  let r0 = min((-b - root) / (2.0 * a), (-b + root) / (2.0 * a));
-  let r1 = max((-b - root) / (2.0 * a), (-b + root) / (2.0 * a));
-  if (a < 0.0) { return max(min(hi, r1) - max(lo, r0), 0.0); }
-  return max(min(hi, r0) - lo, 0.0) + max(hi - max(lo, r1), 0.0);
-}
-
-// How much of a pixel a grid line covers: the line is \`half\` wide either side of
-// its middle, the pixel \`pixel\` wide, and \`d\` is how far the pixel is from the line.
-fn icGridLine(d: f32, half: f32, pixel: f32) -> f32 {
-  return clamp((half - d) / pixel + 0.5, 0.0, 1.0) * clamp(2.0 * half / pixel, 0.0, 1.0);
-}
-//#endif
-//#if GLASS
-fn icGlass(worldPos: vec3f, nrmW: vec3f, center: vec3f, quat: vec4f, size: vec3f, vary: vec3f, tintAll: vec4f, tintOwn: vec3f, camPos: vec3f, glassP: vec4f, viewProj: mat4x4f, room: f32, skyE: vec3f, sunE: vec3f, albedo: vec3f, lightC: vec3f, lightR: vec3f, lightU: vec3f, cmyAll: f32, mirror: f32, bevel: f32, spot: vec4f, lamp: vec3f, lightTex: texture_2d<f32>, lightSamp: sampler, behindTex: texture_2d<f32>, behindSamp: sampler, lampDepthTex: texture_2d<f32>, meshEntry: f32, sdfTex: texture_3d<f32>) -> vec4f {
-  // sdfTex is only listed so three.js binds the baked mesh volume; icVolume reads
-  // it through its global name (icSdfTex).
-  // room: 1 if there is a floor, plus 2 for the dark studio.
-  gDark = floor(room / 2.0); gGroundOn = room - 2.0 * gDark;
-  gSpot = spot;
-  gLamp = lamp;
-  gSkyE = skyE; gSunE = sunE; gAlbedo = albedo;
-  gLightC = lightC; gLightR = lightR; gLightU = lightU;
-  gViewProj = viewProj;
-  gEye = camPos;
-  gReach = max(size.x, max(size.y, size.z));
-  gSteps = glassP.w;
-  gMirror = mirror;
-  // A CMY cube: every box when the whole pile is, or just the objects marked as one.
-  let cmy = max(cmyAll, vary.z);
-  gBevel = bevel;
-  gMeshEntry = meshEntry;
-  // In the shadow of other objects? (The mirror image is drawn upside down below
-  // the floor: the object itself is above it.) The lamp is dimmed for this object
-  // in all it sees of the studio (see icEnv).
-  let here = select(worldPos, worldPos * vec3f(1.0, -1.0, 1.0), mirror > 0.5);
-  gLampLit = icLampVisible(here, dot(center, lamp) + 1.25 * length(size));
-  let shape = IC_SHAPE;
-  let rdW = normalize(worldPos - camPos);
-  let d0 = icToLocal(rdW, quat);
-
-  // Entry point and normal in the object's own space.
-  let entry = icEntry(shape, icToLocal(worldPos - center, quat), size, icToLocal(normalize(nrmW), quat));
-  let p0 = entry.pos;
-  var n0 = entry.nrm;
-  if (dot(d0, n0) > 0.0) { n0 = -n0; }
-
-  // Each object can differ slightly from the settings: vary.x is added to the IOR,
-  // vary.y multiplies the dispersion.
-  let ior = max(glassP.x + vary.x, 1.02);
-  // How far apart the IOR is for blue and red light (n_F - n_C): 1/12 for each unit of
-  // the dispersion setting, far more than real glass shows, for visible fire.
-  let disp = glassP.y * vary.y / 12.0;
-  // The baked mesh is the one shape that has to be marched, so it gets fewer bounces.
-  let maxEvents = select(i32(glassP.z), min(i32(glassP.z), 4), icIsMesh(shape));
-  let layers = select(1, 3, disp > 0.0);
-  var col = vec3f(0.0);
-  // The glass colours light where it enters (white, except for CMY cubes).
-  // The colour of the glass: the setting for all of it times the object's own,
-  // faded toward clear by the setting's alpha.
-  var tint = mix(vec3f(1.0), tintAll.rgb * tintOwn, tintAll.a);
-  if (shape == 0 && cmy > 0.0) { tint *= icCmyTint(n0, cmy); }
-
-  for (var c = 0; c < layers; c++) {
-    // One colour layer: IOR - 1.5 d, IOR, IOR + d.
-    var ch = 1;
-    if (layers == 3) { ch = c; }
-    let iorIn = max(ior + icIorOffset(disp, ch), 1.0001);
-    let f0 = icFresnel(dot(d0, n0), iorIn);
-    var layer = f0 * icLook(worldPos + icToWorld(n0, quat) * 0.003, icToWorld(reflect(d0, n0), quat), false);
-    var thr = 1.0 - f0;   // light still inside, weighted by the chance of getting here
-    var prob = 1.0;
-    var dir = refract(d0, n0, 1.0 / iorIn);
-    var pos = p0;
-    // A CMY cube's faces are colour filters: light is filtered by the face it enters
-    // through, by each face it bounces off inside, and by the face it leaves through. Seen through one face, the others mix
-    // their colours into it: the cube inside the cube.
-    var filtered = tint;
-    if (dot(dir, dir) > 1e-6) {
-      for (var e = 1; e < maxEvents; e++) {
-        // Where the ray meets the inside of the surface again, exactly.
-        let hit = icExit(shape, pos, dir, size);
-        pos = hit.pos;
-        let nrm = hit.nrm;
-        var face = vec3f(1.0);
-        if (shape == 0 && cmy > 0.0) { face = icCmyTint(nrm, cmy); }
-        // The exit glass picks one of the three layer IORs at random in the path
-        // tracer; here all three are taken at once, weighted by their chance.
-        let fx = icExitFactor(min(8.0 * hit.t, 1.0));
-        var reflProb = 0.0;
-        for (var k = 0; k < 3; k++) {
-          var wk = fx / 3.0;
-          if (layers == 1) {
-            if (k != 1) { continue; }
-            wk = 1.0;
-          } else if (k == ch) {
-            wk += 1.0 - fx;
-          }
-          let iorK = max(ior + icIorOffset(disp, k), 1.0001);
-          let rf = refract(dir, -nrm, iorK);
-          var f = icFresnel(dot(dir, nrm), 1.0 / iorK);
-          if (dot(rf, rf) < 1e-6) { f = 1.0; }
-          reflProb += wk * f;
-          let outW = thr * wk * (1.0 - f);
-          if (outW > 0.004) {
-            let seen = icLook(center + icToWorld(pos + nrm * 0.003, quat), icToWorld(rf, quat), true);
-            layer += filtered * face * min(outW * seen, vec3f(10.0 * prob * wk * (1.0 - f)));
-          }
-        }
-        thr *= reflProb;
-        prob *= reflProb;
-        if (thr < 0.004) { break; }
-        dir = reflect(dir, -nrm);
-        filtered *= face;
-      }
-      // Light still bouncing around inside when the bounces run out (common in
-      // cones and octahedra) is let out, rather than left as a black patch.
-      if (thr >= 0.004) {
-        layer += filtered * min(thr * icLook(center + icToWorld(pos, quat), icToWorld(dir, quat), true), vec3f(10.0 * prob));
-      }
-    }
-    if (layers == 3) { col[c] = layer[c]; } else { col = layer; }
-  }
-  if (mirror > 0.5) {
-    let fade = exp(-3.2 * max(worldPos.y, 0.0));
-    return vec4f(col * fade, fade);
-  }
-  // (Alpha: how far away this pixel is, for the finishing passes.)
-  // In the shadow of other objects, the light the lamp would have sent through it
-  // is mostly missing: darker by the lamp's share of all the light in the studio
-  // (about a third in the white studio, half under the spotlight), less what the
-  // glass in the way lets through.
-  let lampShare = dot(sunE, vec3f(1.0)) / max(dot(sunE + skyE, vec3f(1.0)), 1e-4);
-  col *= mix(1.0 - 0.55 * lampShare, 1.0, gLampLit);
-  return vec4f(col, length(worldPos - camPos));
-}
-//#endif
-
-//#if CAUSTIC GLASS PHOTON
-// CMY cube: each pair of opposite faces is a filter that holds back one primary
-// (cyan, yellow, magenta). \`n\` is the face normal in the cube's own space;
-// \`strength\` runs from clear glass (0) to the full filter (1). The filters pass
-// their own colours almost untouched, which keeps the cube luminous, and each
-// lets a little of the blocked one through, so three in a row stay a deep colour
-// instead of going grey.
-fn icCmyTint(n: vec3f, strength: f32) -> vec3f {
-  let a = abs(n);
-  var passed = vec3f(1.0, 0.14, 0.92);
-  if (a.x >= a.y && a.x >= a.z) { passed = vec3f(0.1, 0.92, 1.0); }
-  else if (a.y >= a.z) { passed = vec3f(1.0, 0.9, 0.2); }
-  return mix(vec3f(1.0), passed, strength);
-}
-//#endif
-
-const IC_PI = 3.14159265359;
-
-//#if GROUND
-// The blurred shadow maps at a point of the caustic map: x a little blurred (the
-// shadow of the lamp), y blurred far wider (where objects keep the light of the
-// room off the floor).
-fn icSoftShade(uv: vec2f) -> vec2f {
-  return vec2f(textureSampleLevel(icShadeTex, icShadeTex_sampler, uv, 0.0).g, textureSampleLevel(icShadeFarTex, icShadeFarTex_sampler, uv, 0.0).g);
-}
-//#endif
-//#if GLASS
-fn icSoftShade(uv: vec2f) -> vec2f {
-  return vec2f(1.0);
-}
-//#endif
-//#if GROUND GLASS
-var<private> gFloorP: vec4f;   // floor: how reflective, how dark its shadows, grid on, fog
-var<private> gGroundOn: f32;   // 1: there is a floor
-var<private> gDark: f32;       // 1: the dark studio
-var<private> gSpot: vec4f;     // stage spotlight: x the radius of its beam at the floor (0: off), y how far away the lamp is
-var<private> gLamp: vec3f;     // toward the main lamp (which is also the spotlight), from the middle of the floor
-var<private> gBackdrop: bool;  // looking straight at the background, not through or off glass
-var<private> gSkyE: vec3f;     // sky irradiance / pi on the ground
-var<private> gSunE: vec3f;     // the main lamp's irradiance / pi on the ground
-var<private> gAlbedo: vec3f;
-var<private> gLightC: vec3f;   // caustic map: centre on the ground,
-var<private> gLightR: vec3f;   //   its right axis / half-width,
-var<private> gLightU: vec3f;   //   its up axis / half-width
-
-// A photographer's white studio: a pale room with a few bright lamps, and dark
-// cards for the glass to pick up (they give colourless stones their contrast).
-// The camera itself only ever sees the plain white backdrop.
-var<private> gLampLit: f32 = 1.0;  // how much of the lamp reaches the object being shaded (1: all; see icLampVisible)
-
-// For an object in the shadow of others: how much of the lamp it still sees in its
-// reflections (the ones in the way are glass, and let about a third through).
-fn icLampShare() -> f32 {
-  return mix(0.35, 1.0, gLampLit);
-}
-
-fn icEnv(d: vec3f) -> vec3f {
-  // As bright as the open ground, so the two meet without a visible horizon.
-  // (Under a spotlight the backdrop is outside the pool, so the lamp does not reach it.)
-  if (gBackdrop) { return gAlbedo * (gSkyE + gSunE * select(1.0, 0.0, gSpot.x > 0.0)); }
-  let az = atan2(d.z, d.x);
-  if (gDark > 0.5) {
-    // The dark studio: black all round. With the spotlight it is lit by that one
-    // lamp and nothing else. Without, by a large soft lamp, a soft one overhead,
-    // and two tall strip lights that draw bright lines down the edges of the glass.
-    var k = 0.012;
-    if (gSpot.x > 0.0) {
-      // (The room is not quite black: a dim grey, lighter toward the floor, which is
-      // what the dark band low in a glass ball is showing.)
-      k = mix(0.11, 0.035, smoothstep(0.0, 0.6, d.y));
-      k += 40.0 * icLampShare() * smoothstep(0.988, 0.996, dot(d, gLamp));
-      // A jeweller's softboxes, out of the picture: a large one overhead and a tall
-      // strip either side. The camera never sees them, only the glass does: they are
-      // what makes the facets of a stone flash white against the black.
-      // Overhead: four panels round a dark hole (where the camera looks down through
-      // the tent), so a stone's table shows a pattern of light and dark, not a blank.
-      let ring = smoothstep(0.78, 0.86, d.y) * (1.0 - smoothstep(0.94, 0.97, d.y));
-      k += 2.6 * ring * smoothstep(-0.2, 0.3, cos(4.0 * az));
-      let tall = smoothstep(0.05, 0.15, d.y) * (1.0 - smoothstep(0.55, 0.7, d.y));
-      // (Left and right of where the camera starts, not behind the stones, where a
-      // table facing up would mirror one straight into the camera as a white blank.)
-      k += 4.0 * tall * smoothstep(0.95, 0.985, cos(az - 2.5));
-      k += 4.0 * tall * smoothstep(0.95, 0.985, cos(az + 0.63));
-    } else {
-      k += 6.0 * icLampShare() * smoothstep(0.84, 0.95, dot(d, gLamp));
-      k += 1.6 * smoothstep(0.8, 0.97, d.y);
-      let tall = smoothstep(0.02, 0.1, d.y) * (1.0 - smoothstep(0.6, 0.75, d.y));
-      k += 5.0 * tall * smoothstep(0.985, 0.996, cos(az - 0.5));
-      k += 3.5 * tall * smoothstep(0.99, 0.998, cos(az + 1.9));
-    }
-    return vec3f(k);
-  }
-  // A light tent: pale overhead, dark grey toward the floor.
-  var c = mix(0.15, 0.72, smoothstep(-0.1, 0.95, d.y));
-  // A few grey cards standing round the set, and a small dark one overhead (the
-  // camera): they are what the stone's darker facets are looking at.
-  let band = smoothstep(0.03, 0.1, d.y) * (1.0 - smoothstep(0.68, 0.82, d.y));
-  c = mix(c, 0.04, 0.96 * band * smoothstep(-0.1, 0.15, sin(az * 5.0 + 1.0)));
-  c = mix(c, 0.05, smoothstep(0.9, 0.95, d.y));
-  // Lamps: the main one up and to the left, and two small ones.
-  c += 3.0 * icLampShare() * smoothstep(0.86, 0.96, dot(d, gLamp));
-  c += 3.0 * smoothstep(0.985, 0.995, dot(d, normalize(vec3f(cos(3.0), 0.6, sin(3.0)))));
-  c += 3.0 * smoothstep(0.985, 0.995, dot(d, normalize(vec3f(cos(5.0), 0.9, sin(5.0)))));
-  return vec3f(c);
-}
-
-// How much of the main lamp's light reaches a ground point: the caustic map, lightly blurred.
-fn icSunT(g: vec3f) -> vec3f {
-  let v = g - gLightC;
-  let uv = vec2f(0.5 + 0.5 * dot(v, gLightR), 0.5 - 0.5 * dot(v, gLightU));
-  if (uv.x <= 0.0 || uv.x >= 1.0 || uv.y <= 0.0 || uv.y >= 1.0) { return vec3f(1.0); }
-  let px = 1.0 / vec2f(textureDimensions(icLightTex));
-  var sum = textureSampleLevel(icLightTex, icLightTex_sampler, uv, 0.0).rgb * 2.0;
-  sum += textureSampleLevel(icLightTex, icLightTex_sampler, uv + vec2f(1.5, 0.5) * px, 0.0).rgb;
-  sum += textureSampleLevel(icLightTex, icLightTex_sampler, uv + vec2f(-0.5, 1.5) * px, 0.0).rgb;
-  sum += textureSampleLevel(icLightTex, icLightTex_sampler, uv + vec2f(-1.5, -0.5) * px, 0.0).rgb;
-  sum += textureSampleLevel(icLightTex, icLightTex_sampler, uv + vec2f(0.5, -1.5) * px, 0.0).rgb;
-  return sum / 6.0;
-}
-
-fn icGroundColor(g: vec3f) -> vec3f {
-  let sun = icSunT(g);
-  // The floor's shadows are blurred: the shadow of the main lamp a
-  // little, and a much wider, fainter one where objects keep the light of the room
-  // off the floor.
-  let direct = clamp(sun, vec3f(0.0), vec3f(1.0));
-  // Blurred only where the floor is seen directly, not through glass.
-  let pool = icSpotPool(g);
-  if (!gBackdrop) { return gAlbedo * (gSkyE * (0.55 + 0.45 * direct) + gSunE * direct * pool); }
-  let v = g - gLightC;
-  let uv = vec2f(0.5 + 0.5 * dot(v, gLightR), 0.5 - 0.5 * dot(v, gLightU));
-  let shade = icSoftShade(uv);
-  // gFloorP.y is how dark the shadows are; negative when the near map holds real
-  // caustics (the light that actually arrives), which are used as they are.
-  let darkness = abs(gFloorP.y);
-  var lamp = min(max(shade.x, 0.0), 1.7);
-  if (gFloorP.y < 0.0) {
-    // Gathered light is eased off above the level of the open floor, toward three
-    // times it at most. Only the top layer of a pile is followed, as if nothing lay
-    // beneath it, so taken at face value a pile would light its floor far too much.
-    let over = max(shade.x - 1.0, 0.0);
-    lamp = min(shade.x, 1.0) + over / (1.0 + 0.5 * over);
-  }
-  // How dark the shadows are: the share of the lamp's light they hold back (0: none,
-  // 1: all of it). Light gathered above the open floor's is left as it is.
-  if (lamp < 1.0) { lamp = 1.0 - darkness * (1.0 - lamp); }
-  let ambient = 1.0 - 0.8 * darkness * (1.0 - min(shade.y, 1.0));
-  return gAlbedo * (gSkyE * ambient + gSunE * lamp * pool);
-}
-
-// How much of the spotlight reaches a point of the floor: all of it inside the
-// pool, fading out at its edge. (1 everywhere when there is no spotlight.)
-fn icSpotPool(g: vec3f) -> f32 {
-  if (gSpot.x <= 0.0) { return 1.0; }
-  // How far the point is from the axis of the beam, against how wide the beam is
-  // there. The beam comes down at an angle, so the pool is an oval.
-  let fromLamp = g - gLamp * gSpot.y;
-  let along = dot(fromLamp, -gLamp);
-  if (along <= 0.0) { return 0.0; }
-  let across = length(fromLamp + gLamp * along);
-  // It fades out gradually toward its edge, and (the lamp being near) the floor is
-  // brighter on the side toward the lamp than on the far side.
-  let nearness = gSpot.y / max(along, 0.3 * gSpot.y);
-  return (1.0 - smoothstep(0.3, 1.0, across / along * gSpot.y / gSpot.x)) * nearness * nearness;
-}
-
-// Ground and sky along a ray, ignoring glass.
-fn icScene(ro: vec3f, rd: vec3f) -> vec3f {
-  if (gGroundOn > 0.5 && rd.y < -1e-5) {
-    let t = max(-ro.y / rd.y, 0.0);
-    let horizon = icEnv(normalize(vec3f(rd.x, 0.03, rd.z)));
-    return mix(icGroundColor(ro + rd * t), horizon, smoothstep(150.0, 600.0, t));
-  }
-  return icEnv(rd);
-}
-//#endif
-
-//#if GLASS PHOTON
-var<private> gViewProj: mat4x4f;
-var<private> gEye: vec3f;      // the camera
-var<private> gReach: f32;      // about how big this object is (m)
-var<private> gSteps: f32;      // how many steps a ray leaving it is followed for, looking for other glass (0: not at all)
-var<private> gMirror: f32;     // 1 while drawing the mirror image in the floor
-var<private> gBevel: f32;      // how much is cut off the edges of boxes (m)
-var<private> gMeshEntry: f32;  // 1: light enters a baked mesh through its volume's surface (see icEntry)
-
-// A point on an object's surface, its outward normal there, and (for exits) how
-// far the ray travelled inside the glass to reach it.
-struct IcHit {
-  pos: vec3f,
-  nrm: vec3f,
-  t: f32,
-}
-
-// Each glass program is built for one shape: the app rewrites this line.
-const IC_SHAPE = 0;
-
-// Shapes, in the object's own space (size = per-shape dimensions):
-//   0 box         half-extents size.xyz
-//   1 sphere      radius size.x
-//   2 cylinder    radius size.x, half-height size.y, axis Y
-//   3 capsule     radius size.x, half-length of the middle part size.y, axis Y
-//   4 cone        base radius size.x, half-height size.y, apex up
-//   5 torus       ring radius size.x, tube radius size.y, axis Y
-//   6 octahedron  vertices at distance size.x
-//   7 prism       triangular: apex at y = size.x, base at y = -size.x / 2, half-length size.z
-//   8 hex prism   distance from centre to a side face size.x, half-height size.y
-//   9 mesh        Suzanne, baked into a distance volume; half-width size.x
-//  10 diamond     round brilliant cut (diamond.ts) of size size.x
-//  11 mesh        the Stanford dragon, baked like Suzanne; half-width size.x
-
-// The diamond's facets at size 1 (IC_DIAMOND, IC_DIAMOND_N), from diamond.ts.
-/*DIAMOND*/
-
-// The flat faces of the polyhedra as planes: xyz = outward normal, w = offset.
-// (A box counts as one once its edges are bevelled: its six faces plus a flat
-// cut along each of its twelve edges.)
-fn icIsPolyhedron(shape: i32) -> bool {
-  return (shape >= 6 && shape <= 8) || shape == 10 || (shape == 0 && gBevel > 0.0);
-}
-
-fn icPlaneCount(shape: i32) -> i32 {
-  if (shape == 7) { return 5; }
-  if (shape == 10) { return IC_DIAMOND_N; }
-  if (shape == 0) { return 18; }
-  return 8;
-}
-
-fn icPlane(shape: i32, k: i32, size: vec3f) -> vec4f {
-  if (shape == 0) {
-    if (k < 6) {
-      var n = vec3f(0.0);
-      n[k / 2] = select(-1.0, 1.0, (k & 1) == 1);
-      return vec4f(n, size[k / 2]);
-    }
-    // The cut along an edge: at 45 degrees between the two faces that meet there.
-    let e = k - 6;
-    let a = select(-1.0, 1.0, (e & 1) == 1);
-    let b = select(-1.0, 1.0, (e & 2) == 2);
-    let pair = e / 4;
-    if (pair == 0) { return vec4f(vec3f(a, b, 0.0) * 0.70710678, (size.x + size.y - gBevel) * 0.70710678); }
-    if (pair == 1) { return vec4f(vec3f(0.0, a, b) * 0.70710678, (size.y + size.z - gBevel) * 0.70710678); }
-    return vec4f(vec3f(a, 0.0, b) * 0.70710678, (size.x + size.z - gBevel) * 0.70710678);
-  }
-  if (shape == 10) {
-    let facet = IC_DIAMOND[k];
-    return vec4f(facet.xyz, facet.w * size.x);
-  }
-  if (shape == 6) {
-    let n = vec3f(select(-1.0, 1.0, (k & 1) != 0), select(-1.0, 1.0, (k & 2) != 0), select(-1.0, 1.0, (k & 4) != 0));
-    return vec4f(n * 0.57735027, size.x * 0.57735027);
-  }
-  if (shape == 7) {
-    if (k == 0) { return vec4f(0.0, -1.0, 0.0, size.x * 0.5); }
-    if (k == 1) { return vec4f(0.8660254, 0.5, 0.0, size.x * 0.5); }
-    if (k == 2) { return vec4f(-0.8660254, 0.5, 0.0, size.x * 0.5); }
-    if (k == 3) { return vec4f(0.0, 0.0, 1.0, size.z); }
-    return vec4f(0.0, 0.0, -1.0, size.z);
-  }
-  if (k == 6) { return vec4f(0.0, 1.0, 0.0, size.y); }
-  if (k == 7) { return vec4f(0.0, -1.0, 0.0, size.y); }
-  let a = (30.0 + 60.0 * f32(k)) * 0.017453293;
-  return vec4f(cos(a), 0.0, sin(a), size.x);
-}
-
-// The shapes made from meshes, and which of the baked volumes is theirs.
-fn icIsMesh(shape: i32) -> bool {
-  return shape == 9 || shape == 11;
-}
-
-fn icMeshLayer(shape: i32) -> i32 {
-  return select(0, 1, shape == 11);
-}
-
-// Signed distance to a baked mesh: a 128^3 grid covering a cube of half-width 1.1
-// around the mesh, which is scaled to half-width 1. The volumes of the meshes lie
-// one after another along z in the same texture; \`layer\` picks one.
-fn icVolume(p: vec3f, scale: f32, layer: i32) -> f32 {
-  let q = p / scale;
-  let inner = vec3f(1.1 * (1.0 - 1.0 / 128.0));
-  let c = clamp(q, -inner, inner);
-  let g = (c / 2.2 + 0.5) * 128.0 - 0.5;
-  let cell = clamp(vec3i(floor(g)), vec3i(0), vec3i(126));
-  // (How far between cells, within this mesh's own volume: worked out before moving
-  // to where that volume lies in the texture, or every mesh after the first would
-  // not be blended along z at all, and look built of flat slices.)
-  let f = clamp(g - vec3f(cell), vec3f(0.0), vec3f(1.0));
-  let i0 = cell + vec3i(0, 0, 128 * layer);
-  let d000 = textureLoad(icSdfTex, i0, 0).r;
-  let d100 = textureLoad(icSdfTex, i0 + vec3i(1, 0, 0), 0).r;
-  let d010 = textureLoad(icSdfTex, i0 + vec3i(0, 1, 0), 0).r;
-  let d110 = textureLoad(icSdfTex, i0 + vec3i(1, 1, 0), 0).r;
-  let d001 = textureLoad(icSdfTex, i0 + vec3i(0, 0, 1), 0).r;
-  let d101 = textureLoad(icSdfTex, i0 + vec3i(1, 0, 1), 0).r;
-  let d011 = textureLoad(icSdfTex, i0 + vec3i(0, 1, 1), 0).r;
-  let d111 = textureLoad(icSdfTex, i0 + vec3i(1, 1, 1), 0).r;
-  let d = mix(mix(mix(d000, d100, f.x), mix(d010, d110, f.x), f.y),
-              mix(mix(d001, d101, f.x), mix(d011, d111, f.x), f.y), f.z);
-  return (d + length(q - c)) * scale;
-}
-
-// The outward direction of a baked mesh's surface at p (from its volume), sampled
-// almost two cells apart: closer, the slope of the blended grid jumps at every cell
-// boundary, and the normals with it, which shows as stripes and ripples.
-fn icVolumeNormal(p: vec3f, scale: f32, layer: i32) -> vec3f {
-  let e = vec2f(1.0, -1.0) * (0.03 * scale);
-  return normalize(e.xyy * icVolume(p + e.xyy, scale, layer) + e.yyx * icVolume(p + e.yyx, scale, layer) +
-                   e.yxy * icVolume(p + e.yxy, scale, layer) + e.xxx * icVolume(p + e.xxx, scale, layer));
-}
-
-// Snap a rasterised surface point onto the exact shape and find its normal.
-fn icEntry(shape: i32, pIn: vec3f, size: vec3f, meshNormal: vec3f) -> IcHit {
-  var p = pIn;
-  var n: vec3f;
-  if (icIsMesh(shape) && gMeshEntry > 0.5) {
-    // A baked mesh, with only a few objects on show (each large on screen): the
-    // point moved onto the volume's surface, with the volume's normal there, so
-    // that the light enters the same shape it is followed through and leaves. (The
-    // mesh and its 128^3 volume differ by up to about a cell: with the light
-    // entering one and leaving the other, the bands where they differ show as
-    // jagged dark patches.) The point moves a fraction of a cell, so the normal is
-    // found once for the move and once where it lands.
-    let layer = icMeshLayer(shape);
-    let toward = icVolumeNormal(p, size.x, layer);
-    p -= toward * icVolume(p, size.x, layer);
-    p -= toward * icVolume(p, size.x, layer);
-    n = icVolumeNormal(p, size.x, layer);
-  } else if (icIsMesh(shape)) {
-    // In a pile, where each is small on screen, the cheaper way: the rasterised
-    // point and the mesh's own smooth normal.
-    n = meshNormal;
-  } else if (shape == 4) {
-    let k = size.x / (2.0 * size.y);
-    let rho = max(length(p.xz), 1e-6);
-    let inv = 1.0 / sqrt(1.0 + k * k);
-    let sBase = -p.y - size.y;
-    let sSide = (rho - k * (size.y - p.y)) * inv;
-    if (sBase >= sSide) {
-      n = vec3f(0.0, -1.0, 0.0);
-      p.y = -size.y;
-    } else {
-      n = vec3f(p.x / rho, k, p.z / rho) * inv;
-      p -= n * sSide;
-    }
-  } else if (shape == 5) {
-    let rho = max(length(p.xz), 1e-6);
-    let ring = vec3f(p.x / rho, 0.0, p.z / rho) * size.x;
-    n = normalize(p - ring);
-    p = ring + n * size.y;
-  } else if (icIsPolyhedron(shape)) {
-    // The face this point lies on is the plane it is closest to.
-    var best = -1e9;
-    n = vec3f(0.0, 1.0, 0.0);
-    for (var k = 0; k < icPlaneCount(shape); k++) {
-      let pl = icPlane(shape, k, size);
-      let sd = dot(pl.xyz, p) - pl.w;
-      if (sd > best) { best = sd; n = pl.xyz; }
-    }
-    p -= n * best;
-  } else if (shape == 1) {
-    n = normalize(p);
-    p = n * size.x;
-  } else if (shape == 2) {
-    let radial = length(p.xz);
-    if (abs(p.y) / size.y >= radial / size.x) {
-      n = vec3f(0.0, sign(p.y), 0.0);
-      p.y = n.y * size.y;
-    } else {
-      n = vec3f(p.x, 0.0, p.z) / max(radial, 1e-6);
-      p = vec3f(n.x * size.x, p.y, n.z * size.x);
-    }
-  } else if (shape == 3) {
-    let c = vec3f(0.0, clamp(p.y, -size.y, size.y), 0.0);
-    n = normalize(p - c);
-    p = c + n * size.x;
-  } else {
-    let a = abs(p) / size;
-    if (a.x >= a.y && a.x >= a.z) { n = vec3f(sign(p.x), 0.0, 0.0); p.x = n.x * size.x; }
-    else if (a.y >= a.z) { n = vec3f(0.0, sign(p.y), 0.0); p.y = n.y * size.y; }
-    else { n = vec3f(0.0, 0.0, sign(p.z)); p.z = n.z * size.z; }
-  }
-  return IcHit(p, n, 0.0);
-}
-
-// From a point on the surface, heading inwards along dir: where the ray reaches
-// the surface again.
-fn icExit(shape: i32, pos: vec3f, dir: vec3f, size: vec3f) -> IcHit {
-  if (shape == 1) {
-    let t = max(-2.0 * dot(pos, dir), 0.0);
-    let q = pos + dir * t;
-    return IcHit(q, normalize(q), t);
-  }
-  if (shape == 2 || shape == 3) {
-    // Distance to the round side wall.
-    let a = dot(dir.xz, dir.xz);
-    var tSide = 1e9;
-    if (a > 1e-9) {
-      let b = dot(pos.xz, dir.xz);
-      let c = dot(pos.xz, pos.xz) - size.x * size.x;
-      tSide = (-b + sqrt(max(b * b - a * c, 0.0))) / a;
-    }
-    if (shape == 2) {
-      var tCap = 1e9;
-      if (abs(dir.y) > 1e-7) { tCap = (sign(dir.y) * size.y - pos.y) / dir.y; }
-      let t = max(min(tSide, tCap), 0.0);
-      let q = pos + dir * t;
-      if (tCap < tSide) { return IcHit(q, vec3f(0.0, sign(dir.y), 0.0), t); }
-      return IcHit(q, normalize(vec3f(q.x, 0.0, q.z)), t);
-    }
-    // Capsule: the side wall if the hit is on the middle part, else an end cap.
-    let ySide = pos.y + dir.y * min(tSide, 1e6);
-    if (abs(ySide) <= size.y) {
-      let t = max(tSide, 0.0);
-      let q = pos + dir * t;
-      return IcHit(q, normalize(vec3f(q.x, 0.0, q.z)), t);
-    }
-    let cap = vec3f(0.0, sign(ySide) * size.y, 0.0);
-    let oc = pos - cap;
-    let b = dot(oc, dir);
-    let t = max(-b + sqrt(max(b * b - (dot(oc, oc) - size.x * size.x), 0.0)), 0.0);
-    let q = pos + dir * t;
-    return IcHit(q, normalize(q - cap), t);
-  }
-  if (shape == 4) {
-    // Cone: the slanted side is a quadratic in t, the base a plane.
-    let k = size.x / (2.0 * size.y);
-    let k2 = k * k;
-    let hy = size.y - pos.y;
-    let a = dot(dir.xz, dir.xz) - k2 * dir.y * dir.y;
-    let b = dot(pos.xz, dir.xz) + k2 * hy * dir.y;
-    let c = dot(pos.xz, pos.xz) - k2 * hy * hy;
-    var tSide = 1e9;
-    if (abs(a) > 1e-7) {
-      let disc = b * b - a * c;
-      if (disc >= 0.0) {
-        let sq = sqrt(disc);
-        for (var r = 0; r < 2; r++) {
-          let t = (-b + select(-sq, sq, r == 1)) / a;
-          let y = pos.y + dir.y * t;
-          if (t > 1e-4 && y <= size.y && y >= -size.y - 1e-4) { tSide = min(tSide, t); }
-        }
-      }
-    } else if (abs(b) > 1e-9) {
-      let t = -c / (2.0 * b);
-      if (t > 1e-4) { tSide = t; }
-    }
-    var tBase = 1e9;
-    if (dir.y < -1e-7) { tBase = (-size.y - pos.y) / dir.y; }
-    let t = select(min(tSide, tBase), 0.0, min(tSide, tBase) > 1e8);
-    let q = pos + dir * t;
-    if (tBase < tSide) { return IcHit(q, vec3f(0.0, -1.0, 0.0), t); }
-    let rho = max(length(q.xz), 1e-6);
-    return IcHit(q, normalize(vec3f(q.x / rho, k, q.z / rho)), t);
-  }
-  if (shape == 5) {
-    // Torus: a quartic, so step along the ray using its exact distance instead.
-    var t = 0.004;
-    for (var i = 0; i < 32; i++) {
-      let q = pos + dir * t;
-      let d = size.y - length(vec2f(length(q.xz) - size.x, q.y));
-      if (d < 0.0006) { break; }
-      t += max(d, 0.0015);
-    }
-    let q = pos + dir * t;
-    let rho = max(length(q.xz), 1e-6);
-    return IcHit(q, normalize(q - vec3f(q.x / rho, 0.0, q.z / rho) * size.x), t);
-  }
-  if (icIsPolyhedron(shape)) {
-    // Polyhedron: the nearest face plane the ray is heading towards.
-    var t = 1e9;
-    var n = vec3f(0.0, 1.0, 0.0);
-    for (var k = 0; k < icPlaneCount(shape); k++) {
-      let pl = icPlane(shape, k, size);
-      let dn = dot(pl.xyz, dir);
-      if (dn > 1e-7) {
-        let tk = (pl.w - dot(pl.xyz, pos)) / dn;
-        if (tk < t) { t = tk; n = pl.xyz; }
-      }
-    }
-    t = select(max(t, 0.0), 0.0, t > 1e8);
-    return IcHit(pos + dir * t, n, t);
-  }
-  if (icIsMesh(shape)) {
-    // Baked mesh: step through the distance volume.
-    let layer = icMeshLayer(shape);
-    // (Distances are in units of the object's size, so a small one in a pile is
-    // stepped through as finely as a large one on its own. A cell of the volume
-    // is 2.2 / 128 = 0.017 of it.)
-    let s = size.x;
-    var t = 0.004 * s;
-    // The ray starts on the mesh, which the volume follows only to within about a
-    // cell: where the volume's surface lies a little inside the mesh's, the start
-    // is outside it. Step forward until inside, or the exit is found at once, in
-    // the wrong place: a dark cut across the glass.
-    for (var i = 0; i < 8; i++) {
-      let d = icVolume(pos + dir * t, s, layer);
-      if (d < 0.0) { break; }
-      t += max(d, 0.002 * s);
-    }
-    // Then to where it leaves. Steps of at least a quarter of a cell: a ray running
-    // along the inside of a long body, close to its surface all the way, would
-    // otherwise only creep forward and run out of steps somewhere in the middle,
-    // which drew contour-like dark lines across the glass.
-    var tIn = t;   // the last point known to be inside
-    for (var i = 0; i < 48; i++) {
-      let d = -icVolume(pos + dir * t, s, layer);
-      if (d < 0.0005 * s) { break; }
-      tIn = t;
-      t += max(d, 0.004 * s);
-    }
-    // ... and the surface pinned down between the last point inside and the first
-    // outside, by halving the gap.
-    for (var i = 0; i < 3; i++) {
-      let mid = 0.5 * (tIn + t);
-      if (icVolume(pos + dir * mid, s, layer) < 0.0) { tIn = mid; } else { t = mid; }
-    }
-    let q = pos + dir * t;
-    return IcHit(q, icVolumeNormal(q, s, layer), t);
-  }
-  // Box.
-  let tx = select(1e9, (sign(dir.x) * size.x - pos.x) / dir.x, abs(dir.x) > 1e-7);
-  let ty = select(1e9, (sign(dir.y) * size.y - pos.y) / dir.y, abs(dir.y) > 1e-7);
-  let tz = select(1e9, (sign(dir.z) * size.z - pos.z) / dir.z, abs(dir.z) > 1e-7);
-  let t = max(min(tx, min(ty, tz)), 0.0);
-  let q = pos + dir * t;
-  if (tx <= ty && tx <= tz) { return IcHit(q, vec3f(sign(dir.x), 0.0, 0.0), t); }
-  if (ty <= tz) { return IcHit(q, vec3f(0.0, sign(dir.y), 0.0), t); }
-  return IcHit(q, vec3f(0.0, 0.0, sign(dir.z)), t);
-}
-
-fn icToLocal(v: vec3f, q: vec4f) -> vec3f {
-  let u = -q.xyz;
-  return v + 2.0 * cross(u, cross(u, v) + q.w * v);
-}
-
-fn icToWorld(v: vec3f, q: vec4f) -> vec3f {
-  return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v);
-}
-
-// How much the IOR for red (k = 0) and blue (k = 2) light differs from the quoted IOR
-// (which is for yellow light, 587.6 nm; green, k = 1, uses it as it is), when blue
-// and red are \`spread\` apart. From Cauchy's law, n = A + B / wavelength^2, at the
-// wavelengths glass makers measure at: red 656.3 nm, blue 486.1 nm. Blue bends
-// away from yellow more than twice as far as red does.
-fn icIorOffset(spread: f32, k: i32) -> f32 {
-  if (k == 0) { return -0.301 * spread; }
-  if (k == 2) { return 0.699 * spread; }
-  return 0.0;
-}
-
-// Unpolarised dielectric Fresnel. eta = n_transmitted / n_incident.
-fn icFresnel(cosI: f32, eta: f32) -> f32 {
-  let c = abs(cosI);
-  let g2 = eta * eta - 1.0 + c * c;
-  if (g2 <= 0.0) { return 1.0; }
-  let g = sqrt(g2);
-  let a = (g - c) / (g + c);
-  let b = (c * (g + c) - 1.0) / (c * (g - c) + 1.0);
-  return 0.5 * a * a * (1.0 + b * b);
-}
-
-//#endif
-//#if GLASS
-// How much of the lamp reaches point p of an object (1: all of it, 0: none), from
-// the lamp's depth map: in shadow where another object reaches farther toward the
-// lamp than \`top\`, the farthest this object itself reaches. (An object does not
-// shadow itself: what its own glass does to the light is followed through it.)
-// Four samples soften the edge.
-fn icLampVisible(p: vec3f, top: f32) -> f32 {
-  let v = p - gLightC;
-  let uv = vec2f(0.5 + 0.5 * dot(v, gLightR), 0.5 - 0.5 * dot(v, gLightU));
-  if (any(uv <= vec2f(0.0)) || any(uv >= vec2f(1.0))) { return 1.0; }
-  let dims = vec2i(textureDimensions(icLampDepthTex));
-  let at = uv * vec2f(dims);
-  var lit = 0.0;
-  for (var k = 0; k < 4; k++) {
-    let o = vec2f(select(-0.75, 0.75, (k & 1) == 1), select(-0.75, 0.75, (k & 2) == 2));
-    let texel = clamp(vec2i(at + o), vec2i(0), dims - 1);
-    let reach = textureLoad(icLampDepthTex, texel, 0).r - 100.0;
-    lit += select(1.0, 0.0, reach > top);
-  }
-  return lit * 0.25;
-}
-
-// Share of a back face that acts as exit glass (a smooth ramp over the distance
-// the light travelled inside).
-fn icExitFactor(x: f32) -> f32 {
-  if (x < 0.9864) {
-    let a = x / 0.9864;
-    return a * a * a / 6.0;
-  }
-  if (x < 1.0) {
-    let f = (1.0 - x) / 0.0136;
-    return (1.0 - f) * (1.0 - f) * (1.0 - f) / 6.0 + f * f * f * 0.5 - f * f + 2.0 / 3.0;
-  }
-  return 5.0 / 6.0;
-}
-
-// What a ray sees after leaving its object. Ground points are read from the
-// picture of what is behind this object (ground plus the glass drawn before it)
-// at the pixel where that point appears; off screen it falls back to the ground
-// alone. Everything else is the studio.
-//
-// Before that, a refracted ray is followed out in growing steps, looking for other
-// glass in that picture (which also holds how far away each pixel is): when the
-// ray passes just behind something drawn there, that is what it sees. So glass
-// shows through glass along the bent ray, not only straight behind.
-fn icLook(ro: vec3f, rd: vec3f, throughGlass: bool) -> vec3f {
-  if (throughGlass && gSteps > 0.5 && gMirror < 0.5) {
-    var tEnd = 1e9;   // no farther than the floor
-    if (gGroundOn > 0.5 && rd.y < -1e-5) { tEnd = max(-ro.y / rd.y, 0.0); }
-    var t = 0.2 * gReach;
-    for (var i = 0; i < i32(gSteps); i++) {
-      if (t >= tEnd) { break; }
-      let p = ro + rd * t;
-      let clip = gViewProj * vec4f(p, 1.0);
-      if (clip.w < 0.01) { break; }
-      let ndc = clip.xy / clip.w;
-      if (abs(ndc.x) > 0.98 || abs(ndc.y) > 0.98) { break; }
-      let there = textureSampleLevel(icBehindTex, icBehindTex_sampler, vec2f(ndc.x, -ndc.y) * 0.5 + 0.5, 0.0);
-      // Behind what is drawn there, but not by more than an object's depth: a hit.
-      let behind = length(p - gEye) - there.a;
-      if (behind > 0.0 && behind < 1.5 * gReach) { return there.rgb; }
-      t *= 1.6;
-    }
-  }
-  if (gGroundOn > 0.5 && rd.y < -1e-5) {
-    let t = max(-ro.y / rd.y, 0.0);
-    let g = ro + rd * t;
-    let clip = gViewProj * vec4f(g, 1.0);
-    if (throughGlass && gMirror < 0.5 && clip.w > 0.01) {
-      let ndc = clip.xy / clip.w;
-      if (abs(ndc.x) < 0.98 && abs(ndc.y) < 0.98) {
-        return textureSampleLevel(icBehindTex, icBehindTex_sampler, vec2f(ndc.x, -ndc.y) * 0.5 + 0.5, 0.0).rgb;
-      }
-    }
-  }
-  return icScene(ro, rd);
-}
-//#endif
-`,Uk=2e4,Q={box:0,sphere:1,cylinder:2,capsule:3,cone:4,torus:5,octahedron:6,prism:7,hexprism:8,suzanne:9,diamond:10,dragon:11},Wk=12,Gk=.25;function Kk(){return{count:0,kind:new Uint8Array(Uk),center:new Float32Array(Uk*3),quat:new Float32Array(Uk*4),size:new Float32Array(Uk*3),vary:new Float32Array(Uk*3),tint:new Float32Array(Uk*3).fill(1)}}var qk=2048,Jk=1024,Yk=1024,Xk=1024,Zk=64,Qk=3e3;function $k(e){let t=[],n=!0;for(let r of Hk.split(`
-`)){let i=r.match(/^\s*\/\/#if (.+)$/);i?n=i[1].trim().split(/\s+/).includes(e):/^\s*\/\/#endif/.test(r)?n=!0:n&&t.push(r)}return t.join(`
-`)}var eA=class{geometry=new Cs;center;quat;size;vary;tint;count=0;meshes=[];constructor(e,t=Uk){this.center=new Ii(new Float32Array(t*3),3),this.quat=new Ii(new Float32Array(t*4),4),this.size=new Ii(new Float32Array(t*3),3),this.vary=new Ii(new Float32Array(t*3),3),this.tint=new Ii(new Float32Array(t*3),3),this.build(e)}build(e){this.geometry.index=e.index,this.geometry.setAttribute(`position`,e.getAttribute(`position`)),this.geometry.setAttribute(`normal`,e.getAttribute(`normal`)),this.geometry.setAttribute(`instCenter`,this.center),this.geometry.setAttribute(`instQuat`,this.quat),this.geometry.setAttribute(`instSize`,this.size),this.geometry.setAttribute(`instVary`,this.vary),this.geometry.setAttribute(`instTint`,this.tint),this.geometry.instanceCount=this.count}setBase(e){let t=this.geometry;this.geometry=new Cs,this.build(e);for(let e of this.meshes)e.geometry=this.geometry;t.dispose()}push(e,t){let n=this.count++,r=this.center.array,i=this.quat.array,a=this.size.array,o=this.vary.array;r[n*3]=e.center[t*3],r[n*3+1]=e.center[t*3+1],r[n*3+2]=e.center[t*3+2],i[n*4]=e.quat[t*4],i[n*4+1]=e.quat[t*4+1],i[n*4+2]=e.quat[t*4+2],i[n*4+3]=e.quat[t*4+3],a[n*3]=e.size[t*3],a[n*3+1]=e.size[t*3+1],a[n*3+2]=e.size[t*3+2],o[n*3]=e.vary[t*3],o[n*3+1]=e.vary[t*3+1],o[n*3+2]=e.vary[t*3+2];let s=this.tint.array;s[n*3]=e.tint[t*3],s[n*3+1]=e.tint[t*3+1],s[n*3+2]=e.tint[t*3+2]}sent=0;commit(){if(this.geometry.instanceCount=this.count,this.count||this.sent){this.sent=this.count;for(let e of[this.center,this.quat,this.size,this.vary,this.tint])e.clearUpdateRanges(),e.addUpdateRange(0,Math.max(this.count,1)*e.itemSize),e.needsUpdate=!0}}};function tA(e,t,n,r){let i=new vn(qk,qk,{type:y,format:D,depthBuffer:!1,minFilter:l,magFilter:l}),a=new vn(Jk,Jk,{type:y,format:D,depthBuffer:!0,minFilter:o,magFilter:o}),s=()=>new vn(Yk,Yk,{type:y,format:D,depthBuffer:!1,minFilter:l,magFilter:l}),c=s(),u=new vn(Xk,Xk,{type:y,format:D,depthBuffer:!0,minFilter:o,magFilter:o}),d=new vn(Xk,Xk,{type:y,format:D,depthBuffer:!1,minFilter:l,magFilter:l}),f=s(),p=s(),m=s(),h=s(),g=e=>new vn(4,4,{type:y,format:D,depthBuffer:e,samples:e?4:0,minFilter:l,magFilter:l}),_=g(!1),v=g(!0),b=g(!0),x=g(!1),S=g(!1),C=g(!1),w=new vn(4,4,{type:y,format:D,depthBuffer:!0,minFilter:l,magFilter:l}),T=q(new N(4,4)),E=q(0),O=q(new P),k=q(new _n),ee=q(new P),te=q(new _n),ne=q(new xn),re=q(1),ie=q(new P),ae=q(new P),oe=q(new P),se=new P(0,1,0),ce=q(se),le=q(new P),ue=q(new P),de=q(new P),fe=q(new _n(1.45,1,6,0)),pe=q(new _n),me=q(new _n),he=q(0),ge=q(6),_e=q(new _n(1,1,1,1)),ve=q(0),ye=q(0),be=q(new _n),xe=q(new _n),Se=q(new N),Ce=q(new P),we=Y(i.texture).setName(`icLightTex`),Te=Y(_.texture).setName(`icBehindTex`),Ee=Y(a.texture).setName(`icLampDepthTex`),De=Y(w.texture),Oe=Y(f.texture).setName(`icShadeTex`),ke=Y(p.texture).setName(`icShadeFarTex`),Ae=Y(i.texture),je=jv(r.volume).setName(`icSdfTex`),Me=gp(`instCenter`,`vec3`),Ne=gp(`instQuat`,`vec4`),Pe=gp(`instSize`,`vec3`),Fe=gp(`instVary`,`vec3`),Ie=gp(`instTint`,`vec3`),Le=e=>e.add(qd(Ne.xyz,qd(Ne.xyz,e).add(e.mul(Ne.w))).mul(2)),Re=Le(_m.mul(Pe)).add(Me),ze=_m.y.clamp(-1,1),Be=Le(W(_m.x.mul(Pe.x),_m.y.sub(ze).mul(Pe.x).add(ze.mul(Pe.y)),_m.z.mul(Pe.x))).add(Me),Ve=U(_m.x,_m.z).normalize(),He=W(Ve.x,0,Ve.y),Ue=Le(He.mul(Pe.x).add(_m.sub(He).mul(Pe.y.div(Gk)))).add(Me),We=Le(Am),Ge=Le(Am.div(Pe).normalize()),Ke=Gv($k(`CAUSTIC`)),qe=e=>{let t=new rv;return t.positionNode=e,t.fragmentNode=G(bm.dot(ce).add(100),0,0,1),t.side=2,t},Je=(e,t)=>{let n=new rv;return n.positionNode=e,n.fragmentNode=Ke({normalW:t,worldPos:bm,size:Pe,quat:Ne,cmyAll:ve,vary:Fe,tintAll:_e,tintOwn:Ie}),n.side=2,n.depthTest=!1,n.depthWrite=!1,n.transparent=!0,n.blending=5,n.blendEquation=100,n.blendSrc=208,n.blendDst=200,n},Ye=new rv;Ye.fragmentNode=Gv($k(`GROUND`))({fragCoord:Hp,res:T,camPos:O,camRight:k,camUp:ee,camFwd:te,room:re,skyE:ie,sunE:ae,albedo:oe,lightC:le,lightR:ue,lightU:de,floorP:xe,spot:be,lamp:ce,lightTex:we,lightSamp:Ym(we),mirrorTex:De,mirrorSamp:Ym(De),shadeTex:Oe,shadeSamp:Ym(Oe),shadeFarTex:ke,shadeFarSamp:Ym(ke)}),Ye.transparent=!0,Ye.blending=0,Ye.depthTest=!1,Ye.depthWrite=!1;let Xe=new sv(Ye),Ze=new rv;Ze.fragmentNode=Gv($k(`BLUR`))({uv:wm(),dir:Se,cut:he,reach:ge,src:Ae,srcSamp:Ym(Ae)}),Ze.depthTest=Ze.depthWrite=!1;let Qe=new sv(Ze),$e=(t,n,r,i=r,a=c,o=0)=>{let s=Math.max(r*a.width,i*a.height),l=Math.min(Math.max(Math.ceil((s/18)**2),1),5),u=1/Math.sqrt(l);ge.value=Math.min(Math.max(Math.ceil(s*u/1.5),3),12);for(let s=0;s<l;s++)Ae.value=s===0?t:n.texture,he.value=s===0?o:0,Se.value.set(r*u,0),e.setRenderTarget(a),Qe.render(e),Ae.value=a.texture,he.value=0,Se.value.set(0,i*u),e.setRenderTarget(n),Qe.render(e)},et=$k(`GLASS`).replace(`/*DIAMOND*/`,Lk(`IC_DIAMOND`)),tt=$k(`PHOTON`).replace(`/*DIAMOND*/`,Lk(`IC_DIAMOND`)),nt=(e,t,n)=>{let r=new rv;return r.transparent=!0,r.blending=0,r.positionNode=t,r.fragmentNode=Gv(tt.replace(`const IC_SHAPE = 0;`,`const IC_SHAPE = ${e};`))({worldPos:bm,nrmW:n,center:Me,quat:Ne,size:Pe,vary:Fe,tintAll:_e,tintOwn:Ie,sunDir:ce,lightR:ue,lightU:de,glassP:fe,cmyAll:ve,bevel:ye,raysAcross:H(Xk),meshEntry:E,sdfTex:je}),r},rt=Y(u.texture),it=new rv;it.fragmentNode=G(W(H(1).sub(rt.a.min(1))),1),it.depthTest=it.depthWrite=!1;let at=new sv(it),ot=H(Xf),st=ot.div(Xk).floor(),ct=U(ot.sub(st.mul(Xk)),st).add(.5).div(Xk),lt=Y(u.texture,ct),dt=new rv;dt.vertexNode=G(U(ct.x.mul(2).sub(1),H(1).sub(ct.y.mul(2))).add(lt.xy).add(U(_m.x,_m.y).mul(lt.a.sub(1).max(1).mul(2/Xk))),0,1),dt.fragmentNode=G(W(Tf(lt.z)),1),dt.transparent=!0,dt.blending=2,dt.depthTest=dt.depthWrite=!1;let ft=new Cs,pt=new bo(1,1);ft.index=pt.index,ft.setAttribute(`position`,pt.getAttribute(`position`)),ft.instanceCount=Xk*Xk;let mt=new Mi(ft,dt);mt.frustumCulled=!1;let ht=new ir;ht.add(mt);let gt=(e,t,n,r=!1)=>{let i=new Dx;i.transparent=!0,i.blending=0;let a=W(1,-1,1);return i.positionNode=r?t.mul(a):t,r&&(i.side=1),i.colorNode=Gv(et.replace(`const IC_SHAPE = 0;`,`const IC_SHAPE = ${e};`))({worldPos:r?bm.mul(a):bm,nrmW:n,center:Me,quat:Ne,size:Pe,vary:Fe,tintAll:_e,tintOwn:Ie,camPos:r?Ce:O,glassP:fe,viewProj:ne,room:re,skyE:ie,sunE:ae,albedo:oe,lightC:le,lightR:ue,lightU:de,cmyAll:ve,mirror:H(+!!r),bevel:ye,spot:be,lamp:ce,lightTex:we,lightSamp:Ym(we),behindTex:Te,behindSamp:Ym(Te),lampDepthTex:Ee,meshEntry:E,sdfTex:je}),i},_t=q(new nr(.1,.1,.1)),vt=[],yt=e=>{let t=new Dx;return t.wireframe=!0,t.transparent=!0,t.blending=5,t.blendSrc=211,t.blendDst=212,t.blendSrcAlpha=201,t.blendDstAlpha=200,vt.push(t),t.positionNode=e,t.colorNode=G(_t,bm.sub(O).length()),t},A=Y(_.texture),j=new rv;j.fragmentNode=A,j.transparent=!0,j.blending=0,j.depthTest=j.depthWrite=!1;let bt=new sv(j),xt=Y(h.texture),St=q(1),Ct=new rv;Ct.fragmentNode=xt.mul(St),Ct.transparent=!0,Ct.blending=2,Ct.depthTest=Ct.depthWrite=!1;let wt=new sv(Ct),Tt=Y(b.texture),Et=new rv;Et.fragmentNode=Gv($k(`SHADE`))({fragCoord:Hp,res:T,camPos:O,camRight:k,camUp:ee,camFwd:te,p:pe,src:Tt,srcSamp:Ym(Tt)}),Et.transparent=!0,Et.blending=0,Et.depthTest=Et.depthWrite=!1;let Dt=new sv(Et),Ot=Y(x.texture),M=Y(C.texture),kt=new Dx;kt.colorNode=Gv($k(`LENS`))({fragCoord:Hp,res:T,p:me,src:Ot,srcSamp:Ym(Ot),glowTex:M,glowSamp:Ym(M)}).rgb,kt.depthTest=kt.depthWrite=!1;let At=new sv(kt),jt=e=>{let t=e.index?e.toNonIndexed():e;return t.computeVertexNormals(),t},Mt=new Aa([new N(0,1),new N(-.8660254,-.5),new N(.8660254,-.5)]),Nt=[new Yi(2,2,2),new vo(1,4),new Zi(1,1,2,40,1),new Xi(1,2,10,32),new Qi(1,2,48,1),new So(1,Gk,20,64).rotateX(Math.PI/2),jt(new yo(1)),jt(new ho(Mt,{depth:2,bevelEnabled:!1}).translate(0,0,-1)),jt(new Zi(1/Math.cos(Math.PI/6),1/Math.cos(Math.PI/6),2,6,1).rotateY(Math.PI/2)),r.suzanne,Vk(),r.dragonLod],Pt=[...Nt];Pt[Q.sphere]=new vo(1,12),Pt[Q.cylinder]=new Zi(1,1,2,120,1),Pt[Q.capsule]=new Xi(1,2,24,96),Pt[Q.cone]=new Qi(1,2,120,1),Pt[Q.torus]=new So(1,Gk,40,144).rotateX(Math.PI/2),Pt[Q.dragon]=r.dragon;let Ft=new ir,It=new ir,Lt=new ir,Rt=new ir,zt=new ir,Bt=new ir,Vt=[],Ht=[],Ut=!1,Wt=[],Gt=[];for(let e=0;e<Wk;e++){let t=e===Q.capsule?Be:e===Q.torus?Ue:Re,n=e===Q.capsule||e===Q.torus?We:Ge,r=gt(e,t,n),i=Je(t,n),a=qe(t),o=gt(e,t,n,!0),s=nt(e,t,n),c=yt(t);for(let[t,n,l]of[[Vt,Ft,!1],[Ht,It,!1],[Wt,Ft,!0],[Gt,It,!0]]){let u=l?new eA(Pt[e],Zk):new eA(Nt[e]);t.push(u);for(let[e,t]of[[r,n],[i,Lt],[a,Rt],[o,zt],[s,Bt],[c,n]]){let n=new Mi(u.geometry,e);u.meshes.push(n),n.frustumCulled=!1,t.add(n),(e===r||e===o)&&(n.userData.role=`glass`),e===c&&(n.userData.role=`wire`),n.visible=!1}}}let Kt=new gs(-1,1,1,-1,.1,100),qt=e=>(e.index?e.index.count:e.getAttribute(`position`).count)/3,Jt=Nt.map(qt),Yt=Pt.map(qt),Zt=0,Qt=!0,$t=``,en=new Float32Array(Uk),tn=new Uint32Array(1024),nn=new Uint32Array(Uk),rn=``,an=new P,on=new xn;function sn(e){t.getWorldDirection(an);let r=t.position,i=n.count,a=`${i} ${r.x} ${r.y} ${r.z} ${an.x} ${an.y} ${an.z}`;if(!e&&a===rn)return;rn=a;let o=1/0,s=-1/0;for(let e=0;e<i;e++){let t=(n.center[e*3]-r.x)*an.x+(n.center[e*3+1]-r.y)*an.y+(n.center[e*3+2]-r.z)*an.z;en[e]=t,en[e]<o&&(o=en[e]),en[e]>s&&(s=en[e])}tn.fill(0);let c=1023.999/Math.max(s-o,1e-6);for(let e=0;e<i;e++)tn[(en[e]-o)*c|0]+=1;let l=0;for(let e=0;l<1024&&e+tn[l]<=i>>1;l++)e+=tn[l];let u=o+l/c,d=i<=Zk;E.value=+!!d;let f=d?Wt:Vt,p=d?Gt:Ht,m=[...Vt,...Ht,...Wt,...Gt];for(let e of m)e.count=0;for(let e=0,t=0;e<1024;e++){let n=tn[e];tn[e]=t,t+=n}for(let e=0;e<i;e++)nn[tn[(en[e]-o)*c|0]++]=e;for(let e=0;e<i;e++){let t=nn[e];(en[t]>=u?f:p)[n.kind[t]].push(n,t)}for(let e of m)e.commit()}function cn(){let e=0,t=2*Math.max(1,Math.hypot(se.x,se.z)/Math.max(se.y,.1));for(let r=0;r<n.count;r++){let i=Math.max(Math.abs(n.center[r*3]),Math.abs(n.center[r*3+2]))+n.center[r*3+1]*t;i>e&&(e=i)}return Math.ceil((e+3)/4)*4}function ln(e,t){_.setSize(e,t),v.setSize(e,t),b.setSize(e,t),x.setSize(e,t),S.setSize(Math.max(1,e>>2),Math.max(1,t>>2)),C.setSize(Math.max(1,e>>2),Math.max(1,t>>2)),w.setSize(Math.max(1,e>>1),Math.max(1,t>>1)),T.value.set(e,t)}function un(r,o,s){fn=dn?[]:null;let c=r.wireframe??!1;c!==Ut&&(Ut=c);let[l,g,y,E]=r.wireColor??[.01,.01,.01,1];_t.value.setRGB(l,g,y);for(let e of vt)e.blendColor.setRGB(E,E,E);_e.value.fromArray(r.color??[1,1,1,1]),ye.value=r.bevel??0,ve.value!==(r.cmy??0)&&(Qt=!0),ve.value=r.cmy??0,t.updateMatrixWorld();let D=t.matrixWorld.elements,ce=Math.tan(Xt.degToRad(t.fov)/2);O.value.set(D[12],D[13],D[14]),k.value.set(D[0],D[1],D[2],t.aspect),ee.value.set(D[4],D[5],D[6]),te.value.set(-D[8],-D[9],-D[10],ce),on.multiplyMatrices(t.projectionMatrix,t.matrixWorldInverse),ne.value.copy(on),re.value=+!!o.ground+(o.dark?2:0),be.value.set(o.spotRadius,o.spotRadius*2.2,0,0),ie.value.fromArray(o.skyE),ae.value.fromArray(o.sunE),oe.value.fromArray(o.groundColor),se.fromArray(o.sunDir);let he=o.sunDir.join()+o.shadowSoftness+o.causticSoftness+`/`+o.causticStrength+r.ior+(r.cmy??0)+(r.bevel??0)+(r.color??[]).join()+String(o.realCaustics)+String(o.objectShadows);he!==$t&&($t=he,Qt=!0),s&&(Qt=!0),sn(s||Qt);for(let e of[Vt,Ht,Wt,Gt])for(let t of e){let e=t.count>0;for(let n of t.meshes){let t=n.userData.role;n.visible=e&&(t===`wire`?Ut:t!==`glass`||!Ut)}}let ge=0;for(let e=0;e<Wk;e++)ge+=Jt[e]*(Vt[e].count+Ht[e].count)+Yt[e]*(Wt[e].count+Gt[e].count);let Se=1+(o.ground&&o.floorReflection>0?1:0)+ +!!Qt;if(Zt=ge*Se+8,Qt){Qt=!1;let t=cn(),n=se;Kt.left=Kt.bottom=-t,Kt.right=Kt.top=t,Kt.near=.1,Kt.far=t*6,Kt.position.copy(n).multiplyScalar(t*3),Kt.up.set(0,0,-1),Kt.lookAt(0,0,0),Kt.updateProjectionMatrix(),Kt.updateMatrixWorld();let s=Kt.matrixWorld.elements;le.value.set(0,0,0),ue.value.set(s[0],s[1],s[2]).divideScalar(t),de.value.set(s[4],s[5],s[6]).divideScalar(t);let c=e.getClearColor(new nr),l=e.getClearAlpha();mn(`Shadow map`),e.setClearColor(16777215,1),e.setRenderTarget(i),e.render(Lt,Kt),e.setClearColor(0,0),e.setRenderTarget(a),o.objectShadows?e.render(Rt,Kt):e.clear(),e.setClearColor(c,l);let g=.5/t;$e(i.texture,f,o.shadowSoftness*g),$e(f.texture,p,Math.max(o.shadowSoftness*3,.25)*g),o.realCaustics&&(fe.value.set(r.ior,r.dispersion,6,0),mn(`Caustics`),e.setClearColor(0,0),e.setRenderTarget(u),e.render(Bt,Kt),e.setRenderTarget(m),at.render(e),$e(m.texture,f,o.shadowSoftness*g),e.setClearColor(0,1),e.setRenderTarget(d),e.render(ht,Kt),e.setClearColor(c,l),$e(d.texture,h,o.causticSoftness*g),e.setRenderTarget(f),e.autoClear=!1,St.value=o.causticStrength,wt.render(e),e.autoClear=!0)}let we=n.count>Qk;if(fe.value.set(r.ior,we?0:r.dispersion,we?3:4,0),xe.value.x=o.ground?o.floorReflection:0,xe.value.y=o.realCaustics?-o.shadowDarkness:o.shadowDarkness,xe.value.z=+!!o.floorGrid,xe.value.w=o.fog,xe.value.x>0){Ce.value.set(D[12],-D[13],D[14]);let n=e.getClearColor(new nr),r=e.getClearAlpha();mn(`Reflection`),e.setClearColor(0,0),e.setRenderTarget(w),e.render(zt,t),e.setClearColor(n,r)}if(mn(`Ground`),e.setRenderTarget(_),Xe.render(e),fe.value.set(r.ior,we?0:r.dispersion,we?4:6,0),mn(`Far glass`),e.setRenderTarget(v),A.value=_.texture,bt.render(e),e.autoClear=!1,Te.value=_.texture,e.render(Ft,t),e.autoClear=!0,mn(`Near glass`),e.setRenderTarget(b),A.value=v.texture,bt.render(e),e.autoClear=!1,fe.value.set(r.ior,r.dispersion,we?5:6,o.seeThrough?we?5:8:0),Te.value=o.seeThrough?v.texture:_.texture,e.render(It,t),e.autoClear=!0,pe.value.set(o.contactShadows,o.contactRadius,o.exposure,0),mn(`Finishing`),e.setRenderTarget(x),Dt.render(e),o.glow>0){let e=T.value.x/T.value.y;$e(x.texture,C,.012,.012*e,S,1),$e(C.texture,C,.03,.03*e,S)}if(me.value.set(o.focus,o.depthOfField,o.glow,+!!o.filmic),e.setRenderTarget(null),At.render(e),fn){pn.set(e.info.frame,fn);for(let t of pn.keys())t<e.info.frame-30&&pn.delete(t)}}let dn=e.backend.trackTimestamp===!0,fn=null,pn=new Map;function mn(t){fn&&fn.push([e.info.render.frameCalls+1,t])}async function hn(){if(!dn)return null;await e.resolveTimestampsAsync(ut.RENDER);let t=e.backend.timestampQueryPool.render;if(!t)return null;let n=new Map;for(let[e,r]of t.timestamps){let t=e.match(/^r:(\d+):.*:f(\d+)$/);if(!t)continue;let i=Number(t[2]);n.has(i)||n.set(i,new Map),n.get(i).set(Number(t[1]),r)}let r=[...n.keys()].filter(e=>pn.has(e)).sort((e,t)=>t-e)[0];if(r===void 0)return null;let i=pn.get(r),a={};for(let[e,t]of n.get(r)){let n=`Other`;for(let[t,r]of i)e>=t&&(n=r);a[n]=(a[n]??0)+t}return a}function gn(e,t,n=t){Nt[e]=t,Pt[e]=n;for(let n of[Vt[e],Ht[e]])n.setBase(t);for(let t of[Wt[e],Gt[e]])t.setBase(n);Jt[e]=qt(t),Yt[e]=qt(n),rn=``,Qt=!0}return{render:un,resize:ln,markChanged:()=>Qt=!0,triangles:()=>Zt,passTimes:hn,setMeshGeometry:gn}}var nA=.85,rA=1.35,iA=.6;function aA(e,t){return e===Q.capsule||e===Q.torus?t[0]+t[1]:e===Q.box||e===Q.cylinder||e===Q.cone||e===Q.hexprism||e===Q.prism?Math.hypot(t[0],t[1],t[2]):1.1*Math.max(t[0],t[1],t[2])}var oA={[Q.box]:.1,[Q.sphere]:.2,[Q.cylinder]:.35,[Q.capsule]:.45,[Q.cone]:.55,[Q.torus]:.65,[Q.octahedron]:.75,[Q.prism]:.85,[Q.hexprism]:.9,[Q.diamond]:.95,[Q.suzanne]:.98,[Q.dragon]:.995};function sA(e,t,n=null,r=!1,i){t=Math.min(Math.max(1,Math.round(t)),Uk);let a=t*2654435761>>>0,o=()=>(a=Math.imul(a,1664525)+1013904223>>>0,a/4294967296),s=Math.min(Math.max(Math.sqrt(t)*.11,1.2),12)*(rA/.95),c=Math.max(1,Math.floor(2*s/rA)),l=c*c;e.count=t;for(let i=0;i<t;i++){let t=o();n&&n.length&&(t=oA[n[Math.floor(o()*n.length)]]);let a,s,u=!1;if(t<.16)a=Q.box,s=[.16+o()*.14,.16+o()*.14,.16+o()*.14],!n&&t<.07&&(u=!0,s=[s[0],s[0],s[0]]);else if(t<.3){a=Q.sphere;let e=.18+o()*.17;s=[e,e,e]}else if(t<.4){a=Q.cylinder;let e=.15+o()*.15;s=[e,.15+o()*.2,e]}else if(t<.5){a=Q.capsule;let e=.13+o()*.1;s=[e,.12+o()*.16,e]}else if(t<.6){a=Q.cone;let e=.18+o()*.14;s=[e,.18+o()*.16,e]}else if(t<.7){a=Q.torus;let e=.07+o()*.04;s=[.2+o()*.1,e,e]}else if(t<.79){a=Q.octahedron;let e=.24+o()*.14;s=[e,e,e]}else if(t<.88){a=Q.prism;let e=.22+o()*.14;s=[e,e,.15+o()*.15]}else if(t<.93){a=Q.hexprism;let e=.17+o()*.11;s=[e,.12+o()*.14,e]}else if(t<.975){a=Q.diamond;let e=.2+o()*.14;s=[e,e,e]}else if(t<.99){a=Q.suzanne;let e=.32+o()*.12;s=[e,e,e]}else{a=Q.dragon;let e=.34+o()*.12;s=[e,e,e]}r&&a===Q.box&&(s=[s[0],s[0],s[0]]);let d=Math.min(.85+.7500000000000001*o()**2.5,Math.max(1,iA/aA(a,s)));s=[s[0]*d,s[1]*d,s[2]*d];let f=o(),p=o()*2*Math.PI,m=o()*2*Math.PI,h=[Math.sqrt(1-f)*Math.sin(p),Math.sqrt(1-f)*Math.cos(p),Math.sqrt(f)*Math.sin(m),Math.sqrt(f)*Math.cos(m)],g=i%l,_=Math.floor(i/l),v=[(g%c-(c-1)/2)*rA+(o()-.5)*.15,1.2+_*rA,(Math.floor(g/c)-(c-1)/2)*rA+(o()-.5)*.15];e.kind[i]=a,e.size.set(s,i*3),e.center.set(v,i*3),e.quat.set(h,i*4);let y=(o()-.5)*.3,b=.5+o();e.vary.set(u?[0,1,nA]:[y,b,0],i*3)}return i?.(),s}function cA(e){let t=new Set,n=[];for(let r=-1;r<=1;r++)for(let i=-1;i<=1;i++)for(let a=-1;a<=1;a++){if(!r&&!i&&!a)continue;let o=Math.hypot(r,i,a),s=0,c=-1/0;for(let t=0;t<e.length/3;t++){let n=(e[t*3]*r+e[t*3+1]*i+e[t*3+2]*a)/o;n>c&&(c=n,s=t)}t.add(s),n.push(r/o,i/o,a/o,c)}let r=[];for(let n of t)r.push(e[n*3],e[n*3+1],e[n*3+2]);return{points:r,planes:n}}var lA=8;async function uA(t,n){let r=self.crossOriginIsolated===!0,i=await(r?(await e(async()=>{let{default:e}=await import(`./box3d.mt-yp6rVgHQ.js`);return{default:e}},__vite__mapDeps([0,1,2]))).default:(await e(async()=>{let{default:e}=await import(`./box3d-CoffnFtk.js`);return{default:e}},__vite__mapDeps([3,1,2]))).default)(),a=r?Math.min(Math.max(2,(navigator.hardwareConcurrency??4)-1),12):0,o=i.createEventsBuffer(),s=i.createBodyMoveEvent(),c=null,l=new Int32Array,u=2,d=cA(n.suzanne).points,f=cA(n.dragon).points,p=(e,t,n)=>{let r=i.b3CreateHull(n);i.b3CreateHullShape(e,t,r),r?.delete()};function m(e,n=null,r=!1,o){e=Math.min(Math.max(1,Math.round(e)),Uk),c&&i.b3DestroyWorld(c);let s=i.b3DefaultWorldDef();s.gravity=[0,-9.81,0],s.workerCount=a,c=i.b3CreateWorld(s);let m=i.b3DefaultShapeDef();m.baseMaterial.friction=.65,m.baseMaterial.restitution=.02,m.baseMaterial.rollingResistance=.16;let h=i.b3DefaultBodyDef();h.position=[0,-.5,0],i.b3CreateBoxShape(i.b3CreateBody(c,h),m,400,.5,400),u=sA(t,e,n,r,o);let g=[];for(let n=0;n<e;n++){let e=t.kind[n],r=[t.size[n*3],t.size[n*3+1],t.size[n*3+2]],a=[t.center[n*3],t.center[n*3+1],t.center[n*3+2]],o=[t.quat[n*4],t.quat[n*4+1],t.quat[n*4+2],t.quat[n*4+3]],s=i.b3DefaultBodyDef();s.type=i.b3BodyType.b3_dynamicBody,s.position=a,s.rotation=o,s.linearDamping=.08,s.angularDamping=.6,s.sleepThreshold=.25;let l=i.b3CreateBody(c,s);if(e===Q.box)i.b3CreateBoxShape(l,m,r[0],r[1],r[2]);else if(e===Q.sphere)i.b3CreateSphereShape(l,m,{center:[0,0,0],radius:r[0]});else if(e===Q.cylinder){let e=i.b3CreateCylinder(2*r[1],r[0],-r[1],16);i.b3CreateHullShape(l,m,e),e?.delete()}else if(e===Q.capsule)i.b3CreateCapsuleShape(l,m,{center1:[0,-r[1],0],center2:[0,r[1],0],radius:r[0]});else if(e===Q.cone){let e=[0,r[1],0];for(let t=0;t<16;t++){let n=t/16*2*Math.PI;e.push(r[0]*Math.cos(n),-r[1],r[0]*Math.sin(n))}p(l,m,e)}else if(e===Q.torus)for(let e=0;e<lA;e++){let t=e/lA*2*Math.PI,n=(e+1)/lA*2*Math.PI;i.b3CreateCapsuleShape(l,m,{center1:[r[0]*Math.cos(t),0,r[0]*Math.sin(t)],center2:[r[0]*Math.cos(n),0,r[0]*Math.sin(n)],radius:r[1]})}else if(e===Q.octahedron){let e=r[0];p(l,m,[e,0,0,-e,0,0,0,e,0,0,-e,0,0,0,e,0,0,-e])}else if(e===Q.prism){let e=r[0],t=[];for(let n of[-r[2],r[2]])t.push(0,e,n,-.8660254*e,-.5*e,n,.8660254*e,-.5*e,n);p(l,m,t)}else if(e===Q.hexprism){let e=r[0]/Math.cos(Math.PI/6),t=[];for(let n=0;n<6;n++){let i=n/6*2*Math.PI;for(let n of[-r[1],r[1]])t.push(e*Math.cos(i),n,e*Math.sin(i))}p(l,m,t)}else e===Q.diamond?p(l,m,Rk(r[0])):e===Q.dragon?p(l,m,f.map(e=>e*r[0])):p(l,m,d.map(e=>e*r[0]));g.push(l)}let _=0;for(let e of g)_=Math.max(_,e.index1);l=new Int32Array(_+1).fill(-1),g.forEach((e,t)=>l[e.index1]=t)}function h(){if(!c)return 0;i.b3World_Step(c,1/60,4),i.getEvents(o,c);let e=i.getNumBodyMoveEvents(o);for(let n=0;n<e;n++){i.getBodyMoveEventAt(s,o,n);let e=l[s.bodyId.index1];e===void 0||e<0||(t.center.set(s.position,e*3),t.quat.set(s.rotation,e*4))}return e}return{reset:m,step:h,footprint:()=>u,label:()=>`${Math.max(a,1)} threads`}}var dA=`// Rigid-body physics on the GPU, for piles too large for Box3D.
+	value:`,a)}addColor(e,t,n=1){return new uk(this,e,t,n)}addFolder(t){return new e({parent:this,title:t})}load(e,t=!0){return e.controllers&&this.controllers.forEach(t=>{t instanceof dk||t._name in e.controllers&&t.load(e.controllers[t._name])}),t&&e.folders&&this.folders.forEach(t=>{t._title in e.folders&&t.load(e.folders[t._title])}),this}save(e=!0){let t={controllers:{},folders:{}};return this.controllers.forEach(e=>{if(!(e instanceof dk)){if(e._name in t.controllers)throw Error(`Cannot save GUI with duplicate property "${e._name}"`);t.controllers[e._name]=e.save()}}),e&&this.folders.forEach(e=>{if(e._title in t.folders)throw Error(`Cannot save GUI with duplicate folder "${e._title}"`);t.folders[e._title]=e.save()}),t}open(e=!0){return this._closed=!e,this.$title.setAttribute(`aria-expanded`,!this._closed),this.domElement.classList.toggle(`closed`,this._closed),this}close(){return this.open(!1)}show(e=!0){return this._hidden=!e,this.domElement.style.display=this._hidden?`none`:``,this}hide(){return this.show(!1)}openAnimated(e=!0){return this._closed=!e,this.$title.setAttribute(`aria-expanded`,!this._closed),requestAnimationFrame(()=>{let t=this.$children.clientHeight;this.$children.style.height=t+`px`,this.domElement.classList.add(`transition`);let n=e=>{e.target===this.$children&&(this.$children.style.height=``,this.domElement.classList.remove(`transition`),this.$children.removeEventListener(`transitionend`,n))};this.$children.addEventListener(`transitionend`,n);let r=e?this.$children.scrollHeight:0;this.domElement.classList.toggle(`closed`,!e),requestAnimationFrame(()=>{this.$children.style.height=r+`px`})}),this}title(e){return this._title=e,this.$title.innerHTML=e,this}reset(e=!0){return(e?this.controllersRecursive():this.controllers).forEach(e=>e.reset()),this}onChange(e){return this._onChange=e,this}_callOnChange(e){this.parent&&this.parent._callOnChange(e),this._onChange!==void 0&&this._onChange.call(this,{object:e.object,property:e.property,value:e.getValue(),controller:e})}onFinishChange(e){return this._onFinishChange=e,this}_callOnFinishChange(e){this.parent&&this.parent._callOnFinishChange(e),this._onFinishChange!==void 0&&this._onFinishChange.call(this,{object:e.object,property:e.property,value:e.getValue(),controller:e})}destroy(){this.parent&&(this.parent.children.splice(this.parent.children.indexOf(this),1),this.parent.folders.splice(this.parent.folders.indexOf(this),1)),this.domElement.parentElement&&this.domElement.parentElement.removeChild(this.domElement),Array.from(this.children).forEach(e=>e.destroy())}controllersRecursive(){let e=Array.from(this.controllers);return this.folders.forEach(t=>{e=e.concat(t.controllersRecursive())}),e}foldersRecursive(){let e=Array.from(this.folders);return this.folders.forEach(t=>{e=e.concat(t.foldersRecursive())}),e}},_k=1.0823922,vk=.56,yk=Math.tan(Xt.degToRad(34.5)),bk=Math.tan(Xt.degToRad(40.75)),xk=.03,Sk=.759,Ck=.25,wk=(e,t,n)=>{let r=Xt.degToRad(n);return[e*Math.cos(r)*_k,t*_k,e*Math.sin(r)*_k]},Tk=xk+.43999999999999995*yk,Ek=Math.cos(Math.PI/8),Dk=e=>wk(vk,Tk,45*e),Ok=e=>wk(1,xk,22.5*e),kk=e=>wk(1,-.03,22.5*e),Ak=e=>wk(Sk,xk+(1-Sk*Ek)*yk,45*e+22.5),jk=e=>wk(Ck,-.03-(1-Ck*Ek)*bk,45*e+22.5),Mk=[0,(-.03-bk)*_k,0];function Nk(e,t,n){let r=[t[0]-e[0],t[1]-e[1],t[2]-e[2]],i=[n[0]-e[0],n[1]-e[1],n[2]-e[2]],a=[r[1]*i[2]-r[2]*i[1],r[2]*i[0]-r[0]*i[2],r[0]*i[1]-r[1]*i[0]],o=Math.hypot(a[0],a[1],a[2]);a=a.map(e=>e/o);let s=a[0]*e[0]+a[1]*e[1]+a[2]*e[2];return s<0&&(a=a.map(e=>-e),s=-s),[a[0],a[1],a[2],s]}var Pk=(()=>{let e=[0,1,0,Tk*_k];for(let t=0;t<8;t++)e.push(...Nk(Dk(t),Ak(t),Ok(2*t))),e.push(...Nk(Dk(t),Dk(t+1),Ak(t))),e.push(...Nk(Ak(t),Ok(2*t),Ok(2*t+1))),e.push(...Nk(Ak(t),Ok(2*t+1),Ok(2*t+2))),e.push(...Nk(jk(t),kk(2*t),kk(2*t+1))),e.push(...Nk(jk(t),kk(2*t+1),kk(2*t+2))),e.push(...Nk(kk(2*t),Mk,jk(t)));for(let t=0;t<16;t++)e.push(...Nk(Ok(t),Ok(t+1),kk(t)));return e})(),Fk=Pk.length/4,Ik=(()=>{let e=[Mk];for(let t=0;t<8;t++)e.push(Dk(t),Ak(t),jk(t));for(let t=0;t<16;t++)e.push(Ok(t),kk(t));return e})();for(let e of Ik)for(let t=0;t<Fk;t++){let n=Pk[t*4]*e[0]+Pk[t*4+1]*e[1]+Pk[t*4+2]*e[2]-Pk[t*4+3];n>1e-6&&console.warn(`diamond: corner ${e} is ${n.toFixed(4)} outside facet ${t}`)}function Lk(e,t){let n=`const ${e}_N = ${Fk};`;return t===`texture`?`${n}\nfn icDiamondPlane(k: i32) -> vec4f { return textureLoad(icDiamondTex, vec2i(k, 0), 0); }`:`${n}\nconst ${e} = array<vec4f, ${Fk}>(\n  ${Array.from({length:Fk},(e,t)=>`vec4f(${Pk.slice(t*4,t*4+4).map(e=>e.toFixed(7)).join(`, `)})`).join(`,
+  `)});\nfn icDiamondPlane(k: i32) -> vec4f { return ${e}[k]; }`}function Rk(){let e=new Fi(new Float32Array(Pk),Fk,1,D,v);return e.minFilter=e.magFilter=o,e.needsUpdate=!0,e}function zk(e){let t=[];for(let e=0;e<8;e++)t.push(...Dk(e),...Ok(2*e),...kk(2*e));return t.push(...Mk),t.map(t=>t*e)}var Bk=Pk[31],Vk=Math.atan2(Pk[28],-Pk[29]);function Hk(){let e=[],t=[];for(let n=0;n<Fk;n++){let r=new P(Pk[n*4],Pk[n*4+1],Pk[n*4+2]),i=Ik.filter(e=>Math.abs(r.x*e[0]+r.y*e[1]+r.z*e[2]-Pk[n*4+3])<1e-5).map(e=>new P(...e));if(i.length<3)continue;let a=i.reduce((e,t)=>e.add(t),new P).divideScalar(i.length),o=i[0].clone().sub(a).normalize(),s=r.clone().cross(o),c=e=>Math.atan2(e.clone().sub(a).dot(s),e.clone().sub(a).dot(o));i.sort((e,t)=>c(e)-c(t));for(let n=1;n+1<i.length;n++)for(let a of[i[0],i[n],i[n+1]])e.push(a.x,a.y,a.z),t.push(r.x,r.y,r.z)}let n=new ri;return n.setAttribute(`position`,new Gr(e,3)),n.setAttribute(`normal`,new Gr(t,3)),n}var Uk=`// Real-time glass for thousands of objects of every shape the app supports.\r
+//\r
+// Nothing is ray-marched and nothing is random. Objects are drawn as instanced\r
+// triangles; each fragment follows the light through its own\r
+// object with exact ray/shape formulas (only the torus and the baked mesh take a\r
+// few steps along the ray), and whatever the light sees\r
+// after leaving is looked up (sky, ground, or the picture of what is behind).\r
+//\r
+// The app builds three programs from this file by keeping only the lines between\r
+// the matching \`//#if\` and \`//#endif\` markers:\r
+//   CAUSTIC  objects drawn from the main lamp's direction into the caustic map\r
+//   GROUND   the ground and sky\r
+//   GLASS    the glass objects\r
+//   BLUR     one direction of the blur that softens the shadows (and makes the glow)\r
+//   SHADE    contact shadows, over the finished picture\r
+//   LENS     depth of field, glow and tones: the last pass, onto the screen\r
+//   PHOTON   real caustics: where each ray of the lamp's light lands on the floor\r
+//#if BLUR\r
+// A Gaussian blur along \`dir\` (in texture coordinates, out to its full length).\r
+// Only what is brighter than \`cut\` is kept (0 keeps everything).\r
+fn icBlur(uv: vec2f, dir: vec2f, cut: f32, reach: f32, src: texture_2d<f32>, srcSamp: sampler) -> vec4f {\r
+  // \`reach\` samples each side of the middle: as many as the blur is texels wide.\r
+  var sum = vec4f(0.0);\r
+  var total = 0.0;\r
+  let n = i32(reach);\r
+  for (var i = -n; i <= n; i++) {\r
+    let x = 2.0 * f32(i) / reach;\r
+    let w = exp(-0.5 * x * x);\r
+    sum += w * max(textureSampleLevel(src, srcSamp, uv + dir * (f32(i) / reach), 0.0) - vec4f(cut), vec4f(0.0));\r
+    total += w;\r
+  }\r
+  return sum / total;\r
+}\r
+//#endif\r
+//#if SHADE\r
+// First finishing pass: contact shadows. The picture so far carries, in its alpha,\r
+// how far each pixel is from the camera; from that, each pixel looks at the\r
+// surfaces around it and darkens where they crowd in over it - under an object\r
+// where it meets the floor, and in the gaps between objects. p = strength,\r
+// radius (m), exposure.\r
+fn icShade(fragCoord: vec2f, res: vec2f, camPos: vec3f, camRight: vec4f, camUp: vec3f, camFwd: vec4f, p: vec4f, src: texture_2d<f32>, srcSamp: sampler) -> vec4f {\r
+  gRes = res; gCamPos = camPos; gCamRight = camRight; gCamUp = camUp; gCamFwd = camFwd;\r
+  let uv = fragCoord / res;\r
+  let here = textureSampleLevel(src, srcSamp, uv, 0.0);\r
+  let dist = here.a;\r
+  var shade = 1.0;\r
+  if (p.x > 0.0 && dist < 900.0) {\r
+    let px = 1.0 / res;\r
+    let at = icPointAt(uv, dist);\r
+    // The surface's direction, from its neighbours (on each axis, the one nearer in depth).\r
+    let right = textureSampleLevel(src, srcSamp, uv + vec2f(px.x, 0.0), 0.0).a;\r
+    let left = textureSampleLevel(src, srcSamp, uv - vec2f(px.x, 0.0), 0.0).a;\r
+    let below = textureSampleLevel(src, srcSamp, uv + vec2f(0.0, px.y), 0.0).a;\r
+    let above = textureSampleLevel(src, srcSamp, uv - vec2f(0.0, px.y), 0.0).a;\r
+    var alongX = icPointAt(uv + vec2f(px.x, 0.0), right) - at;\r
+    if (abs(left - dist) < abs(right - dist)) { alongX = at - icPointAt(uv - vec2f(px.x, 0.0), left); }\r
+    var alongY = icPointAt(uv + vec2f(0.0, px.y), below) - at;\r
+    if (abs(above - dist) < abs(below - dist)) { alongY = at - icPointAt(uv - vec2f(0.0, px.y), above); }\r
+    var n = normalize(cross(alongY, alongX));\r
+    if (dot(n, camPos - at) < 0.0) { n = -n; }\r
+    // The floor takes the full shadow; glass, being clear, only a little.\r
+    let onFloor = abs(at.y) < 0.02 + 0.002 * dist;\r
+    if (onFloor) { n = vec3f(0.0, 1.0, 0.0); }\r
+\r
+    // Points round about, in a spiral turned differently at every pixel.\r
+    let reach = p.y / (dist * 2.0 * camFwd.w);   // the radius on screen, as a share of its height\r
+    let turn = 6.2831853 * fract(52.9829189 * fract(dot(fragCoord, vec2f(0.06711056, 0.00583715))));\r
+    var crowded = 0.0;\r
+    for (var k = 0; k < 24; k++) {\r
+      let a = turn + f32(k) * 2.3999632;\r
+      let r = reach * sqrt((f32(k) + 0.5) / 24.0);\r
+      let suv = uv + vec2f(cos(a) * r * res.y / res.x, sin(a) * r);\r
+      let sd = textureSampleLevel(src, srcSamp, suv, 0.0).a;\r
+      let point = icPointAt(suv, sd);\r
+      // The floor never shades the floor. (Its depth is stored only roughly, so\r
+      // nearby floor would read as tiny bumps, and leave a fine grain over it.)\r
+      if (onFloor && abs(point.y) < 0.02 + 0.002 * sd) { continue; }\r
+      // On the floor only what is close above it counts: the spot where an object\r
+      // meets it. (Its shadow proper comes from the lamp. Counting all of an object\r
+      // gave a wide, grainy halo round it, the samples falling on it or not at random.)\r
+      if (onFloor && point.y > 0.1 * p.y) { continue; }\r
+      let there = point - at;\r
+      let far = length(there);\r
+      crowded += max(dot(n, there) / (far + 1e-4) - 0.1, 0.0) * (1.0 - smoothstep(0.7 * p.y, 1.6 * p.y, far));\r
+    }\r
+    shade = 1.0 - p.x * select(0.3, 1.0, onFloor) * clamp(crowded / 24.0 * 2.6, 0.0, 1.0);\r
+  }\r
+  return vec4f(here.rgb * shade * p.z, dist);\r
+}\r
+\r
+var<private> gRes: vec2f;\r
+var<private> gCamPos: vec3f;\r
+var<private> gCamRight: vec4f;\r
+var<private> gCamUp: vec3f;\r
+var<private> gCamFwd: vec4f;\r
+\r
+// The point in the world seen at a place on screen, that far from the camera.\r
+fn icPointAt(uv: vec2f, dist: f32) -> vec3f {\r
+  let ndc = (uv * 2.0 - 1.0) * vec2f(1.0, -1.0);\r
+  let rd = normalize(gCamFwd.xyz + gCamRight.xyz * (ndc.x * gCamFwd.w * gCamRight.w) + gCamUp * (ndc.y * gCamFwd.w));\r
+  return gCamPos + rd * dist;\r
+}\r
+//#endif\r
+//#if LENS\r
+// Last finishing pass: the camera. Depth of field (what is nearer or farther than\r
+// the focus goes soft), the glow round the brightest glints, and film-like tones.\r
+// p = focus distance to fall back on (m), aperture, glow, tones on.\r
+fn icLens(fragCoord: vec2f, res: vec2f, p: vec4f, src: texture_2d<f32>, srcSamp: sampler, glowTex: texture_2d<f32>, glowSamp: sampler) -> vec4f {\r
+  let uv = fragCoord / res;\r
+  let here = textureSampleLevel(src, srcSamp, uv, 0.0);\r
+  var col = here.rgb;\r
+  // Autofocus: on whatever is in the middle of the picture (a few points round the\r
+  // centre, in case one falls in a gap). Only if all of them see the backdrop does\r
+  // it fall back on the distance it was given.\r
+  var focus = 0.0;\r
+  var found = 0.0;\r
+  for (var k = 0; k < 5; k++) {\r
+    let a = f32(k) * 1.2566371;\r
+    let offset = select(vec2f(cos(a), sin(a)) * 0.03, vec2f(0.0), k == 0);\r
+    let d = textureSampleLevel(src, srcSamp, vec2f(0.5) + offset * vec2f(res.y / res.x, 1.0), 0.0).a;\r
+    if (d < 900.0) {\r
+      focus += d;\r
+      found += 1.0;\r
+    }\r
+  }\r
+  focus = select(p.x, focus / max(found, 1.0), found > 0.0);\r
+  let blur = icSoftness(here.a, focus, p.y);\r
+  if (blur * res.y > 0.75) {\r
+    // Gather from a disc as wide as this pixel is soft. A point in front of this\r
+    // one only spills over it as far as it is soft itself.\r
+    let turn = 6.2831853 * fract(52.9829189 * fract(dot(fragCoord, vec2f(0.06711056, 0.00583715))));\r
+    var sum = here.rgb;\r
+    var weight = 1.0;\r
+    for (var k = 0; k < 24; k++) {\r
+      let a = turn + f32(k) * 2.3999632;\r
+      let r = blur * sqrt((f32(k) + 0.5) / 24.0);\r
+      let there = textureSampleLevel(src, srcSamp, uv + vec2f(cos(a) * r * res.y / res.x, sin(a) * r), 0.0);\r
+      var w = 1.0;\r
+      if (there.a < here.a - 0.05) { w = clamp(icSoftness(there.a, focus, p.y) / max(r, 1e-5), 0.0, 1.0); }\r
+      sum += there.rgb * w;\r
+      weight += w;\r
+    }\r
+    col = sum / weight;\r
+  }\r
+  col += textureSampleLevel(glowTex, glowSamp, uv, 0.0).rgb * p.z;\r
+  if (p.w > 0.5) { col = icTones(col); }\r
+  return vec4f(col, 1.0);\r
+}\r
+\r
+// How soft a point at that distance is: the radius of its blur, as a share of the\r
+// height of the picture.\r
+fn icSoftness(dist: f32, focus: f32, aperture: f32) -> f32 {\r
+  return min(aperture * 0.05 * abs(dist - focus) / max(dist, 0.1), 0.02);\r
+}\r
+\r
+// Film-like tones: left alone up to fairly bright, then eased toward white\r
+// instead of clipping, losing a little colour on the way (the Khronos "neutral"\r
+// curve).\r
+fn icTones(cIn: vec3f) -> vec3f {\r
+  var c = cIn;\r
+  let low = min(c.r, min(c.g, c.b));\r
+  c -= select(0.04, low - 6.25 * low * low, low < 0.08);\r
+  let peak = max(c.r, max(c.g, c.b));\r
+  let start = 0.76;\r
+  if (peak < start) { return c; }\r
+  let d = 1.0 - start;\r
+  let newPeak = 1.0 - d * d / (peak + d - start);\r
+  c *= newPeak / peak;\r
+  let grey = 1.0 - 1.0 / (0.15 * (peak - newPeak) + 1.0);\r
+  return mix(c, vec3f(newPeak), grey);\r
+}\r
+//#endif\r
+//#if PHOTON\r
+// Real caustics, first half. Objects are drawn from the main lamp's direction, so\r
+// every pixel here is one ray of its light. Each is followed through its object\r
+// (in at this point, round the inside for as long as it cannot get out, then out)\r
+// and on down to the floor. The answer is how far from its straight path the ray\r
+// lands, in the units of the caustic map (xy), and how much of the light is left\r
+// (z). The second half moves every one of these rays to where it lands and adds\r
+// them up, which is bright wherever the glass gathers them together.\r
+fn icPhoton(worldPos: vec3f, nrmW: vec3f, center: vec3f, quat: vec4f, size: vec3f, vary: vec3f, tintAll: vec4f, tintOwn: vec3f, sunDir: vec3f, lightR: vec3f, lightU: vec3f, glassP: vec4f, cmyAll: f32, bevel: f32, raysAcross: f32, meshEntry: f32, sdfTex: texture_3d<f32>, diamondTex: texture_2d<f32>) -> vec4f {\r
+  // sdfTex is only listed so three.js binds the baked mesh volume (see icGlass).\r
+  // raysAcross: how many rays there are each way (the width of this picture).\r
+  gBevel = bevel;\r
+  gMeshEntry = meshEntry;\r
+  let cmy = max(cmyAll, vary.z);\r
+  let shape = IC_SHAPE;\r
+  let d0 = icToLocal(-sunDir, quat);\r
+  let entry = icEntry(shape, icToLocal(worldPos - center, quat), size, icToLocal(normalize(nrmW), quat));\r
+  var n0 = entry.nrm;\r
+  if (dot(d0, n0) > 0.0) { n0 = -n0; }\r
+  let ior = max(glassP.x + vary.x, 1.02);\r
+  var left = 1.0 - icFresnel(dot(d0, n0), ior);\r
+  // Light that only grazes the surface is thrown wide in a thin, faint streak:\r
+  // it is faded out, which keeps the pool of light clean.\r
+  left *= smoothstep(0.05, 0.4, -dot(d0, n0));\r
+  // The colour of the glass: the setting for all of it times the object's own,\r
+  // faded toward clear by the setting's alpha.\r
+  var tint = mix(vec3f(1.0), tintAll.rgb * tintOwn, tintAll.a);\r
+  if (shape == 0 && cmy > 0.0) { tint *= icCmyTint(n0, cmy); }\r
+  var dir = refract(d0, n0, 1.0 / ior);\r
+  var pos = entry.pos;\r
+  var leaving = vec3f(0.0);\r
+  var escaped = false;\r
+  if (dot(dir, dir) > 1e-6) {\r
+    for (var e = 0; e < 8; e++) {\r
+      let hit = icExit(shape, pos, dir, size);\r
+      pos = hit.pos;\r
+      if (shape == 0 && cmy > 0.0) { tint *= icCmyTint(hit.nrm, cmy); }\r
+      let through = refract(dir, -hit.nrm, ior);\r
+      if (dot(through, through) > 1e-6) {\r
+        left *= 1.0 - icFresnel(dot(dir, hit.nrm), 1.0 / ior);\r
+        leaving = through;\r
+        escaped = true;\r
+        break;\r
+      }\r
+      dir = reflect(dir, -hit.nrm);   // cannot get out here: it bounces back inside\r
+    }\r
+  }\r
+  var thrown = vec2f(0.0);   // how far from its straight path the ray lands\r
+  var light = 0.0;           // and how much light it still carries\r
+  if (escaped) {\r
+    let exitAt = center + icToWorld(pos, quat);\r
+    let down = icToWorld(leaving, quat);\r
+    if (down.y < -0.02) {\r
+      let moved = exitAt + down * (-exitAt.y / down.y) - worldPos;\r
+      thrown = vec2f(dot(moved, lightR), dot(moved, lightU));\r
+      light = left * dot(tint, vec3f(0.333333));\r
+    }\r
+  }\r
+  // Rays that the glass fans out land far apart, and one ray on its own would show\r
+  // as a bright dot. How far apart is the area a little square of rays covers when\r
+  // it lands, against the area it started with: found from how differently this\r
+  // ray's neighbours are thrown. A fanned-out ray is then spread over that larger\r
+  // area (up to a limit), and dimmed by as much; where neighbours are thrown\r
+  // completely differently (across the edge of a facet) there is next to nothing left.\r
+  let across = dpdx(thrown) * (0.5 * raysAcross);\r
+  let downward = dpdy(thrown) * (0.5 * raysAcross);\r
+  let spread = max(abs((1.0 + across.x) * (1.0 - downward.y) + downward.x * across.y), 1.0);\r
+  // Alpha: above 0 marks the pixel as covered by glass (whether or not its ray\r
+  // reaches the floor); beyond 1, it is how wide (in rays) to draw this one.\r
+  return vec4f(thrown, light / spread, 1.0 + min(sqrt(spread), 6.0));\r
+}\r
+//#endif\r
+//#if CAUSTIC\r
+fn icCaustic(normalW: vec3f, worldPos: vec3f, size: vec3f, quat: vec4f, cmyAll: f32, vary: vec3f, tintAll: vec4f, tintOwn: vec3f) -> vec4f {\r
+  // A CMY cube: every box when the whole pile is, or just the objects marked as one.\r
+  let cmy = max(cmyAll, vary.z);\r
+  // Every surface the lamp's light crosses multiplies it; multiplicative blending\r
+  // builds up the product over all surfaces. The upper part of an object shades\r
+  // the floor; the part resting on it gathers light there instead, the bright\r
+  // patch at the foot of a cut stone.\r
+  let n = normalize(normalW);\r
+  let height = worldPos.y / (0.9 * max(size.x, max(size.y, size.z)));\r
+  var c = vec3f(mix(1.32, 0.79, smoothstep(0.0, 1.0, height)));\r
+  // Coloured glass colours the light that passes through it. Light crosses two\r
+  // surfaces of an object (in and out), so each takes half of the colouring.\r
+  c *= sqrt(mix(vec3f(1.0), tintAll.rgb * tintOwn, tintAll.a));\r
+  // CMY cubes also colour the light, on every face it crosses.\r
+  if (cmy > 0.0) {\r
+    let local = n + 2.0 * cross(-quat.xyz, cross(-quat.xyz, n) + quat.w * n);\r
+    c *= icCmyTint(local, cmy);\r
+  }\r
+  return vec4f(c, 1.0);\r
+}\r
+//#endif\r
+//#if GROUND\r
+fn icGround(fragCoord: vec2f, res: vec2f, camPos: vec3f, camRight: vec4f, camUp: vec3f, camFwd: vec4f, room: f32, skyE: vec3f, sunE: vec3f, albedo: vec3f, lightC: vec3f, lightR: vec3f, lightU: vec3f, floorP: vec4f, spot: vec4f, lamp: vec3f, lightTex: texture_2d<f32>, lightSamp: sampler, mirrorTex: texture_2d<f32>, mirrorSamp: sampler, shadeTex: texture_2d<f32>, shadeSamp: sampler, shadeFarTex: texture_2d<f32>, shadeFarSamp: sampler) -> vec4f {\r
+  // shadeTex and shadeFarTex are only listed so three.js binds them; icSoftShade\r
+  // reads them through their global names.\r
+  gFloorP = floorP;\r
+  // room: 1 if there is a floor, plus 2 for the dark studio.\r
+  gDark = floor(room / 2.0); gGroundOn = room - 2.0 * gDark;\r
+  gSpot = spot;\r
+  gLamp = lamp;\r
+  gSkyE = skyE; gSunE = sunE; gAlbedo = albedo;\r
+  gLightC = lightC; gLightR = lightR; gLightU = lightU;\r
+  let ndc = (fragCoord / res * 2.0 - 1.0) * vec2f(1.0, -1.0);\r
+  let rd = normalize(camFwd.xyz + camRight.xyz * (ndc.x * camFwd.w * camRight.w) + camUp * (ndc.y * camFwd.w));\r
+  gBackdrop = true;\r
+  var col = icScene(camPos, rd);\r
+  // The studio backdrop is lit a little unevenly: brighter up and to the left.\r
+  col *= 1.0 + 0.07 * (0.8 * ndc.y - 0.5 * ndc.x);\r
+  let onFloor = gGroundOn > 0.5 && rd.y < -1e-5;\r
+  let floorT = -camPos.y / min(rd.y, -1e-5);\r
+  // An endless grid on the floor: a line every metre, a heavier one every five metres.\r
+  if (onFloor && floorP.z > 0.5) {\r
+    let g = camPos.xz + rd.xz * floorT;\r
+    // How much floor one pixel covers there (it stretches away from the camera).\r
+    let pixel = floorT * (2.0 * camFwd.w / res.y) / max(-rd.y, 0.02);\r
+    let near1 = abs(fract(g - 0.5) - 0.5);\r
+    let near5 = abs(fract(g / 5.0 - 0.5) - 0.5) * 5.0;\r
+    let fine = icGridLine(min(near1.x, near1.y), 0.009, pixel);\r
+    let heavy = icGridLine(min(near5.x, near5.y), 0.02, pixel);\r
+    let lines = min(0.38 * fine + 0.5 * heavy, 0.62);\r
+    // Dark lines on the white floor, pale ones on the dark one.\r
+    if (gDark > 0.5) { col += vec3f(0.035) * lines; } else { col *= 1.0 - lines; }\r
+  }\r
+  // A polished floor: the picture of the objects mirrored in it (drawn before this\r
+  // pass), stronger at grazing angles and slightly blurred.\r
+  if (floorP.x > 0.0 && onFloor) {\r
+    let uv = fragCoord / res;\r
+    // The mirror picture's alpha falls with height above the floor: a polished\r
+    // (not mirror) floor shows what touches it clearly, and what is higher up\r
+    // fainter and more blurred.\r
+    var m = textureSampleLevel(mirrorTex, mirrorSamp, uv, 0.0);\r
+    let px = mix(9.0, 1.0, clamp(m.a * 1.3, 0.0, 1.0)) / res;\r
+    for (var k = 0; k < 12; k++) {\r
+      let a = f32(k) * 2.3999632;\r
+      m += textureSampleLevel(mirrorTex, mirrorSamp, uv + vec2f(cos(a), sin(a)) * sqrt((f32(k) + 0.5) / 12.0) * px, 0.0);\r
+    }\r
+    m /= 13.0;\r
+    let grazing = 1.0 - clamp(-rd.y, 0.0, 1.0);\r
+    // (A black floor shows its reflections the more clearly: twice as strong in the dark studio.)\r
+    let k = min(floorP.x * select(1.0, 2.0, gDark > 0.5) * (0.35 + 0.65 * grazing * grazing), 1.0) * m.a;\r
+    if (m.a > 1e-4) { col = mix(col, m.rgb / m.a, k); }\r
+  }\r
+  // The beam of the spotlight, made visible by the dust in the air.\r
+  if (gSpot.x > 0.0) {\r
+    let inBeam = icBeam(camPos, rd, select(1e4, floorT, onFloor));\r
+    col += vec3f(0.07, 0.07, 0.075) * (1.0 - exp(-0.3 * inBeam));\r
+  }\r
+  // Fog: the floor fades into a pale haze with distance, and the haze hangs along\r
+  // the horizon.\r
+  if (floorP.w > 0.0) {\r
+    let haze = icEnv(normalize(vec3f(rd.x, 0.03, rd.z))) * 1.07;\r
+    if (onFloor) {\r
+      col = mix(col, haze, 1.0 - exp(-0.05 * floorP.w * floorT));\r
+    } else {\r
+      col = mix(col, haze, exp(-max(rd.y, 0.0) * 5.0 / floorP.w));\r
+    }\r
+  }\r
+  // (Alpha: how far away this pixel is, for the finishing passes.)\r
+  return vec4f(col, select(1000.0, floorT, onFloor));\r
+}\r
+\r
+// How far a ray travels inside the cone of the spotlight (from the lamp, gSpot.y\r
+// away toward gLamp, to the middle of the floor, where the beam is gSpot.x\r
+// in radius), up to distance tEnd.\r
+fn icBeam(o: vec3f, d: vec3f, tEnd: f32) -> f32 {\r
+  let axis = -gLamp;\r
+  let k = gSpot.x / gSpot.y;\r
+  let cos2 = 1.0 / (1.0 + k * k);         // squared cosine of the half-angle of the cone\r
+  let fromLamp = o - gLamp * gSpot.y;\r
+  let dAxis = dot(d, axis);\r
+  let oAxis = dot(fromLamp, axis);\r
+  let a = dAxis * dAxis - cos2;\r
+  let b = 2.0 * (dAxis * oAxis - dot(d, fromLamp) * cos2);\r
+  let c = oAxis * oAxis - dot(fromLamp, fromLamp) * cos2;\r
+  let disc = b * b - 4.0 * a * c;\r
+  // Where along the ray it may count: in front of the camera, short of tEnd, and\r
+  // on the lamp's side of the cone's tip that the light goes out from (the\r
+  // cone's equation has a mirror half behind the lamp too).\r
+  var lo = 0.0;\r
+  var hi = tEnd;\r
+  if (abs(dAxis) < 1e-6) {\r
+    if (oAxis <= 0.0) { return 0.0; }\r
+  } else if (dAxis > 0.0) {\r
+    lo = max(lo, -oAxis / dAxis);\r
+  } else {\r
+    hi = min(hi, -oAxis / dAxis);\r
+  }\r
+  if (hi <= lo) { return 0.0; }\r
+  // Inside the (double) cone where a t^2 + b t + c >= 0. A ray running more across\r
+  // the beam than the cone opens (a < 0) is inside between the two crossings; one\r
+  // running more along it (a > 0, as when looking down the beam from inside it)\r
+  // is inside before the first crossing and after the second, or all the way if\r
+  // it never crosses. (Leaving those rays out drew a hard-edged circle on the\r
+  // floor round the point straight below a camera inside the beam.)\r
+  if (abs(a) < 1e-7) {\r
+    // Parallel to the cone's side: inside on one side of a single crossing.\r
+    if (abs(b) < 1e-9) { return select(0.0, hi - lo, c >= 0.0); }\r
+    let t = -c / b;\r
+    if (b > 0.0) { return max(hi - max(lo, t), 0.0); }\r
+    return max(min(hi, t) - lo, 0.0);\r
+  }\r
+  if (disc <= 0.0) { return select(0.0, hi - lo, a > 0.0); }\r
+  let root = sqrt(disc);\r
+  let r0 = min((-b - root) / (2.0 * a), (-b + root) / (2.0 * a));\r
+  let r1 = max((-b - root) / (2.0 * a), (-b + root) / (2.0 * a));\r
+  if (a < 0.0) { return max(min(hi, r1) - max(lo, r0), 0.0); }\r
+  return max(min(hi, r0) - lo, 0.0) + max(hi - max(lo, r1), 0.0);\r
+}\r
+\r
+// How much of a pixel a grid line covers: the line is \`half\` wide either side of\r
+// its middle, the pixel \`pixel\` wide, and \`d\` is how far the pixel is from the line.\r
+fn icGridLine(d: f32, half: f32, pixel: f32) -> f32 {\r
+  return clamp((half - d) / pixel + 0.5, 0.0, 1.0) * clamp(2.0 * half / pixel, 0.0, 1.0);\r
+}\r
+//#endif\r
+//#if GLASS\r
+fn icGlass(worldPos: vec3f, nrmW: vec3f, center: vec3f, quat: vec4f, size: vec3f, vary: vec3f, tintAll: vec4f, tintOwn: vec3f, camPos: vec3f, glassP: vec4f, viewProj: mat4x4f, room: f32, skyE: vec3f, sunE: vec3f, albedo: vec3f, lightC: vec3f, lightR: vec3f, lightU: vec3f, cmyAll: f32, mirror: f32, bevel: f32, spot: vec4f, lamp: vec3f, lightTex: texture_2d<f32>, lightSamp: sampler, behindTex: texture_2d<f32>, behindSamp: sampler, lampDepthTex: texture_2d<f32>, meshEntry: f32, sdfTex: texture_3d<f32>, diamondTex: texture_2d<f32>) -> vec4f {\r
+  // sdfTex is only listed so three.js binds the baked mesh volume; icVolume reads\r
+  // it through its global name (icSdfTex).\r
+  // room: 1 if there is a floor, plus 2 for the dark studio.\r
+  gDark = floor(room / 2.0); gGroundOn = room - 2.0 * gDark;\r
+  gSpot = spot;\r
+  gLamp = lamp;\r
+  gSkyE = skyE; gSunE = sunE; gAlbedo = albedo;\r
+  gLightC = lightC; gLightR = lightR; gLightU = lightU;\r
+  gViewProj = viewProj;\r
+  gEye = camPos;\r
+  gReach = max(size.x, max(size.y, size.z));\r
+  gSteps = glassP.w;\r
+  gMirror = mirror;\r
+  // A CMY cube: every box when the whole pile is, or just the objects marked as one.\r
+  let cmy = max(cmyAll, vary.z);\r
+  gBevel = bevel;\r
+  gMeshEntry = meshEntry;\r
+  // In the shadow of other objects? (The mirror image is drawn upside down below\r
+  // the floor: the object itself is above it.) The lamp is dimmed for this object\r
+  // in all it sees of the studio (see icEnv).\r
+  let here = select(worldPos, worldPos * vec3f(1.0, -1.0, 1.0), mirror > 0.5);\r
+  gLampLit = icLampVisible(here, dot(center, lamp) + 1.25 * length(size));\r
+  let shape = IC_SHAPE;\r
+  let rdW = normalize(worldPos - camPos);\r
+  let d0 = icToLocal(rdW, quat);\r
+\r
+  // Entry point and normal in the object's own space.\r
+  let entry = icEntry(shape, icToLocal(worldPos - center, quat), size, icToLocal(normalize(nrmW), quat));\r
+  let p0 = entry.pos;\r
+  var n0 = entry.nrm;\r
+  if (dot(d0, n0) > 0.0) { n0 = -n0; }\r
+\r
+  // Each object can differ slightly from the settings: vary.x is added to the IOR,\r
+  // vary.y multiplies the dispersion.\r
+  let ior = max(glassP.x + vary.x, 1.02);\r
+  // How far apart the IOR is for blue and red light (n_F - n_C): 1/12 for each unit of\r
+  // the dispersion setting, far more than real glass shows, for visible fire.\r
+  let disp = glassP.y * vary.y / 12.0;\r
+  // The baked mesh is the one shape that has to be marched, so it gets fewer bounces.\r
+  let maxEvents = select(i32(glassP.z), min(i32(glassP.z), 4), icIsMesh(shape));\r
+  let layers = select(1, 3, disp > 0.0);\r
+  var col = vec3f(0.0);\r
+  // The glass colours light where it enters (white, except for CMY cubes).\r
+  // The colour of the glass: the setting for all of it times the object's own,\r
+  // faded toward clear by the setting's alpha.\r
+  var tint = mix(vec3f(1.0), tintAll.rgb * tintOwn, tintAll.a);\r
+  if (shape == 0 && cmy > 0.0) { tint *= icCmyTint(n0, cmy); }\r
+\r
+  for (var c = 0; c < layers; c++) {\r
+    // One colour layer: IOR - 1.5 d, IOR, IOR + d.\r
+    var ch = 1;\r
+    if (layers == 3) { ch = c; }\r
+    let iorIn = max(ior + icIorOffset(disp, ch), 1.0001);\r
+    let f0 = icFresnel(dot(d0, n0), iorIn);\r
+    var layer = f0 * icLook(worldPos + icToWorld(n0, quat) * 0.003, icToWorld(reflect(d0, n0), quat), false);\r
+    var thr = 1.0 - f0;   // light still inside, weighted by the chance of getting here\r
+    var prob = 1.0;\r
+    var dir = refract(d0, n0, 1.0 / iorIn);\r
+    var pos = p0;\r
+    // A CMY cube's faces are colour filters: light is filtered by the face it enters\r
+    // through, by each face it bounces off inside, and by the face it leaves through. Seen through one face, the others mix\r
+    // their colours into it: the cube inside the cube.\r
+    var filtered = tint;\r
+    if (dot(dir, dir) > 1e-6) {\r
+      for (var e = 1; e < maxEvents; e++) {\r
+        // Where the ray meets the inside of the surface again, exactly.\r
+        let hit = icExit(shape, pos, dir, size);\r
+        pos = hit.pos;\r
+        let nrm = hit.nrm;\r
+        var face = vec3f(1.0);\r
+        if (shape == 0 && cmy > 0.0) { face = icCmyTint(nrm, cmy); }\r
+        // The exit glass picks one of the three layer IORs at random in the path\r
+        // tracer; here all three are taken at once, weighted by their chance.\r
+        let fx = icExitFactor(min(8.0 * hit.t, 1.0));\r
+        var reflProb = 0.0;\r
+        for (var k = 0; k < 3; k++) {\r
+          var wk = fx / 3.0;\r
+          if (layers == 1) {\r
+            if (k != 1) { continue; }\r
+            wk = 1.0;\r
+          } else if (k == ch) {\r
+            wk += 1.0 - fx;\r
+          }\r
+          let iorK = max(ior + icIorOffset(disp, k), 1.0001);\r
+          let rf = refract(dir, -nrm, iorK);\r
+          var f = icFresnel(dot(dir, nrm), 1.0 / iorK);\r
+          if (dot(rf, rf) < 1e-6) { f = 1.0; }\r
+          reflProb += wk * f;\r
+          let outW = thr * wk * (1.0 - f);\r
+          if (outW > 0.004) {\r
+            let seen = icLook(center + icToWorld(pos + nrm * 0.003, quat), icToWorld(rf, quat), true);\r
+            layer += filtered * face * min(outW * seen, vec3f(10.0 * prob * wk * (1.0 - f)));\r
+          }\r
+        }\r
+        thr *= reflProb;\r
+        prob *= reflProb;\r
+        if (thr < 0.004) { break; }\r
+        dir = reflect(dir, -nrm);\r
+        filtered *= face;\r
+      }\r
+      // Light still bouncing around inside when the bounces run out (common in\r
+      // cones and octahedra) is let out, rather than left as a black patch.\r
+      if (thr >= 0.004) {\r
+        layer += filtered * min(thr * icLook(center + icToWorld(pos, quat), icToWorld(dir, quat), true), vec3f(10.0 * prob));\r
+      }\r
+    }\r
+    if (layers == 3) { col[c] = layer[c]; } else { col = layer; }\r
+  }\r
+  if (mirror > 0.5) {\r
+    let fade = exp(-3.2 * max(worldPos.y, 0.0));\r
+    return vec4f(col * fade, fade);\r
+  }\r
+  // (Alpha: how far away this pixel is, for the finishing passes.)\r
+  // In the shadow of other objects, the light the lamp would have sent through it\r
+  // is mostly missing: darker by the lamp's share of all the light in the studio\r
+  // (about a third in the white studio, half under the spotlight), less what the\r
+  // glass in the way lets through.\r
+  let lampShare = dot(sunE, vec3f(1.0)) / max(dot(sunE + skyE, vec3f(1.0)), 1e-4);\r
+  col *= mix(1.0 - 0.55 * lampShare, 1.0, gLampLit);\r
+  return vec4f(col, length(worldPos - camPos));\r
+}\r
+//#endif\r
+\r
+//#if CAUSTIC GLASS PHOTON\r
+// CMY cube: each pair of opposite faces is a filter that holds back one primary\r
+// (cyan, yellow, magenta). \`n\` is the face normal in the cube's own space;\r
+// \`strength\` runs from clear glass (0) to the full filter (1). The filters pass\r
+// their own colours almost untouched, which keeps the cube luminous, and each\r
+// lets a little of the blocked one through, so three in a row stay a deep colour\r
+// instead of going grey.\r
+fn icCmyTint(n: vec3f, strength: f32) -> vec3f {\r
+  let a = abs(n);\r
+  var passed = vec3f(1.0, 0.14, 0.92);\r
+  if (a.x >= a.y && a.x >= a.z) { passed = vec3f(0.1, 0.92, 1.0); }\r
+  else if (a.y >= a.z) { passed = vec3f(1.0, 0.9, 0.2); }\r
+  return mix(vec3f(1.0), passed, strength);\r
+}\r
+//#endif\r
+\r
+const IC_PI = 3.14159265359;\r
+\r
+//#if GROUND\r
+// The blurred shadow maps at a point of the caustic map: x a little blurred (the\r
+// shadow of the lamp), y blurred far wider (where objects keep the light of the\r
+// room off the floor).\r
+fn icSoftShade(uv: vec2f) -> vec2f {\r
+  return vec2f(textureSampleLevel(icShadeTex, icShadeTex_sampler, uv, 0.0).g, textureSampleLevel(icShadeFarTex, icShadeFarTex_sampler, uv, 0.0).g);\r
+}\r
+//#endif\r
+//#if GLASS\r
+fn icSoftShade(uv: vec2f) -> vec2f {\r
+  return vec2f(1.0);\r
+}\r
+//#endif\r
+//#if GROUND GLASS\r
+var<private> gFloorP: vec4f;   // floor: how reflective, how dark its shadows, grid on, fog\r
+var<private> gGroundOn: f32;   // 1: there is a floor\r
+var<private> gDark: f32;       // 1: the dark studio\r
+var<private> gSpot: vec4f;     // stage spotlight: x the radius of its beam at the floor (0: off), y how far away the lamp is\r
+var<private> gLamp: vec3f;     // toward the main lamp (which is also the spotlight), from the middle of the floor\r
+var<private> gBackdrop: bool;  // looking straight at the background, not through or off glass\r
+var<private> gSkyE: vec3f;     // sky irradiance / pi on the ground\r
+var<private> gSunE: vec3f;     // the main lamp's irradiance / pi on the ground\r
+var<private> gAlbedo: vec3f;\r
+var<private> gLightC: vec3f;   // caustic map: centre on the ground,\r
+var<private> gLightR: vec3f;   //   its right axis / half-width,\r
+var<private> gLightU: vec3f;   //   its up axis / half-width\r
+\r
+// A photographer's white studio: a pale room with a few bright lamps, and dark\r
+// cards for the glass to pick up (they give colourless stones their contrast).\r
+// The camera itself only ever sees the plain white backdrop.\r
+var<private> gLampLit: f32 = 1.0;  // how much of the lamp reaches the object being shaded (1: all; see icLampVisible)\r
+\r
+// For an object in the shadow of others: how much of the lamp it still sees in its\r
+// reflections (the ones in the way are glass, and let about a third through).\r
+fn icLampShare() -> f32 {\r
+  return mix(0.35, 1.0, gLampLit);\r
+}\r
+\r
+fn icEnv(d: vec3f) -> vec3f {\r
+  // As bright as the open ground, so the two meet without a visible horizon.\r
+  // (Under a spotlight the backdrop is outside the pool, so the lamp does not reach it.)\r
+  if (gBackdrop) { return gAlbedo * (gSkyE + gSunE * select(1.0, 0.0, gSpot.x > 0.0)); }\r
+  let az = atan2(d.z, d.x);\r
+  if (gDark > 0.5) {\r
+    // The dark studio: black all round. With the spotlight it is lit by that one\r
+    // lamp and nothing else. Without, by a large soft lamp, a soft one overhead,\r
+    // and two tall strip lights that draw bright lines down the edges of the glass.\r
+    var k = 0.012;\r
+    if (gSpot.x > 0.0) {\r
+      // (The room is not quite black: a dim grey, lighter toward the floor, which is\r
+      // what the dark band low in a glass ball is showing.)\r
+      k = mix(0.11, 0.035, smoothstep(0.0, 0.6, d.y));\r
+      k += 40.0 * icLampShare() * smoothstep(0.988, 0.996, dot(d, gLamp));\r
+      // A jeweller's softboxes, out of the picture: a large one overhead and a tall\r
+      // strip either side. The camera never sees them, only the glass does: they are\r
+      // what makes the facets of a stone flash white against the black.\r
+      // Overhead: four panels round a dark hole (where the camera looks down through\r
+      // the tent), so a stone's table shows a pattern of light and dark, not a blank.\r
+      let ring = smoothstep(0.78, 0.86, d.y) * (1.0 - smoothstep(0.94, 0.97, d.y));\r
+      k += 2.6 * ring * smoothstep(-0.2, 0.3, cos(4.0 * az));\r
+      let tall = smoothstep(0.05, 0.15, d.y) * (1.0 - smoothstep(0.55, 0.7, d.y));\r
+      // (Left and right of where the camera starts, not behind the stones, where a\r
+      // table facing up would mirror one straight into the camera as a white blank.)\r
+      k += 4.0 * tall * smoothstep(0.95, 0.985, cos(az - 2.5));\r
+      k += 4.0 * tall * smoothstep(0.95, 0.985, cos(az + 0.63));\r
+    } else {\r
+      k += 6.0 * icLampShare() * smoothstep(0.84, 0.95, dot(d, gLamp));\r
+      k += 1.6 * smoothstep(0.8, 0.97, d.y);\r
+      let tall = smoothstep(0.02, 0.1, d.y) * (1.0 - smoothstep(0.6, 0.75, d.y));\r
+      k += 5.0 * tall * smoothstep(0.985, 0.996, cos(az - 0.5));\r
+      k += 3.5 * tall * smoothstep(0.99, 0.998, cos(az + 1.9));\r
+    }\r
+    return vec3f(k);\r
+  }\r
+  // A light tent: pale overhead, dark grey toward the floor.\r
+  var c = mix(0.15, 0.72, smoothstep(-0.1, 0.95, d.y));\r
+  // A few grey cards standing round the set, and a small dark one overhead (the\r
+  // camera): they are what the stone's darker facets are looking at.\r
+  let band = smoothstep(0.03, 0.1, d.y) * (1.0 - smoothstep(0.68, 0.82, d.y));\r
+  c = mix(c, 0.04, 0.96 * band * smoothstep(-0.1, 0.15, sin(az * 5.0 + 1.0)));\r
+  c = mix(c, 0.05, smoothstep(0.9, 0.95, d.y));\r
+  // Lamps: the main one up and to the left, and two small ones.\r
+  c += 3.0 * icLampShare() * smoothstep(0.86, 0.96, dot(d, gLamp));\r
+  c += 3.0 * smoothstep(0.985, 0.995, dot(d, normalize(vec3f(cos(3.0), 0.6, sin(3.0)))));\r
+  c += 3.0 * smoothstep(0.985, 0.995, dot(d, normalize(vec3f(cos(5.0), 0.9, sin(5.0)))));\r
+  return vec3f(c);\r
+}\r
+\r
+// How much of the main lamp's light reaches a ground point: the caustic map, lightly blurred.\r
+fn icSunT(g: vec3f) -> vec3f {\r
+  let v = g - gLightC;\r
+  let uv = vec2f(0.5 + 0.5 * dot(v, gLightR), 0.5 - 0.5 * dot(v, gLightU));\r
+  if (uv.x <= 0.0 || uv.x >= 1.0 || uv.y <= 0.0 || uv.y >= 1.0) { return vec3f(1.0); }\r
+  let px = 1.0 / vec2f(textureDimensions(icLightTex));\r
+  var sum = textureSampleLevel(icLightTex, icLightTex_sampler, uv, 0.0).rgb * 2.0;\r
+  sum += textureSampleLevel(icLightTex, icLightTex_sampler, uv + vec2f(1.5, 0.5) * px, 0.0).rgb;\r
+  sum += textureSampleLevel(icLightTex, icLightTex_sampler, uv + vec2f(-0.5, 1.5) * px, 0.0).rgb;\r
+  sum += textureSampleLevel(icLightTex, icLightTex_sampler, uv + vec2f(-1.5, -0.5) * px, 0.0).rgb;\r
+  sum += textureSampleLevel(icLightTex, icLightTex_sampler, uv + vec2f(0.5, -1.5) * px, 0.0).rgb;\r
+  return sum / 6.0;\r
+}\r
+\r
+fn icGroundColor(g: vec3f) -> vec3f {\r
+  let sun = icSunT(g);\r
+  // The floor's shadows are blurred: the shadow of the main lamp a\r
+  // little, and a much wider, fainter one where objects keep the light of the room\r
+  // off the floor.\r
+  let direct = clamp(sun, vec3f(0.0), vec3f(1.0));\r
+  // Blurred only where the floor is seen directly, not through glass.\r
+  let pool = icSpotPool(g);\r
+  if (!gBackdrop) { return gAlbedo * (gSkyE * (0.55 + 0.45 * direct) + gSunE * direct * pool); }\r
+  let v = g - gLightC;\r
+  let uv = vec2f(0.5 + 0.5 * dot(v, gLightR), 0.5 - 0.5 * dot(v, gLightU));\r
+  let shade = icSoftShade(uv);\r
+  // gFloorP.y is how dark the shadows are; negative when the near map holds real\r
+  // caustics (the light that actually arrives), which are used as they are.\r
+  let darkness = abs(gFloorP.y);\r
+  var lamp = min(max(shade.x, 0.0), 1.7);\r
+  if (gFloorP.y < 0.0) {\r
+    // Gathered light is eased off above the level of the open floor, toward three\r
+    // times it at most. Only the top layer of a pile is followed, as if nothing lay\r
+    // beneath it, so taken at face value a pile would light its floor far too much.\r
+    let over = max(shade.x - 1.0, 0.0);\r
+    lamp = min(shade.x, 1.0) + over / (1.0 + 0.5 * over);\r
+  }\r
+  // How dark the shadows are: the share of the lamp's light they hold back (0: none,\r
+  // 1: all of it). Light gathered above the open floor's is left as it is.\r
+  if (lamp < 1.0) { lamp = 1.0 - darkness * (1.0 - lamp); }\r
+  let ambient = 1.0 - 0.8 * darkness * (1.0 - min(shade.y, 1.0));\r
+  return gAlbedo * (gSkyE * ambient + gSunE * lamp * pool);\r
+}\r
+\r
+// How much of the spotlight reaches a point of the floor: all of it inside the\r
+// pool, fading out at its edge. (1 everywhere when there is no spotlight.)\r
+fn icSpotPool(g: vec3f) -> f32 {\r
+  if (gSpot.x <= 0.0) { return 1.0; }\r
+  // How far the point is from the axis of the beam, against how wide the beam is\r
+  // there. The beam comes down at an angle, so the pool is an oval.\r
+  let fromLamp = g - gLamp * gSpot.y;\r
+  let along = dot(fromLamp, -gLamp);\r
+  if (along <= 0.0) { return 0.0; }\r
+  let across = length(fromLamp + gLamp * along);\r
+  // It fades out gradually toward its edge, and (the lamp being near) the floor is\r
+  // brighter on the side toward the lamp than on the far side.\r
+  let nearness = gSpot.y / max(along, 0.3 * gSpot.y);\r
+  return (1.0 - smoothstep(0.3, 1.0, across / along * gSpot.y / gSpot.x)) * nearness * nearness;\r
+}\r
+\r
+// Ground and sky along a ray, ignoring glass.\r
+fn icScene(ro: vec3f, rd: vec3f) -> vec3f {\r
+  if (gGroundOn > 0.5 && rd.y < -1e-5) {\r
+    let t = max(-ro.y / rd.y, 0.0);\r
+    let horizon = icEnv(normalize(vec3f(rd.x, 0.03, rd.z)));\r
+    return mix(icGroundColor(ro + rd * t), horizon, smoothstep(150.0, 600.0, t));\r
+  }\r
+  return icEnv(rd);\r
+}\r
+//#endif\r
+\r
+//#if GLASS PHOTON\r
+var<private> gViewProj: mat4x4f;\r
+var<private> gEye: vec3f;      // the camera\r
+var<private> gReach: f32;      // about how big this object is (m)\r
+var<private> gSteps: f32;      // how many steps a ray leaving it is followed for, looking for other glass (0: not at all)\r
+var<private> gMirror: f32;     // 1 while drawing the mirror image in the floor\r
+var<private> gBevel: f32;      // how much is cut off the edges of boxes (m)\r
+var<private> gMeshEntry: f32;  // 1: light enters a baked mesh through its volume's surface (see icEntry)\r
+\r
+// A point on an object's surface, its outward normal there, and (for exits) how\r
+// far the ray travelled inside the glass to reach it.\r
+struct IcHit {\r
+  pos: vec3f,\r
+  nrm: vec3f,\r
+  t: f32,\r
+}\r
+\r
+// Each glass program is built for one shape: the app rewrites this line.\r
+const IC_SHAPE = 0;\r
+\r
+// Shapes, in the object's own space (size = per-shape dimensions):\r
+//   0 box         half-extents size.xyz\r
+//   1 sphere      radius size.x\r
+//   2 cylinder    radius size.x, half-height size.y, axis Y\r
+//   3 capsule     radius size.x, half-length of the middle part size.y, axis Y\r
+//   4 cone        base radius size.x, half-height size.y, apex up\r
+//   5 torus       ring radius size.x, tube radius size.y, axis Y\r
+//   6 octahedron  vertices at distance size.x\r
+//   7 prism       triangular: apex at y = size.x, base at y = -size.x / 2, half-length size.z\r
+//   8 hex prism   distance from centre to a side face size.x, half-height size.y\r
+//   9 mesh        Suzanne, baked into a distance volume; half-width size.x\r
+//  10 diamond     round brilliant cut (diamond.ts) of size size.x\r
+//  11 mesh        the Stanford dragon, baked like Suzanne; half-width size.x\r
+\r
+// The diamond's facets at size 1 (IC_DIAMOND_N of them, icDiamondPlane(k)), from\r
+// diamond.ts: in a const array or a texture (icDiamondTex), see diamondWgsl.\r
+/*DIAMOND*/\r
+\r
+// The flat faces of the polyhedra as planes: xyz = outward normal, w = offset.\r
+// (A box counts as one once its edges are bevelled: its six faces plus a flat\r
+// cut along each of its twelve edges.)\r
+fn icIsPolyhedron(shape: i32) -> bool {\r
+  return (shape >= 6 && shape <= 8) || shape == 10 || (shape == 0 && gBevel > 0.0);\r
+}\r
+\r
+fn icPlaneCount(shape: i32) -> i32 {\r
+  if (shape == 7) { return 5; }\r
+  if (shape == 10) { return IC_DIAMOND_N; }\r
+  if (shape == 0) { return 18; }\r
+  return 8;\r
+}\r
+\r
+fn icPlane(shape: i32, k: i32, size: vec3f) -> vec4f {\r
+  if (shape == 0) {\r
+    if (k < 6) {\r
+      var n = vec3f(0.0);\r
+      n[k / 2] = select(-1.0, 1.0, (k & 1) == 1);\r
+      return vec4f(n, size[k / 2]);\r
+    }\r
+    // The cut along an edge: at 45 degrees between the two faces that meet there.\r
+    let e = k - 6;\r
+    let a = select(-1.0, 1.0, (e & 1) == 1);\r
+    let b = select(-1.0, 1.0, (e & 2) == 2);\r
+    let pair = e / 4;\r
+    if (pair == 0) { return vec4f(vec3f(a, b, 0.0) * 0.70710678, (size.x + size.y - gBevel) * 0.70710678); }\r
+    if (pair == 1) { return vec4f(vec3f(0.0, a, b) * 0.70710678, (size.y + size.z - gBevel) * 0.70710678); }\r
+    return vec4f(vec3f(a, 0.0, b) * 0.70710678, (size.x + size.z - gBevel) * 0.70710678);\r
+  }\r
+  if (shape == 10) {\r
+    let facet = icDiamondPlane(k);\r
+    return vec4f(facet.xyz, facet.w * size.x);\r
+  }\r
+  if (shape == 6) {\r
+    let n = vec3f(select(-1.0, 1.0, (k & 1) != 0), select(-1.0, 1.0, (k & 2) != 0), select(-1.0, 1.0, (k & 4) != 0));\r
+    return vec4f(n * 0.57735027, size.x * 0.57735027);\r
+  }\r
+  if (shape == 7) {\r
+    if (k == 0) { return vec4f(0.0, -1.0, 0.0, size.x * 0.5); }\r
+    if (k == 1) { return vec4f(0.8660254, 0.5, 0.0, size.x * 0.5); }\r
+    if (k == 2) { return vec4f(-0.8660254, 0.5, 0.0, size.x * 0.5); }\r
+    if (k == 3) { return vec4f(0.0, 0.0, 1.0, size.z); }\r
+    return vec4f(0.0, 0.0, -1.0, size.z);\r
+  }\r
+  if (k == 6) { return vec4f(0.0, 1.0, 0.0, size.y); }\r
+  if (k == 7) { return vec4f(0.0, -1.0, 0.0, size.y); }\r
+  let a = (30.0 + 60.0 * f32(k)) * 0.017453293;\r
+  return vec4f(cos(a), 0.0, sin(a), size.x);\r
+}\r
+\r
+// The shapes made from meshes, and which of the baked volumes is theirs.\r
+fn icIsMesh(shape: i32) -> bool {\r
+  return shape == 9 || shape == 11;\r
+}\r
+\r
+fn icMeshLayer(shape: i32) -> i32 {\r
+  return select(0, 1, shape == 11);\r
+}\r
+\r
+// Signed distance to a baked mesh: a 128^3 grid covering a cube of half-width 1.1\r
+// around the mesh, which is scaled to half-width 1. The volumes of the meshes lie\r
+// one after another along z in the same texture; \`layer\` picks one.\r
+fn icVolume(p: vec3f, scale: f32, layer: i32) -> f32 {\r
+  let q = p / scale;\r
+  let inner = vec3f(1.1 * (1.0 - 1.0 / 128.0));\r
+  let c = clamp(q, -inner, inner);\r
+  let g = (c / 2.2 + 0.5) * 128.0 - 0.5;\r
+  let cell = clamp(vec3i(floor(g)), vec3i(0), vec3i(126));\r
+  // (How far between cells, within this mesh's own volume: worked out before moving\r
+  // to where that volume lies in the texture, or every mesh after the first would\r
+  // not be blended along z at all, and look built of flat slices.)\r
+  let f = clamp(g - vec3f(cell), vec3f(0.0), vec3f(1.0));\r
+  let i0 = cell + vec3i(0, 0, 128 * layer);\r
+  let d000 = textureLoad(icSdfTex, i0, 0).r;\r
+  let d100 = textureLoad(icSdfTex, i0 + vec3i(1, 0, 0), 0).r;\r
+  let d010 = textureLoad(icSdfTex, i0 + vec3i(0, 1, 0), 0).r;\r
+  let d110 = textureLoad(icSdfTex, i0 + vec3i(1, 1, 0), 0).r;\r
+  let d001 = textureLoad(icSdfTex, i0 + vec3i(0, 0, 1), 0).r;\r
+  let d101 = textureLoad(icSdfTex, i0 + vec3i(1, 0, 1), 0).r;\r
+  let d011 = textureLoad(icSdfTex, i0 + vec3i(0, 1, 1), 0).r;\r
+  let d111 = textureLoad(icSdfTex, i0 + vec3i(1, 1, 1), 0).r;\r
+  let d = mix(mix(mix(d000, d100, f.x), mix(d010, d110, f.x), f.y),\r
+              mix(mix(d001, d101, f.x), mix(d011, d111, f.x), f.y), f.z);\r
+  return (d + length(q - c)) * scale;\r
+}\r
+\r
+// The outward direction of a baked mesh's surface at p (from its volume), sampled\r
+// almost two cells apart: closer, the slope of the blended grid jumps at every cell\r
+// boundary, and the normals with it, which shows as stripes and ripples.\r
+fn icVolumeNormal(p: vec3f, scale: f32, layer: i32) -> vec3f {\r
+  let e = vec2f(1.0, -1.0) * (0.03 * scale);\r
+  return normalize(e.xyy * icVolume(p + e.xyy, scale, layer) + e.yyx * icVolume(p + e.yyx, scale, layer) +\r
+                   e.yxy * icVolume(p + e.yxy, scale, layer) + e.xxx * icVolume(p + e.xxx, scale, layer));\r
+}\r
+\r
+// Snap a rasterised surface point onto the exact shape and find its normal.\r
+fn icEntry(shape: i32, pIn: vec3f, size: vec3f, meshNormal: vec3f) -> IcHit {\r
+  var p = pIn;\r
+  var n: vec3f;\r
+  if (icIsMesh(shape) && gMeshEntry > 0.5) {\r
+    // A baked mesh, with only a few objects on show (each large on screen): the\r
+    // point moved onto the volume's surface, with the volume's normal there, so\r
+    // that the light enters the same shape it is followed through and leaves. (The\r
+    // mesh and its 128^3 volume differ by up to about a cell: with the light\r
+    // entering one and leaving the other, the bands where they differ show as\r
+    // jagged dark patches.) The point moves a fraction of a cell, so the normal is\r
+    // found once for the move and once where it lands.\r
+    let layer = icMeshLayer(shape);\r
+    let toward = icVolumeNormal(p, size.x, layer);\r
+    p -= toward * icVolume(p, size.x, layer);\r
+    p -= toward * icVolume(p, size.x, layer);\r
+    n = icVolumeNormal(p, size.x, layer);\r
+  } else if (icIsMesh(shape)) {\r
+    // In a pile, where each is small on screen, the cheaper way: the rasterised\r
+    // point and the mesh's own smooth normal.\r
+    n = meshNormal;\r
+  } else if (shape == 4) {\r
+    let k = size.x / (2.0 * size.y);\r
+    let rho = max(length(p.xz), 1e-6);\r
+    let inv = 1.0 / sqrt(1.0 + k * k);\r
+    let sBase = -p.y - size.y;\r
+    let sSide = (rho - k * (size.y - p.y)) * inv;\r
+    if (sBase >= sSide) {\r
+      n = vec3f(0.0, -1.0, 0.0);\r
+      p.y = -size.y;\r
+    } else {\r
+      n = vec3f(p.x / rho, k, p.z / rho) * inv;\r
+      p -= n * sSide;\r
+    }\r
+  } else if (shape == 5) {\r
+    let rho = max(length(p.xz), 1e-6);\r
+    let ring = vec3f(p.x / rho, 0.0, p.z / rho) * size.x;\r
+    n = normalize(p - ring);\r
+    p = ring + n * size.y;\r
+  } else if (icIsPolyhedron(shape)) {\r
+    // The face this point lies on is the plane it is closest to.\r
+    var best = -1e9;\r
+    n = vec3f(0.0, 1.0, 0.0);\r
+    for (var k = 0; k < icPlaneCount(shape); k++) {\r
+      let pl = icPlane(shape, k, size);\r
+      let sd = dot(pl.xyz, p) - pl.w;\r
+      if (sd > best) { best = sd; n = pl.xyz; }\r
+    }\r
+    p -= n * best;\r
+  } else if (shape == 1) {\r
+    n = normalize(p);\r
+    p = n * size.x;\r
+  } else if (shape == 2) {\r
+    let radial = length(p.xz);\r
+    if (abs(p.y) / size.y >= radial / size.x) {\r
+      n = vec3f(0.0, sign(p.y), 0.0);\r
+      p.y = n.y * size.y;\r
+    } else {\r
+      n = vec3f(p.x, 0.0, p.z) / max(radial, 1e-6);\r
+      p = vec3f(n.x * size.x, p.y, n.z * size.x);\r
+    }\r
+  } else if (shape == 3) {\r
+    let c = vec3f(0.0, clamp(p.y, -size.y, size.y), 0.0);\r
+    n = normalize(p - c);\r
+    p = c + n * size.x;\r
+  } else {\r
+    let a = abs(p) / size;\r
+    if (a.x >= a.y && a.x >= a.z) { n = vec3f(sign(p.x), 0.0, 0.0); p.x = n.x * size.x; }\r
+    else if (a.y >= a.z) { n = vec3f(0.0, sign(p.y), 0.0); p.y = n.y * size.y; }\r
+    else { n = vec3f(0.0, 0.0, sign(p.z)); p.z = n.z * size.z; }\r
+  }\r
+  return IcHit(p, n, 0.0);\r
+}\r
+\r
+// From a point on the surface, heading inwards along dir: where the ray reaches\r
+// the surface again.\r
+fn icExit(shape: i32, pos: vec3f, dir: vec3f, size: vec3f) -> IcHit {\r
+  if (shape == 1) {\r
+    let t = max(-2.0 * dot(pos, dir), 0.0);\r
+    let q = pos + dir * t;\r
+    return IcHit(q, normalize(q), t);\r
+  }\r
+  if (shape == 2 || shape == 3) {\r
+    // Distance to the round side wall.\r
+    let a = dot(dir.xz, dir.xz);\r
+    var tSide = 1e9;\r
+    if (a > 1e-9) {\r
+      let b = dot(pos.xz, dir.xz);\r
+      let c = dot(pos.xz, pos.xz) - size.x * size.x;\r
+      tSide = (-b + sqrt(max(b * b - a * c, 0.0))) / a;\r
+    }\r
+    if (shape == 2) {\r
+      var tCap = 1e9;\r
+      if (abs(dir.y) > 1e-7) { tCap = (sign(dir.y) * size.y - pos.y) / dir.y; }\r
+      let t = max(min(tSide, tCap), 0.0);\r
+      let q = pos + dir * t;\r
+      if (tCap < tSide) { return IcHit(q, vec3f(0.0, sign(dir.y), 0.0), t); }\r
+      return IcHit(q, normalize(vec3f(q.x, 0.0, q.z)), t);\r
+    }\r
+    // Capsule: the side wall if the hit is on the middle part, else an end cap.\r
+    let ySide = pos.y + dir.y * min(tSide, 1e6);\r
+    if (abs(ySide) <= size.y) {\r
+      let t = max(tSide, 0.0);\r
+      let q = pos + dir * t;\r
+      return IcHit(q, normalize(vec3f(q.x, 0.0, q.z)), t);\r
+    }\r
+    let cap = vec3f(0.0, sign(ySide) * size.y, 0.0);\r
+    let oc = pos - cap;\r
+    let b = dot(oc, dir);\r
+    let t = max(-b + sqrt(max(b * b - (dot(oc, oc) - size.x * size.x), 0.0)), 0.0);\r
+    let q = pos + dir * t;\r
+    return IcHit(q, normalize(q - cap), t);\r
+  }\r
+  if (shape == 4) {\r
+    // Cone: the slanted side is a quadratic in t, the base a plane.\r
+    let k = size.x / (2.0 * size.y);\r
+    let k2 = k * k;\r
+    let hy = size.y - pos.y;\r
+    let a = dot(dir.xz, dir.xz) - k2 * dir.y * dir.y;\r
+    let b = dot(pos.xz, dir.xz) + k2 * hy * dir.y;\r
+    let c = dot(pos.xz, pos.xz) - k2 * hy * hy;\r
+    var tSide = 1e9;\r
+    if (abs(a) > 1e-7) {\r
+      let disc = b * b - a * c;\r
+      if (disc >= 0.0) {\r
+        let sq = sqrt(disc);\r
+        for (var r = 0; r < 2; r++) {\r
+          let t = (-b + select(-sq, sq, r == 1)) / a;\r
+          let y = pos.y + dir.y * t;\r
+          if (t > 1e-4 && y <= size.y && y >= -size.y - 1e-4) { tSide = min(tSide, t); }\r
+        }\r
+      }\r
+    } else if (abs(b) > 1e-9) {\r
+      let t = -c / (2.0 * b);\r
+      if (t > 1e-4) { tSide = t; }\r
+    }\r
+    var tBase = 1e9;\r
+    if (dir.y < -1e-7) { tBase = (-size.y - pos.y) / dir.y; }\r
+    let t = select(min(tSide, tBase), 0.0, min(tSide, tBase) > 1e8);\r
+    let q = pos + dir * t;\r
+    if (tBase < tSide) { return IcHit(q, vec3f(0.0, -1.0, 0.0), t); }\r
+    let rho = max(length(q.xz), 1e-6);\r
+    return IcHit(q, normalize(vec3f(q.x / rho, k, q.z / rho)), t);\r
+  }\r
+  if (shape == 5) {\r
+    // Torus: a quartic, so step along the ray using its exact distance instead.\r
+    var t = 0.004;\r
+    for (var i = 0; i < 32; i++) {\r
+      let q = pos + dir * t;\r
+      let d = size.y - length(vec2f(length(q.xz) - size.x, q.y));\r
+      if (d < 0.0006) { break; }\r
+      t += max(d, 0.0015);\r
+    }\r
+    let q = pos + dir * t;\r
+    let rho = max(length(q.xz), 1e-6);\r
+    return IcHit(q, normalize(q - vec3f(q.x / rho, 0.0, q.z / rho) * size.x), t);\r
+  }\r
+  if (icIsPolyhedron(shape)) {\r
+    // Polyhedron: the nearest face plane the ray is heading towards.\r
+    var t = 1e9;\r
+    var n = vec3f(0.0, 1.0, 0.0);\r
+    for (var k = 0; k < icPlaneCount(shape); k++) {\r
+      let pl = icPlane(shape, k, size);\r
+      let dn = dot(pl.xyz, dir);\r
+      if (dn > 1e-7) {\r
+        let tk = (pl.w - dot(pl.xyz, pos)) / dn;\r
+        if (tk < t) { t = tk; n = pl.xyz; }\r
+      }\r
+    }\r
+    t = select(max(t, 0.0), 0.0, t > 1e8);\r
+    return IcHit(pos + dir * t, n, t);\r
+  }\r
+  if (icIsMesh(shape)) {\r
+    // Baked mesh: step through the distance volume.\r
+    let layer = icMeshLayer(shape);\r
+    // (Distances are in units of the object's size, so a small one in a pile is\r
+    // stepped through as finely as a large one on its own. A cell of the volume\r
+    // is 2.2 / 128 = 0.017 of it.)\r
+    let s = size.x;\r
+    var t = 0.004 * s;\r
+    // The ray starts on the mesh, which the volume follows only to within about a\r
+    // cell: where the volume's surface lies a little inside the mesh's, the start\r
+    // is outside it. Step forward until inside, or the exit is found at once, in\r
+    // the wrong place: a dark cut across the glass.\r
+    for (var i = 0; i < 8; i++) {\r
+      let d = icVolume(pos + dir * t, s, layer);\r
+      if (d < 0.0) { break; }\r
+      t += max(d, 0.002 * s);\r
+    }\r
+    // Then to where it leaves. Steps of at least a quarter of a cell: a ray running\r
+    // along the inside of a long body, close to its surface all the way, would\r
+    // otherwise only creep forward and run out of steps somewhere in the middle,\r
+    // which drew contour-like dark lines across the glass.\r
+    var tIn = t;   // the last point known to be inside\r
+    for (var i = 0; i < 48; i++) {\r
+      let d = -icVolume(pos + dir * t, s, layer);\r
+      if (d < 0.0005 * s) { break; }\r
+      tIn = t;\r
+      t += max(d, 0.004 * s);\r
+    }\r
+    // ... and the surface pinned down between the last point inside and the first\r
+    // outside, by halving the gap.\r
+    for (var i = 0; i < 3; i++) {\r
+      let mid = 0.5 * (tIn + t);\r
+      if (icVolume(pos + dir * mid, s, layer) < 0.0) { tIn = mid; } else { t = mid; }\r
+    }\r
+    let q = pos + dir * t;\r
+    return IcHit(q, icVolumeNormal(q, s, layer), t);\r
+  }\r
+  // Box.\r
+  let tx = select(1e9, (sign(dir.x) * size.x - pos.x) / dir.x, abs(dir.x) > 1e-7);\r
+  let ty = select(1e9, (sign(dir.y) * size.y - pos.y) / dir.y, abs(dir.y) > 1e-7);\r
+  let tz = select(1e9, (sign(dir.z) * size.z - pos.z) / dir.z, abs(dir.z) > 1e-7);\r
+  let t = max(min(tx, min(ty, tz)), 0.0);\r
+  let q = pos + dir * t;\r
+  if (tx <= ty && tx <= tz) { return IcHit(q, vec3f(sign(dir.x), 0.0, 0.0), t); }\r
+  if (ty <= tz) { return IcHit(q, vec3f(0.0, sign(dir.y), 0.0), t); }\r
+  return IcHit(q, vec3f(0.0, 0.0, sign(dir.z)), t);\r
+}\r
+\r
+fn icToLocal(v: vec3f, q: vec4f) -> vec3f {\r
+  let u = -q.xyz;\r
+  return v + 2.0 * cross(u, cross(u, v) + q.w * v);\r
+}\r
+\r
+fn icToWorld(v: vec3f, q: vec4f) -> vec3f {\r
+  return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v);\r
+}\r
+\r
+// How much the IOR for red (k = 0) and blue (k = 2) light differs from the quoted IOR\r
+// (which is for yellow light, 587.6 nm; green, k = 1, uses it as it is), when blue\r
+// and red are \`spread\` apart. From Cauchy's law, n = A + B / wavelength^2, at the\r
+// wavelengths glass makers measure at: red 656.3 nm, blue 486.1 nm. Blue bends\r
+// away from yellow more than twice as far as red does.\r
+fn icIorOffset(spread: f32, k: i32) -> f32 {\r
+  if (k == 0) { return -0.301 * spread; }\r
+  if (k == 2) { return 0.699 * spread; }\r
+  return 0.0;\r
+}\r
+\r
+// Unpolarised dielectric Fresnel. eta = n_transmitted / n_incident.\r
+fn icFresnel(cosI: f32, eta: f32) -> f32 {\r
+  let c = abs(cosI);\r
+  let g2 = eta * eta - 1.0 + c * c;\r
+  if (g2 <= 0.0) { return 1.0; }\r
+  let g = sqrt(g2);\r
+  let a = (g - c) / (g + c);\r
+  let b = (c * (g + c) - 1.0) / (c * (g - c) + 1.0);\r
+  return 0.5 * a * a * (1.0 + b * b);\r
+}\r
+\r
+//#endif\r
+//#if GLASS\r
+// How much of the lamp reaches point p of an object (1: all of it, 0: none), from\r
+// the lamp's depth map: in shadow where another object reaches farther toward the\r
+// lamp than \`top\`, the farthest this object itself reaches. (An object does not\r
+// shadow itself: what its own glass does to the light is followed through it.)\r
+// Four samples soften the edge.\r
+fn icLampVisible(p: vec3f, top: f32) -> f32 {\r
+  let v = p - gLightC;\r
+  let uv = vec2f(0.5 + 0.5 * dot(v, gLightR), 0.5 - 0.5 * dot(v, gLightU));\r
+  if (any(uv <= vec2f(0.0)) || any(uv >= vec2f(1.0))) { return 1.0; }\r
+  let dims = vec2i(textureDimensions(icLampDepthTex));\r
+  let at = uv * vec2f(dims);\r
+  var lit = 0.0;\r
+  for (var k = 0; k < 4; k++) {\r
+    let o = vec2f(select(-0.75, 0.75, (k & 1) == 1), select(-0.75, 0.75, (k & 2) == 2));\r
+    let texel = clamp(vec2i(at + o), vec2i(0), dims - 1);\r
+    let reach = textureLoad(icLampDepthTex, texel, 0).r - 100.0;\r
+    lit += select(1.0, 0.0, reach > top);\r
+  }\r
+  return lit * 0.25;\r
+}\r
+\r
+// Share of a back face that acts as exit glass (a smooth ramp over the distance\r
+// the light travelled inside).\r
+fn icExitFactor(x: f32) -> f32 {\r
+  if (x < 0.9864) {\r
+    let a = x / 0.9864;\r
+    return a * a * a / 6.0;\r
+  }\r
+  if (x < 1.0) {\r
+    let f = (1.0 - x) / 0.0136;\r
+    return (1.0 - f) * (1.0 - f) * (1.0 - f) / 6.0 + f * f * f * 0.5 - f * f + 2.0 / 3.0;\r
+  }\r
+  return 5.0 / 6.0;\r
+}\r
+\r
+// What a ray sees after leaving its object. Ground points are read from the\r
+// picture of what is behind this object (ground plus the glass drawn before it)\r
+// at the pixel where that point appears; off screen it falls back to the ground\r
+// alone. Everything else is the studio.\r
+//\r
+// Before that, a refracted ray is followed out in growing steps, looking for other\r
+// glass in that picture (which also holds how far away each pixel is): when the\r
+// ray passes just behind something drawn there, that is what it sees. So glass\r
+// shows through glass along the bent ray, not only straight behind.\r
+fn icLook(ro: vec3f, rd: vec3f, throughGlass: bool) -> vec3f {\r
+  if (throughGlass && gSteps > 0.5 && gMirror < 0.5) {\r
+    var tEnd = 1e9;   // no farther than the floor\r
+    if (gGroundOn > 0.5 && rd.y < -1e-5) { tEnd = max(-ro.y / rd.y, 0.0); }\r
+    var t = 0.2 * gReach;\r
+    for (var i = 0; i < i32(gSteps); i++) {\r
+      if (t >= tEnd) { break; }\r
+      let p = ro + rd * t;\r
+      let clip = gViewProj * vec4f(p, 1.0);\r
+      if (clip.w < 0.01) { break; }\r
+      let ndc = clip.xy / clip.w;\r
+      if (abs(ndc.x) > 0.98 || abs(ndc.y) > 0.98) { break; }\r
+      let there = textureSampleLevel(icBehindTex, icBehindTex_sampler, vec2f(ndc.x, -ndc.y) * 0.5 + 0.5, 0.0);\r
+      // Behind what is drawn there, but not by more than an object's depth: a hit.\r
+      let behind = length(p - gEye) - there.a;\r
+      if (behind > 0.0 && behind < 1.5 * gReach) { return there.rgb; }\r
+      t *= 1.6;\r
+    }\r
+  }\r
+  if (gGroundOn > 0.5 && rd.y < -1e-5) {\r
+    let t = max(-ro.y / rd.y, 0.0);\r
+    let g = ro + rd * t;\r
+    let clip = gViewProj * vec4f(g, 1.0);\r
+    if (throughGlass && gMirror < 0.5 && clip.w > 0.01) {\r
+      let ndc = clip.xy / clip.w;\r
+      if (abs(ndc.x) < 0.98 && abs(ndc.y) < 0.98) {\r
+        return textureSampleLevel(icBehindTex, icBehindTex_sampler, vec2f(ndc.x, -ndc.y) * 0.5 + 0.5, 0.0).rgb;\r
+      }\r
+    }\r
+  }\r
+  return icScene(ro, rd);\r
+}\r
+//#endif\r
+`,Wk=2e4,Q={box:0,sphere:1,cylinder:2,capsule:3,cone:4,torus:5,octahedron:6,prism:7,hexprism:8,suzanne:9,diamond:10,dragon:11},Gk=12,Kk=.25;function qk(){return{count:0,kind:new Uint8Array(Wk),center:new Float32Array(Wk*3),quat:new Float32Array(Wk*4),size:new Float32Array(Wk*3),vary:new Float32Array(Wk*3),tint:new Float32Array(Wk*3).fill(1)}}var Jk=2048,Yk=1024,Xk=1024,Zk=1024,Qk=64,$k=3e3;function eA(e){let t=[],n=!0;for(let r of Uk.split(/\r?\n/)){let i=r.match(/^\s*\/\/#if (.+)$/);i?n=i[1].trim().split(/\s+/).includes(e):/^\s*\/\/#endif/.test(r)?n=!0:n&&t.push(r)}return t.join(`
+`)}var tA=class{geometry=new Cs;center;quat;size;vary;tint;count=0;meshes=[];constructor(e,t=Wk){this.center=new Ii(new Float32Array(t*3),3),this.quat=new Ii(new Float32Array(t*4),4),this.size=new Ii(new Float32Array(t*3),3),this.vary=new Ii(new Float32Array(t*3),3),this.tint=new Ii(new Float32Array(t*3),3),this.build(e)}build(e){this.geometry.index=e.index,this.geometry.setAttribute(`position`,e.getAttribute(`position`)),this.geometry.setAttribute(`normal`,e.getAttribute(`normal`)),this.geometry.setAttribute(`instCenter`,this.center),this.geometry.setAttribute(`instQuat`,this.quat),this.geometry.setAttribute(`instSize`,this.size),this.geometry.setAttribute(`instVary`,this.vary),this.geometry.setAttribute(`instTint`,this.tint),this.geometry.instanceCount=this.count}setBase(e){let t=this.geometry;this.geometry=new Cs,this.build(e);for(let e of this.meshes)e.geometry=this.geometry;t.dispose()}push(e,t){let n=this.count++,r=this.center.array,i=this.quat.array,a=this.size.array,o=this.vary.array;r[n*3]=e.center[t*3],r[n*3+1]=e.center[t*3+1],r[n*3+2]=e.center[t*3+2],i[n*4]=e.quat[t*4],i[n*4+1]=e.quat[t*4+1],i[n*4+2]=e.quat[t*4+2],i[n*4+3]=e.quat[t*4+3],a[n*3]=e.size[t*3],a[n*3+1]=e.size[t*3+1],a[n*3+2]=e.size[t*3+2],o[n*3]=e.vary[t*3],o[n*3+1]=e.vary[t*3+1],o[n*3+2]=e.vary[t*3+2];let s=this.tint.array;s[n*3]=e.tint[t*3],s[n*3+1]=e.tint[t*3+1],s[n*3+2]=e.tint[t*3+2]}sent=0;commit(){if(this.geometry.instanceCount=this.count,this.count||this.sent){this.sent=this.count;for(let e of[this.center,this.quat,this.size,this.vary,this.tint])e.clearUpdateRanges(),e.addUpdateRange(0,Math.max(this.count,1)*e.itemSize),e.needsUpdate=!0}}};function nA(e,t,n,r){let i=new vn(Jk,Jk,{type:y,format:D,depthBuffer:!1,minFilter:l,magFilter:l}),a=new vn(Yk,Yk,{type:y,format:D,depthBuffer:!0,minFilter:o,magFilter:o}),s=()=>new vn(Xk,Xk,{type:y,format:D,depthBuffer:!1,minFilter:l,magFilter:l}),c=s(),u=new vn(Zk,Zk,{type:y,format:D,depthBuffer:!0,minFilter:o,magFilter:o}),d=new vn(Zk,Zk,{type:y,format:D,depthBuffer:!1,minFilter:l,magFilter:l}),f=s(),p=s(),m=s(),h=s(),g=e=>new vn(4,4,{type:y,format:D,depthBuffer:e,samples:e?4:0,minFilter:l,magFilter:l}),_=g(!1),v=g(!0),b=g(!0),x=g(!1),S=g(!1),C=g(!1),w=new vn(4,4,{type:y,format:D,depthBuffer:!0,minFilter:l,magFilter:l}),T=q(new N(4,4)),E=q(0),O=q(new P),k=q(new _n),ee=q(new P),te=q(new _n),ne=q(new xn),re=q(1),ie=q(new P),ae=q(new P),oe=q(new P),se=new P(0,1,0),ce=q(se),le=q(new P),ue=q(new P),de=q(new P),fe=q(new _n(1.45,1,6,0)),pe=q(new _n),me=q(new _n),he=q(0),ge=q(6),_e=q(new _n(1,1,1,1)),ve=q(0),ye=q(0),be=q(new _n),xe=q(new _n),Se=q(new N),Ce=q(new P),we=Y(i.texture).setName(`icLightTex`),Te=Y(_.texture).setName(`icBehindTex`),Ee=Y(a.texture).setName(`icLampDepthTex`),De=Y(w.texture),Oe=Y(f.texture).setName(`icShadeTex`),ke=Y(p.texture).setName(`icShadeFarTex`),Ae=Y(i.texture),je=jv(r.volume).setName(`icSdfTex`),Me=Y(Rk()).setName(`icDiamondTex`),Ne=gp(`instCenter`,`vec3`),Pe=gp(`instQuat`,`vec4`),Fe=gp(`instSize`,`vec3`),Ie=gp(`instVary`,`vec3`),Le=gp(`instTint`,`vec3`),Re=e=>e.add(qd(Pe.xyz,qd(Pe.xyz,e).add(e.mul(Pe.w))).mul(2)),ze=Re(_m.mul(Fe)).add(Ne),Be=_m.y.clamp(-1,1),Ve=Re(W(_m.x.mul(Fe.x),_m.y.sub(Be).mul(Fe.x).add(Be.mul(Fe.y)),_m.z.mul(Fe.x))).add(Ne),He=U(_m.x,_m.z).normalize(),Ue=W(He.x,0,He.y),We=Re(Ue.mul(Fe.x).add(_m.sub(Ue).mul(Fe.y.div(Kk)))).add(Ne),Ge=Re(Am),Ke=Re(Am.div(Fe).normalize()),qe=Gv(eA(`CAUSTIC`)),Je=e=>{let t=new rv;return t.positionNode=e,t.fragmentNode=G(bm.dot(ce).add(100),0,0,1),t.side=2,t},Ye=(e,t)=>{let n=new rv;return n.positionNode=e,n.fragmentNode=qe({normalW:t,worldPos:bm,size:Fe,quat:Pe,cmyAll:ve,vary:Ie,tintAll:_e,tintOwn:Le}),n.side=2,n.depthTest=!1,n.depthWrite=!1,n.transparent=!0,n.blending=5,n.blendEquation=100,n.blendSrc=208,n.blendDst=200,n},Xe=new rv;Xe.fragmentNode=Gv(eA(`GROUND`))({fragCoord:Hp,res:T,camPos:O,camRight:k,camUp:ee,camFwd:te,room:re,skyE:ie,sunE:ae,albedo:oe,lightC:le,lightR:ue,lightU:de,floorP:xe,spot:be,lamp:ce,lightTex:we,lightSamp:Ym(we),mirrorTex:De,mirrorSamp:Ym(De),shadeTex:Oe,shadeSamp:Ym(Oe),shadeFarTex:ke,shadeFarSamp:Ym(ke)}),Xe.transparent=!0,Xe.blending=0,Xe.depthTest=!1,Xe.depthWrite=!1;let Ze=new sv(Xe),Qe=new rv;Qe.fragmentNode=Gv(eA(`BLUR`))({uv:wm(),dir:Se,cut:he,reach:ge,src:Ae,srcSamp:Ym(Ae)}),Qe.depthTest=Qe.depthWrite=!1;let $e=new sv(Qe),et=(t,n,r,i=r,a=c,o=0)=>{let s=Math.max(r*a.width,i*a.height),l=Math.min(Math.max(Math.ceil((s/18)**2),1),5),u=1/Math.sqrt(l);ge.value=Math.min(Math.max(Math.ceil(s*u/1.5),3),12);for(let s=0;s<l;s++)Ae.value=s===0?t:n.texture,he.value=s===0?o:0,Se.value.set(r*u,0),e.setRenderTarget(a),$e.render(e),Ae.value=a.texture,he.value=0,Se.value.set(0,i*u),e.setRenderTarget(n),$e.render(e)},tt=new URLSearchParams(location.search).get(`planes`)===`texture`?`texture`:`const`,nt=eA(`GLASS`).replace(`/*DIAMOND*/`,Lk(`IC_DIAMOND`,tt)),rt=eA(`PHOTON`).replace(`/*DIAMOND*/`,Lk(`IC_DIAMOND`,tt)),it=(e,t,n)=>{let r=new rv;return r.transparent=!0,r.blending=0,r.positionNode=t,r.fragmentNode=Gv(rt.replace(`const IC_SHAPE = 0;`,`const IC_SHAPE = ${e};`))({worldPos:bm,nrmW:n,center:Ne,quat:Pe,size:Fe,vary:Ie,tintAll:_e,tintOwn:Le,sunDir:ce,lightR:ue,lightU:de,glassP:fe,cmyAll:ve,bevel:ye,raysAcross:H(Zk),meshEntry:E,sdfTex:je,diamondTex:Me}),r},at=Y(u.texture),ot=new rv;ot.fragmentNode=G(W(H(1).sub(at.a.min(1))),1),ot.depthTest=ot.depthWrite=!1;let st=new sv(ot),ct=H(Xf),lt=ct.div(Zk).floor(),dt=U(ct.sub(lt.mul(Zk)),lt).add(.5).div(Zk),ft=Y(u.texture,dt),pt=new rv;pt.vertexNode=G(U(dt.x.mul(2).sub(1),H(1).sub(dt.y.mul(2))).add(ft.xy).add(U(_m.x,_m.y).mul(ft.a.sub(1).max(1).mul(2/Zk))),0,1),pt.fragmentNode=G(W(Tf(ft.z)),1),pt.transparent=!0,pt.blending=2,pt.depthTest=pt.depthWrite=!1;let mt=new Cs,ht=new bo(1,1);mt.index=ht.index,mt.setAttribute(`position`,ht.getAttribute(`position`)),mt.instanceCount=Zk*Zk;let gt=new Mi(mt,pt);gt.frustumCulled=!1;let _t=new ir;_t.add(gt);let vt=(e,t,n,r=!1)=>{let i=new Dx;i.transparent=!0,i.blending=0;let a=W(1,-1,1);return i.positionNode=r?t.mul(a):t,r&&(i.side=1),i.colorNode=Gv(nt.replace(`const IC_SHAPE = 0;`,`const IC_SHAPE = ${e};`))({worldPos:r?bm.mul(a):bm,nrmW:n,center:Ne,quat:Pe,size:Fe,vary:Ie,tintAll:_e,tintOwn:Le,camPos:r?Ce:O,glassP:fe,viewProj:ne,room:re,skyE:ie,sunE:ae,albedo:oe,lightC:le,lightR:ue,lightU:de,cmyAll:ve,mirror:H(+!!r),bevel:ye,spot:be,lamp:ce,lightTex:we,lightSamp:Ym(we),behindTex:Te,behindSamp:Ym(Te),lampDepthTex:Ee,meshEntry:E,sdfTex:je,diamondTex:Me}),i},yt=q(new nr(.1,.1,.1)),A=[],j=e=>{let t=new Dx;return t.wireframe=!0,t.transparent=!0,t.blending=5,t.blendSrc=211,t.blendDst=212,t.blendSrcAlpha=201,t.blendDstAlpha=200,A.push(t),t.positionNode=e,t.colorNode=G(yt,bm.sub(O).length()),t},bt=Y(_.texture),xt=new rv;xt.fragmentNode=bt,xt.transparent=!0,xt.blending=0,xt.depthTest=xt.depthWrite=!1;let St=new sv(xt),Ct=Y(h.texture),wt=q(1),Tt=new rv;Tt.fragmentNode=Ct.mul(wt),Tt.transparent=!0,Tt.blending=2,Tt.depthTest=Tt.depthWrite=!1;let Et=new sv(Tt),Dt=Y(b.texture),Ot=new rv;Ot.fragmentNode=Gv(eA(`SHADE`))({fragCoord:Hp,res:T,camPos:O,camRight:k,camUp:ee,camFwd:te,p:pe,src:Dt,srcSamp:Ym(Dt)}),Ot.transparent=!0,Ot.blending=0,Ot.depthTest=Ot.depthWrite=!1;let M=new sv(Ot),kt=Y(x.texture),At=Y(C.texture),jt=new Dx;jt.colorNode=Gv(eA(`LENS`))({fragCoord:Hp,res:T,p:me,src:kt,srcSamp:Ym(kt),glowTex:At,glowSamp:Ym(At)}).rgb,jt.depthTest=jt.depthWrite=!1;let Mt=new sv(jt),Nt=e=>{let t=e.index?e.toNonIndexed():e;return t.computeVertexNormals(),t},Pt=new Aa([new N(0,1),new N(-.8660254,-.5),new N(.8660254,-.5)]),Ft=[new Yi(2,2,2),new vo(1,4),new Zi(1,1,2,40,1),new Xi(1,2,10,32),new Qi(1,2,48,1),new So(1,Kk,20,64).rotateX(Math.PI/2),Nt(new yo(1)),Nt(new ho(Pt,{depth:2,bevelEnabled:!1}).translate(0,0,-1)),Nt(new Zi(1/Math.cos(Math.PI/6),1/Math.cos(Math.PI/6),2,6,1).rotateY(Math.PI/2)),r.suzanne,Hk(),r.dragonLod],It=[...Ft];It[Q.sphere]=new vo(1,12),It[Q.cylinder]=new Zi(1,1,2,120,1),It[Q.capsule]=new Xi(1,2,24,96),It[Q.cone]=new Qi(1,2,120,1),It[Q.torus]=new So(1,Kk,40,144).rotateX(Math.PI/2),It[Q.dragon]=r.dragon;let Lt=new ir,Rt=new ir,zt=new ir,Bt=new ir,Vt=new ir,Ht=new ir,Ut=[],Wt=[],Gt=!1,Kt=[],qt=[];for(let e=0;e<Gk;e++){let t=e===Q.capsule?Ve:e===Q.torus?We:ze,n=e===Q.capsule||e===Q.torus?Ge:Ke,r=vt(e,t,n),i=Ye(t,n),a=Je(t),o=vt(e,t,n,!0),s=it(e,t,n),c=j(t);for(let[t,n,l]of[[Ut,Lt,!1],[Wt,Rt,!1],[Kt,Lt,!0],[qt,Rt,!0]]){let u=l?new tA(It[e],Qk):new tA(Ft[e]);t.push(u);for(let[e,t]of[[r,n],[i,zt],[a,Bt],[o,Vt],[s,Ht],[c,n]]){let n=new Mi(u.geometry,e);u.meshes.push(n),n.frustumCulled=!1,t.add(n),(e===r||e===o)&&(n.userData.role=`glass`),e===c&&(n.userData.role=`wire`),n.visible=!1}}}let Jt=new gs(-1,1,1,-1,.1,100),Yt=e=>(e.index?e.index.count:e.getAttribute(`position`).count)/3,Zt=Ft.map(Yt),Qt=It.map(Yt),$t=0,en=!0,tn=``,nn=new Float32Array(Wk),rn=new Uint32Array(1024),an=new Uint32Array(Wk),on=``,sn=new P,cn=new xn;function ln(e){t.getWorldDirection(sn);let r=t.position,i=n.count,a=`${i} ${r.x} ${r.y} ${r.z} ${sn.x} ${sn.y} ${sn.z}`;if(!e&&a===on)return;on=a;let o=1/0,s=-1/0;for(let e=0;e<i;e++){let t=(n.center[e*3]-r.x)*sn.x+(n.center[e*3+1]-r.y)*sn.y+(n.center[e*3+2]-r.z)*sn.z;nn[e]=t,nn[e]<o&&(o=nn[e]),nn[e]>s&&(s=nn[e])}rn.fill(0);let c=1023.999/Math.max(s-o,1e-6);for(let e=0;e<i;e++)rn[(nn[e]-o)*c|0]+=1;let l=0;for(let e=0;l<1024&&e+rn[l]<=i>>1;l++)e+=rn[l];let u=o+l/c,d=i<=Qk;E.value=+!!d;let f=d?Kt:Ut,p=d?qt:Wt,m=[...Ut,...Wt,...Kt,...qt];for(let e of m)e.count=0;for(let e=0,t=0;e<1024;e++){let n=rn[e];rn[e]=t,t+=n}for(let e=0;e<i;e++)an[rn[(nn[e]-o)*c|0]++]=e;for(let e=0;e<i;e++){let t=an[e];(nn[t]>=u?f:p)[n.kind[t]].push(n,t)}for(let e of m)e.commit()}function un(){let e=0,t=2*Math.max(1,Math.hypot(se.x,se.z)/Math.max(se.y,.1));for(let r=0;r<n.count;r++){let i=Math.max(Math.abs(n.center[r*3]),Math.abs(n.center[r*3+2]))+n.center[r*3+1]*t;i>e&&(e=i)}return Math.ceil((e+3)/4)*4}function dn(e,t){_.setSize(e,t),v.setSize(e,t),b.setSize(e,t),x.setSize(e,t),S.setSize(Math.max(1,e>>2),Math.max(1,t>>2)),C.setSize(Math.max(1,e>>2),Math.max(1,t>>2)),w.setSize(Math.max(1,e>>1),Math.max(1,t>>1)),T.value.set(e,t)}function fn(r,o,s){mn=pn?[]:null;let c=r.wireframe??!1;c!==Gt&&(Gt=c);let[l,g,y,E]=r.wireColor??[.01,.01,.01,1];yt.value.setRGB(l,g,y);for(let e of A)e.blendColor.setRGB(E,E,E);_e.value.fromArray(r.color??[1,1,1,1]),ye.value=r.bevel??0,ve.value!==(r.cmy??0)&&(en=!0),ve.value=r.cmy??0,t.updateMatrixWorld();let D=t.matrixWorld.elements,ce=Math.tan(Xt.degToRad(t.fov)/2);O.value.set(D[12],D[13],D[14]),k.value.set(D[0],D[1],D[2],t.aspect),ee.value.set(D[4],D[5],D[6]),te.value.set(-D[8],-D[9],-D[10],ce),cn.multiplyMatrices(t.projectionMatrix,t.matrixWorldInverse),ne.value.copy(cn),re.value=+!!o.ground+(o.dark?2:0),be.value.set(o.spotRadius,o.spotRadius*2.2,0,0),ie.value.fromArray(o.skyE),ae.value.fromArray(o.sunE),oe.value.fromArray(o.groundColor),se.fromArray(o.sunDir);let he=o.sunDir.join()+o.shadowSoftness+o.causticSoftness+`/`+o.causticStrength+r.ior+(r.cmy??0)+(r.bevel??0)+(r.color??[]).join()+String(o.realCaustics)+String(o.objectShadows);he!==tn&&(tn=he,en=!0),s&&(en=!0),ln(s||en);for(let e of[Ut,Wt,Kt,qt])for(let t of e){let e=t.count>0;for(let n of t.meshes){let t=n.userData.role;n.visible=e&&(t===`wire`?Gt:t!==`glass`||!Gt)}}let ge=0;for(let e=0;e<Gk;e++)ge+=Zt[e]*(Ut[e].count+Wt[e].count)+Qt[e]*(Kt[e].count+qt[e].count);let Se=1+(o.ground&&o.floorReflection>0?1:0)+ +!!en;if($t=ge*Se+8,en){en=!1;let t=un(),n=se;Jt.left=Jt.bottom=-t,Jt.right=Jt.top=t,Jt.near=.1,Jt.far=t*6,Jt.position.copy(n).multiplyScalar(t*3),Jt.up.set(0,0,-1),Jt.lookAt(0,0,0),Jt.updateProjectionMatrix(),Jt.updateMatrixWorld();let s=Jt.matrixWorld.elements;le.value.set(0,0,0),ue.value.set(s[0],s[1],s[2]).divideScalar(t),de.value.set(s[4],s[5],s[6]).divideScalar(t);let c=e.getClearColor(new nr),l=e.getClearAlpha();gn(`Shadow map`),e.setClearColor(16777215,1),e.setRenderTarget(i),e.render(zt,Jt),e.setClearColor(0,0),e.setRenderTarget(a),o.objectShadows?e.render(Bt,Jt):e.clear(),e.setClearColor(c,l);let g=.5/t;et(i.texture,f,o.shadowSoftness*g),et(f.texture,p,Math.max(o.shadowSoftness*3,.25)*g),o.realCaustics&&(fe.value.set(r.ior,r.dispersion,6,0),gn(`Caustics`),e.setClearColor(0,0),e.setRenderTarget(u),e.render(Ht,Jt),e.setRenderTarget(m),st.render(e),et(m.texture,f,o.shadowSoftness*g),e.setClearColor(0,1),e.setRenderTarget(d),e.render(_t,Jt),e.setClearColor(c,l),et(d.texture,h,o.causticSoftness*g),e.setRenderTarget(f),e.autoClear=!1,wt.value=o.causticStrength,Et.render(e),e.autoClear=!0)}let we=n.count>$k;if(fe.value.set(r.ior,we?0:r.dispersion,we?3:4,0),xe.value.x=o.ground?o.floorReflection:0,xe.value.y=o.realCaustics?-o.shadowDarkness:o.shadowDarkness,xe.value.z=+!!o.floorGrid,xe.value.w=o.fog,xe.value.x>0){Ce.value.set(D[12],-D[13],D[14]);let n=e.getClearColor(new nr),r=e.getClearAlpha();gn(`Reflection`),e.setClearColor(0,0),e.setRenderTarget(w),e.render(Vt,t),e.setClearColor(n,r)}if(gn(`Ground`),e.setRenderTarget(_),Ze.render(e),fe.value.set(r.ior,we?0:r.dispersion,we?4:6,0),gn(`Far glass`),e.setRenderTarget(v),bt.value=_.texture,St.render(e),e.autoClear=!1,Te.value=_.texture,e.render(Lt,t),e.autoClear=!0,gn(`Near glass`),e.setRenderTarget(b),bt.value=v.texture,St.render(e),e.autoClear=!1,fe.value.set(r.ior,r.dispersion,we?5:6,o.seeThrough?we?5:8:0),Te.value=o.seeThrough?v.texture:_.texture,e.render(Rt,t),e.autoClear=!0,pe.value.set(o.contactShadows,o.contactRadius,o.exposure,0),gn(`Finishing`),e.setRenderTarget(x),M.render(e),o.glow>0){let e=T.value.x/T.value.y;et(x.texture,C,.012,.012*e,S,1),et(C.texture,C,.03,.03*e,S)}if(me.value.set(o.focus,o.depthOfField,o.glow,+!!o.filmic),e.setRenderTarget(null),Mt.render(e),mn){hn.set(e.info.frame,mn);for(let t of hn.keys())t<e.info.frame-30&&hn.delete(t)}}let pn=e.backend.trackTimestamp===!0,mn=null,hn=new Map;function gn(t){mn&&mn.push([e.info.render.frameCalls+1,t])}async function yn(){if(!pn)return null;await e.resolveTimestampsAsync(ut.RENDER);let t=e.backend.timestampQueryPool.render;if(!t)return null;let n=new Map;for(let[e,r]of t.timestamps){let t=e.match(/^r:(\d+):.*:f(\d+)$/);if(!t)continue;let i=Number(t[2]);n.has(i)||n.set(i,new Map),n.get(i).set(Number(t[1]),r)}let r=[...n.keys()].filter(e=>hn.has(e)).sort((e,t)=>t-e)[0];if(r===void 0)return null;let i=hn.get(r),a={};for(let[e,t]of n.get(r)){let n=`Other`;for(let[t,r]of i)e>=t&&(n=r);a[n]=(a[n]??0)+t}return a}function bn(e,t,n=t){Ft[e]=t,It[e]=n;for(let n of[Ut[e],Wt[e]])n.setBase(t);for(let t of[Kt[e],qt[e]])t.setBase(n);Zt[e]=Yt(t),Qt[e]=Yt(n),on=``,en=!0}return{render:fn,resize:dn,markChanged:()=>en=!0,triangles:()=>$t,passTimes:yn,setMeshGeometry:bn}}var rA=.85,iA=1.35,aA=.6;function oA(e,t){return e===Q.capsule||e===Q.torus?t[0]+t[1]:e===Q.box||e===Q.cylinder||e===Q.cone||e===Q.hexprism||e===Q.prism?Math.hypot(t[0],t[1],t[2]):1.1*Math.max(t[0],t[1],t[2])}var sA={[Q.box]:.1,[Q.sphere]:.2,[Q.cylinder]:.35,[Q.capsule]:.45,[Q.cone]:.55,[Q.torus]:.65,[Q.octahedron]:.75,[Q.prism]:.85,[Q.hexprism]:.9,[Q.diamond]:.95,[Q.suzanne]:.98,[Q.dragon]:.995};function cA(e,t,n=null,r=!1,i){t=Math.min(Math.max(1,Math.round(t)),Wk);let a=t*2654435761>>>0,o=()=>(a=Math.imul(a,1664525)+1013904223>>>0,a/4294967296),s=Math.min(Math.max(Math.sqrt(t)*.11,1.2),12)*(iA/.95),c=Math.max(1,Math.floor(2*s/iA)),l=c*c;e.count=t;for(let i=0;i<t;i++){let t=o();n&&n.length&&(t=sA[n[Math.floor(o()*n.length)]]);let a,s,u=!1;if(t<.16)a=Q.box,s=[.16+o()*.14,.16+o()*.14,.16+o()*.14],!n&&t<.07&&(u=!0,s=[s[0],s[0],s[0]]);else if(t<.3){a=Q.sphere;let e=.18+o()*.17;s=[e,e,e]}else if(t<.4){a=Q.cylinder;let e=.15+o()*.15;s=[e,.15+o()*.2,e]}else if(t<.5){a=Q.capsule;let e=.13+o()*.1;s=[e,.12+o()*.16,e]}else if(t<.6){a=Q.cone;let e=.18+o()*.14;s=[e,.18+o()*.16,e]}else if(t<.7){a=Q.torus;let e=.07+o()*.04;s=[.2+o()*.1,e,e]}else if(t<.79){a=Q.octahedron;let e=.24+o()*.14;s=[e,e,e]}else if(t<.88){a=Q.prism;let e=.22+o()*.14;s=[e,e,.15+o()*.15]}else if(t<.93){a=Q.hexprism;let e=.17+o()*.11;s=[e,.12+o()*.14,e]}else if(t<.975){a=Q.diamond;let e=.2+o()*.14;s=[e,e,e]}else if(t<.99){a=Q.suzanne;let e=.32+o()*.12;s=[e,e,e]}else{a=Q.dragon;let e=.34+o()*.12;s=[e,e,e]}r&&a===Q.box&&(s=[s[0],s[0],s[0]]);let d=Math.min(.85+.7500000000000001*o()**2.5,Math.max(1,aA/oA(a,s)));s=[s[0]*d,s[1]*d,s[2]*d];let f=o(),p=o()*2*Math.PI,m=o()*2*Math.PI,h=[Math.sqrt(1-f)*Math.sin(p),Math.sqrt(1-f)*Math.cos(p),Math.sqrt(f)*Math.sin(m),Math.sqrt(f)*Math.cos(m)],g=i%l,_=Math.floor(i/l),v=[(g%c-(c-1)/2)*iA+(o()-.5)*.15,1.2+_*iA,(Math.floor(g/c)-(c-1)/2)*iA+(o()-.5)*.15];e.kind[i]=a,e.size.set(s,i*3),e.center.set(v,i*3),e.quat.set(h,i*4);let y=(o()-.5)*.3,b=.5+o();e.vary.set(u?[0,1,rA]:[y,b,0],i*3)}return i?.(),s}function lA(e){let t=new Set,n=[];for(let r=-1;r<=1;r++)for(let i=-1;i<=1;i++)for(let a=-1;a<=1;a++){if(!r&&!i&&!a)continue;let o=Math.hypot(r,i,a),s=0,c=-1/0;for(let t=0;t<e.length/3;t++){let n=(e[t*3]*r+e[t*3+1]*i+e[t*3+2]*a)/o;n>c&&(c=n,s=t)}t.add(s),n.push(r/o,i/o,a/o,c)}let r=[];for(let n of t)r.push(e[n*3],e[n*3+1],e[n*3+2]);return{points:r,planes:n}}var uA=8;async function dA(t,n){let r=self.crossOriginIsolated===!0,i=await(r?(await e(async()=>{let{default:e}=await import(`./box3d.mt-yp6rVgHQ.js`);return{default:e}},__vite__mapDeps([0,1,2]))).default:(await e(async()=>{let{default:e}=await import(`./box3d-CoffnFtk.js`);return{default:e}},__vite__mapDeps([3,1,2]))).default)(),a=r?Math.min(Math.max(2,(navigator.hardwareConcurrency??4)-1),12):0,o=i.createEventsBuffer(),s=i.createBodyMoveEvent(),c=null,l=new Int32Array,u=2,d=lA(n.suzanne).points,f=lA(n.dragon).points,p=(e,t,n)=>{let r=i.b3CreateHull(n);i.b3CreateHullShape(e,t,r),r?.delete()};function m(e,n=null,r=!1,o){e=Math.min(Math.max(1,Math.round(e)),Wk),c&&i.b3DestroyWorld(c);let s=i.b3DefaultWorldDef();s.gravity=[0,-9.81,0],s.workerCount=a,c=i.b3CreateWorld(s);let m=i.b3DefaultShapeDef();m.baseMaterial.friction=.65,m.baseMaterial.restitution=.02,m.baseMaterial.rollingResistance=.16;let h=i.b3DefaultBodyDef();h.position=[0,-.5,0],i.b3CreateBoxShape(i.b3CreateBody(c,h),m,400,.5,400),u=cA(t,e,n,r,o);let g=[];for(let n=0;n<e;n++){let e=t.kind[n],r=[t.size[n*3],t.size[n*3+1],t.size[n*3+2]],a=[t.center[n*3],t.center[n*3+1],t.center[n*3+2]],o=[t.quat[n*4],t.quat[n*4+1],t.quat[n*4+2],t.quat[n*4+3]],s=i.b3DefaultBodyDef();s.type=i.b3BodyType.b3_dynamicBody,s.position=a,s.rotation=o,s.linearDamping=.08,s.angularDamping=.6,s.sleepThreshold=.25;let l=i.b3CreateBody(c,s);if(e===Q.box)i.b3CreateBoxShape(l,m,r[0],r[1],r[2]);else if(e===Q.sphere)i.b3CreateSphereShape(l,m,{center:[0,0,0],radius:r[0]});else if(e===Q.cylinder){let e=i.b3CreateCylinder(2*r[1],r[0],-r[1],16);i.b3CreateHullShape(l,m,e),e?.delete()}else if(e===Q.capsule)i.b3CreateCapsuleShape(l,m,{center1:[0,-r[1],0],center2:[0,r[1],0],radius:r[0]});else if(e===Q.cone){let e=[0,r[1],0];for(let t=0;t<16;t++){let n=t/16*2*Math.PI;e.push(r[0]*Math.cos(n),-r[1],r[0]*Math.sin(n))}p(l,m,e)}else if(e===Q.torus)for(let e=0;e<uA;e++){let t=e/uA*2*Math.PI,n=(e+1)/uA*2*Math.PI;i.b3CreateCapsuleShape(l,m,{center1:[r[0]*Math.cos(t),0,r[0]*Math.sin(t)],center2:[r[0]*Math.cos(n),0,r[0]*Math.sin(n)],radius:r[1]})}else if(e===Q.octahedron){let e=r[0];p(l,m,[e,0,0,-e,0,0,0,e,0,0,-e,0,0,0,e,0,0,-e])}else if(e===Q.prism){let e=r[0],t=[];for(let n of[-r[2],r[2]])t.push(0,e,n,-.8660254*e,-.5*e,n,.8660254*e,-.5*e,n);p(l,m,t)}else if(e===Q.hexprism){let e=r[0]/Math.cos(Math.PI/6),t=[];for(let n=0;n<6;n++){let i=n/6*2*Math.PI;for(let n of[-r[1],r[1]])t.push(e*Math.cos(i),n,e*Math.sin(i))}p(l,m,t)}else e===Q.diamond?p(l,m,zk(r[0])):e===Q.dragon?p(l,m,f.map(e=>e*r[0])):p(l,m,d.map(e=>e*r[0]));g.push(l)}let _=0;for(let e of g)_=Math.max(_,e.index1);l=new Int32Array(_+1).fill(-1),g.forEach((e,t)=>l[e.index1]=t)}function h(){if(!c)return 0;i.b3World_Step(c,1/60,4),i.getEvents(o,c);let e=i.getNumBodyMoveEvents(o);for(let n=0;n<e;n++){i.getBodyMoveEventAt(s,o,n);let e=l[s.bodyId.index1];e===void 0||e<0||(t.center.set(s.position,e*3),t.quat.set(s.rotation,e*4))}return e}return{reset:m,step:h,footprint:()=>u,label:()=>`${Math.max(a,1)} threads`}}var fA=`// Rigid-body physics on the GPU, for piles too large for Box3D.
 //
 // Every body is solved in parallel, one substep at a time:
 //   integrate  move each body ahead by its velocity and gravity (a prediction)
@@ -2301,6 +2301,6 @@ fn solve(@builtin(workgroup_id) group: vec3u, @builtin(local_invocation_index) t
   work[b] = vec4f(v, resting);
   work[b + 1u] = vec4f(w, 0.0);
 }
-`,fA=131072,pA=32,mA=1/240,hA=4,gA=Math.min(Math.max(Number(new URLSearchParams(location.search).get(`substeps`))||0,0),16),_A=64,vA={MAP_READ:1,COPY_SRC:4,COPY_DST:8,UNIFORM:64,STORAGE:128},yA={COMPUTE:4},bA={READ:1};function xA(e,t,n,r){switch(e){case Q.box:return[t,n,r];case Q.sphere:return[t*.8,t*.8,t*.8];case Q.cylinder:case Q.hexprism:return[t,n,t];case Q.capsule:return[t,n+t,t];case Q.cone:return[t*.7,n,t*.7];case Q.torus:return[t+n,n,t+n];case Q.octahedron:return[t*.6,t*.6,t*.6];case Q.prism:return[t*.7,t*.7,r];case Q.suzanne:return[t,t*.7,t*.6];case Q.dragon:return[t,t*.7,t*.45];default:return[t,t*.6,t]}}function SA(e,t,n){let r=cA(n.suzanne),i=cA(n.dragon),a=e=>Math.sqrt(Math.max(...Array.from({length:e.length/3},(t,n)=>e[n*3]**2+e[n*3+1]**2+e[n*3+2]**2))),o=a(r.points),s=a(i.points),c=r.points.length/3,l=i.points.length/3,u=[`const SUZ_POINTS_N = ${c};`,`const DRAGON_POINTS_N = ${l};`,`const MESH_POINTS_N = ${c+l};`].join(`
-`),d=new Float32Array((8+c+l+52)*4);for(let e=0;e<8;e++)d.set([Math.cos(e*Math.PI/4),Math.sin(e*Math.PI/4),0,0],e*4);[...r.points,...i.points].forEach((e,t)=>d[(8+Math.floor(t/3))*4+t%3]=e),d.set([...r.planes,...i.planes],(8+c+l)*4);let f=e.createShaderModule({code:dA.replace(`/*SUZANNE*/`,u)});f.getCompilationInfo().then(e=>{for(let t of e.messages)t.type===`error`&&console.error(`gpuPhysics.wgsl:${t.lineNum}: ${t.message}`)});let p=vA.STORAGE|vA.COPY_DST,m=e.createBuffer({size:16,usage:vA.UNIFORM|vA.COPY_DST}),h=e.createBuffer({size:Uk*2*16,usage:p|vA.COPY_SRC}),g=e.createBuffer({size:Uk*8*16,usage:p}),_=e.createBuffer({size:fA*4,usage:p}),v=e.createBuffer({size:fA*pA*4,usage:p}),y=e.createBuffer({size:d.byteLength,usage:vA.UNIFORM|vA.COPY_DST}),b=e.createBuffer({size:Uk*4,usage:p}),x=e.createBuffer({size:Uk*4,usage:p}),S=e.createBuffer({size:4,usage:p}),C=e.createBuffer({size:12,usage:p|256});e.queue.writeBuffer(y,0,d);let w=e.createBindGroupLayout({entries:[{binding:0,visibility:yA.COMPUTE,buffer:{type:`uniform`}},...[1,2,3,4].map(e=>({binding:e,visibility:yA.COMPUTE,buffer:{type:`storage`}})),{binding:5,visibility:yA.COMPUTE,buffer:{type:`uniform`}},...[6,7,8].map(e=>({binding:e,visibility:yA.COMPUTE,buffer:{type:`storage`}}))]}),T=e.createBindGroup({layout:w,entries:[m,h,g,_,v,y,b,x,S].map((e,t)=>({binding:t,resource:{buffer:e}}))}),E=e.createPipelineLayout({bindGroupLayouts:[w]}),D=t=>e.createComputePipeline({layout:E,compute:{module:f,entryPoint:t}}),O=e.createBindGroupLayout({entries:[{binding:0,visibility:yA.COMPUTE,buffer:{type:`storage`}}]}),k=e.createBindGroup({layout:O,entries:[{binding:0,resource:{buffer:C}}]}),ee=e.createPipelineLayout({bindGroupLayouts:[w,O]}),te=D(`integrate`),ne=D(`clearGrid`),re=D(`fillGrid`),ie=D(`solve`),ae=D(`clearActive`),oe=D(`markActive`),se=D(`compact`),ce=e.createComputePipeline({layout:ee,compute:{module:f,entryPoint:`sizeSolve`}}),le=0,ue=1,de=2,fe=0,pe=0,me=0,he=0,ge=0,_e=!1,ve=e.features.has(`timestamp-query`)?{queries:e.createQuerySet({type:`timestamp`,count:2}),resolved:e.createBuffer({size:16,usage:512|vA.COPY_SRC}),read:e.createBuffer({size:16,usage:vA.MAP_READ|vA.COPY_DST}),frame:0,busy:!1,ms:0}:null,ye=[],be=0,xe=new ArrayBuffer(16),Se=new Uint32Array(xe),Ce=new Float32Array(xe);function we(n,r=null,i=!1,a){de=sA(t,n,r,i,a),le=t.count,pe+=1,fe=0,ge=0,_e=!1;let c=new Float32Array(le*8),l=new Float32Array(le*32),u=0;for(let e=0;e<le;e++){let n=t.kind[e],[r,i,a]=t.size.subarray(e*3,e*3+3),d;d=n===Q.box?Math.hypot(r,i,a):n===Q.sphere||n===Q.octahedron?r:n===Q.cylinder||n===Q.cone?Math.hypot(r,i):n===Q.capsule||n===Q.torus?r+i:n===Q.prism?Math.hypot(r,a):n===Q.hexprism?Math.hypot(r*1.1547,i):n===Q.suzanne?o*r:n===Q.dragon?s*r:1.0824*r,d+=.01,u=Math.max(u,d);let[f,p,m]=xA(n,r,i,a),h=8*f*p*m;c.set(t.center.subarray(e*3,e*3+3),e*8),c[e*8+3]=d,c.set(t.quat.subarray(e*4,e*4+4),e*8+4);let g=e*32;l.set([r,i,a,n],g+24),l.set([3/(h*(p*p+m*m)),3/(h*(f*f+m*m)),3/(h*(f*f+p*p)),1/h],g+28)}ue=2*u,e.queue.writeBuffer(h,0,c),e.queue.writeBuffer(g,0,l)}function Te(){if(be>=3)return;let n=le*32,r=ye.pop()??e.createBuffer({size:64e4,usage:vA.MAP_READ|vA.COPY_DST}),i=e.createCommandEncoder();i.copyBufferToBuffer(h,0,r,0,n),e.queue.submit([i.finish()]);let a=pe;be+=1,r.mapAsync(bA.READ,0,n).then(()=>{if(a===pe){let e=new Float32Array(r.getMappedRange(0,n)),i=n/32,a=0,o=0;for(let n=0;n<i;n++){let r=n*8,i=n*3,s=n*4,c=Math.abs(e[r]-t.center[i])+Math.abs(e[r+1]-t.center[i+1])+Math.abs(e[r+2]-t.center[i+2])+Math.abs(e[r+4]-t.quat[s])+Math.abs(e[r+5]-t.quat[s+1]);c>2e-4&&(a+=1),c>.001&&(o+=1),t.center[i]=e[r],t.center[i+1]=e[r+1],t.center[i+2]=e[r+2],t.quat[s]=e[r+4],t.quat[s+1]=e[r+5],t.quat[s+2]=e[r+6],t.quat[s+3]=e[r+7]}me+=a,he+=o}r.unmap(),ye.push(r)}).catch(()=>r.destroy()).finally(()=>--be)}function Ee(){if(!le||_e)return 0;let t=performance.now(),n=fe?Math.min(Math.max((t-fe)/1e3,1/240),1/30):1/60;fe=t,Se[0]=le;let r=gA||Math.min(Math.max(Math.round(n/mA),1),hA);Ce[1]=n/r,Ce[2]=ue,e.queue.writeBuffer(m,0,xe);let i=Math.ceil(le/_A),a=e.createCommandEncoder(),o=ve!==null&&!ve.busy&&++ve.frame%4==0,s=a.beginComputePass(o?{timestampWrites:{querySet:ve.queries,beginningOfPassWriteIndex:0,endOfPassWriteIndex:1}}:void 0);s.setBindGroup(0,T);for(let e=0;e<r;e++)s.setPipeline(te),s.dispatchWorkgroups(i),s.setPipeline(ne),s.dispatchWorkgroups(fA/_A),s.setPipeline(re),s.dispatchWorkgroups(i),s.setPipeline(ae),s.dispatchWorkgroups(i),s.setPipeline(oe),s.dispatchWorkgroups(i),s.setPipeline(se),s.dispatchWorkgroups(i),s.setPipeline(ce),s.setBindGroup(1,k),s.dispatchWorkgroups(1),s.setPipeline(ie),s.dispatchWorkgroupsIndirect(C,0);if(s.end(),o&&(a.resolveQuerySet(ve.queries,0,2,ve.resolved,0),a.copyBufferToBuffer(ve.resolved,0,ve.read,0,16)),e.queue.submit([a.finish()]),o){let e=ve;e.busy=!0,e.read.mapAsync(bA.READ).then(()=>{let[t,n]=new BigUint64Array(e.read.getMappedRange()),r=Number(n-t)/1e6;e.ms=e.ms?e.ms+(r-e.ms)*.5:r,e.read.unmap()}).catch(()=>{}).finally(()=>e.busy=!1)}Te();let c=me,l=he;return me=he=0,l>Math.max(2,le/400)?ge=0:ge?t-ge>1500&&(_e=!0):ge=t,c}function De(){pe+=1,le=0}return{reset:we,step:Ee,release:De,footprint:()=>de,label:()=>`GPU`,gpuMs:()=>ve&&!_e&&le?ve.ms:null}}var CA=[`suzanne_sdf_128.bin`,`dragon_sdf_128.bin`],wA=128,TA=`mesh_hulls.bin`,EA=matchMedia(`(pointer: coarse)`).matches?16e5:84e5,$={dark:!1,spotlight:!0,lamp:1,lampHeight:45,lampTurn:150,ground:!0,groundColor:{r:238/255,g:238/255,b:238/255},exposure:1,floorReflection:.4,shadowSoftness:.15,shadowDarkness:.85,objectShadows:!0,floorGrid:!0,fog:.15,realCaustics:!0,seeThrough:!1,causticSoftness:.3,causticStrength:.3,contactShadows:.7,depthOfField:.05,glow:.35,filmic:!0,physics:!0,solver:`Auto`,ior:1.45,dispersion:1,bevel:0,glassColor:{r:1,g:1,b:1},glassAlpha:1,colorize:!1,wireframe:!1,wireColor:{r:1,g:170/255,b:64/255},wireAlpha:1},DA=new URLSearchParams(location.search);DA.get(`physics`)===`gpu`&&($.solver=`GPU`),DA.get(`physics`)===`box3d`&&($.solver=`Box3D (CPU)`);var OA=structuredClone($),kA={"Mixed shapes":{kinds:null},Diamond:{kinds:[Q.diamond],ior:2.42,dispersion:.4,camera:[3,1.2,4.1,.35,.4,0]},Sphere:{kinds:[Q.sphere],look:{spotlight:!0,lamp:1.7,lampHeight:32,lampTurn:-93,fog:0,causticSoftness:.26,glow:.5,depthOfField:0},camera:[2.35,2.76,3.1,.35,.3,.04]},Cube:{kinds:[Q.box],cubic:!0},"CMY cube":{kinds:[Q.box],cubic:!0,cmy:!0},Box:{kinds:[Q.box]},Cylinder:{kinds:[Q.cylinder]},Capsule:{kinds:[Q.capsule]},Cone:{kinds:[Q.cone]},Torus:{kinds:[Q.torus]},Octahedron:{kinds:[Q.octahedron]},Prism:{kinds:[Q.prism]},"Hex prism":{kinds:[Q.hexprism]},Suzanne:{kinds:[Q.suzanne]},Dragon:{kinds:[Q.dragon]}},AA=15e3,jA=e=>e.toLowerCase().replace(/[^a-z0-9]+/g,``),MA=e=>{let t=jA(e);if(t)return Object.keys(kA).filter(e=>t.startsWith(jA(e))||jA(e).startsWith(t)).sort((e,t)=>t.length-e.length)[0]},NA=jA(DA.get(`demo`)??``),PA={shape:MA(DA.get(`shape`)??NA.replace(/^(single|pile)/,``))??`Diamond`,count:DA.has(`count`)?Number(DA.get(`count`)):NA.startsWith(`pile`)?2e3:1};PA.count=Math.min(Math.max(Math.round(PA.count)||1,1),AA);var FA=e=>e.toLowerCase().replace(/[^a-z0-9]+/g,`-`),IA=(()=>{let e=document.getElementById(`loading`),t=document.getElementById(`loading-fill`),n=document.getElementById(`loading-text`),r=new Map,i=[.1,.9],a=(e,r)=>{t.style.width=`${(Math.min(Math.max(e,0),1)*100).toFixed(1)}%`,n.textContent=r},o=()=>{let e=[...r.values()],t=e.reduce((e,t)=>e+t.loaded,0),n=e.every(e=>e.total!==null),o=e.reduce((e,t)=>e+(t.total??0),0),s=n&&o>0?t/o:e.filter(e=>e.done).length/Math.max(e.length,1),c=e=>(e/1048576).toFixed(1);a(i[0]+s*(i[1]-i[0]),n?`Downloading models… ${c(t)} / ${c(o)} MB`:`Downloading models… ${c(t)} MB`)};return{stage:(e,t)=>a(e,t),async fetch(e){let t=await fetch(e),n=t.headers.get(`content-length`),i={loaded:0,total:n&&!t.headers.get(`content-encoding`)?Number(n):null,done:!1};return r.set(e,i),Object.assign(t,{buffer:async()=>{if(!t.body)return t.arrayBuffer();let e=[],n=t.body.getReader();for(;;){let{done:t,value:r}=await n.read();if(t)break;e.push(r),i.loaded+=r.byteLength,o()}i.done=!0,o();let r=new Uint8Array(i.loaded),a=0;for(let t of e)r.set(t,a),a+=t.byteLength;return r.buffer}})},again(t){r.clear(),i=[0,1],e.classList.add(`over`),e.classList.remove(`done`),a(0,t)},done(){a(1,`Ready`),e.classList.add(`done`)}}})();function LA(e){document.getElementById(`loading`)?.remove();let t=document.getElementById(`error`);throw t.textContent=e,t.style.display=`flex`,Error(e)}var RA=e=>e<=.04045?e/12.92:((e+.055)/1.055)**2.4;function zA(){let e=wA,t=new bn(new Uint16Array(16384*e*CA.length),e,e,e*CA.length);return t.format=ee,t.type=y,t.minFilter=t.magFilter=l,t.wrapS=t.wrapT=t.wrapR=i,t.needsUpdate=!0,t}async function BA(e,t){let n=wA,r=CA[t],i=await IA.fetch(r);if(!i.ok)throw Error(`Could not load the mesh volume (${r}).`);e.image.data.set(new Uint16Array(await i.buffer()),t*n*n*n),e.needsUpdate=!0}async function VA(){let e=await fetch(TA);e.ok||LA(`Could not load the mesh hulls (${TA}).`);let t=await e.arrayBuffer(),[n,r]=new Uint32Array(t,0,2);return{suzanne:new Float32Array(t,8,n*3),dragon:new Float32Array(t,8+n*12,r*3)}}async function HA(e){let t=await IA.fetch(e);if(!t.ok)throw Error(`Could not load the mesh (${e}).`);let n=await t.buffer(),[r,i]=new Uint32Array(n,0,2),a=new Float32Array(n,12,r*3),o=new Float32Array(n,12+r*12,r*3),s=new Uint32Array(n,12+r*24,i),c=new ri;return c.setAttribute(`position`,new Vr(a,3)),c.setAttribute(`normal`,new Vr(o,3)),c.setIndex(new Vr(s,1)),c}async function UA(){let t=document.getElementById(`view`);self.crossOriginIsolated?e(()=>import(`./box3d.mt-yp6rVgHQ.js`),__vite__mapDeps([0,1,2])):e(()=>import(`./box3d-CoffnFtk.js`),__vite__mapDeps([3,1,2])),IA.stage(0,`Starting WebGPU…`);let n=new PO({canvas:t,antialias:!0,trackTimestamp:!0});await n.init(),n.backend.isWebGPUBackend||LA(`This demo needs WebGPU.
-Open it in a recent Chrome, Edge or another WebGPU-enabled browser.`),n.toneMapping=0,n.onDeviceLost=e=>{console.error(`WebGPU device lost`,e);let t=document.getElementById(`error`);document.getElementById(`loading`)?.remove(),t.textContent=`The GPU stopped (${e.message||e.reason||`device lost`}).\nThis device may not have enough GPU memory for the demo. Reload to try again.`,t.style.display=`flex`,n.setAnimationLoop(null)};let r=new ds(28.8,1,.1,500),i=new GO(r,t);i.enableDamping=!0,i.dampingFactor=.08,i.zoomToCursor=!0,i.maxPolarAngle=Math.PI/2-Xt.degToRad(8);let a=await VA(),o=zA(),s=new Yi(2,2,2);IA.stage(.05,`Setting up physics…`);let c=Kk(),l=await uA(c,a),u=SA(n.backend.device,c,a),d={[Q.box]:{labels:[`Half width`,`Half height`,`Half depth`],measures:[.6,.6,.6],turn:-15},[Q.sphere]:{labels:[`Radius`],measures:[.6],turn:0},[Q.cylinder]:{labels:[`Radius`,`Half height`],measures:[.5,.6],turn:0},[Q.capsule]:{labels:[`Radius`,`Half length`],measures:[.4,.4],turn:0},[Q.cone]:{labels:[`Radius`,`Half height`],measures:[.55,.6],turn:0},[Q.torus]:{labels:[`Ring radius`,`Tube radius`],measures:[.62,.22],turn:0},[Q.octahedron]:{labels:[`Size`],measures:[.85],turn:20},[Q.prism]:{labels:[`Size`,`Half length`],measures:[.65,.6],turn:55},[Q.hexprism]:{labels:[`Radius`,`Half height`],measures:[.5,.5],turn:-15},[Q.suzanne]:{labels:[`Size`],measures:[.8],turn:-20},[Q.diamond]:{labels:[`Size`],measures:[.6],turn:240},[Q.dragon]:{labels:[`Size`],measures:[.9],turn:-30}},f={},p=e=>kA[e].kinds?.[0]??Q.box,m=e=>{let t=kA[e],n=d[p(e)];return f[e]??={measures:e===`Box`?[.75,.42,.55]:[...n.measures],turn:n.turn,ior:t.ior??1.45,dispersion:t.dispersion??1,bevel:t.cmy?.008:0,colour:nA,glassColor:{r:1,g:1,b:1},glassAlpha:1}},h=(e,t=!1)=>{let n=p(e),r=m(e),[i,a=i,o=i]=r.measures,s=[i,i,i],l=i,u=null;n===Q.box?(s=[i,a,o],l=a):n===Q.cylinder||n===Q.cone||n===Q.hexprism?(s=[i,a,i],l=a):n===Q.capsule?(s=[i,a,i],l=i+a):n===Q.torus?(s=[i,a,a],l=a):n===Q.octahedron?(l=i*.57735,u=new Zt().setFromUnitVectors(new P(-1,-1,-1).normalize(),new P(0,-1,0))):n===Q.prism?(s=[i,i,a],l=i/2):n===Q.suzanne?l=i*.72:n===Q.dragon?l=i*.7053:n===Q.diamond&&(l=zk*i,u=new Zt().setFromAxisAngle(new P(0,0,1),-Bk));let d=new Zt().setFromAxisAngle(new P(0,1,0),Xt.degToRad(r.turn));if(u&&d.multiply(u),t){let e=Math.random()*Math.PI*2,t=new P(Math.cos(e),0,Math.sin(e));d.premultiply(new Zt().setFromAxisAngle(t,Xt.degToRad(20+Math.random()*30))),l+=1.6}c.count=1,c.kind[0]=n,c.size.set(s,0),c.center.set([0,l,0],0),c.quat.set([d.x,d.y,d.z,d.w],0),c.vary.set([0,1,0],0),c.tint.set([1,1,1],0)},g={reset:()=>{},step:()=>0,footprint:()=>1,label:()=>`still`},_=l,v=tA(n,r,c,{suzanne:s,dragon:s,dragonLod:s,volume:o}),y=new Map,b={[Q.suzanne]:async()=>{let[e]=await Promise.all([HA(`suzanne_mesh.bin`),BA(o,0)]);v.setMeshGeometry(Q.suzanne,e)},[Q.dragon]:async()=>{let[e,t]=await Promise.all([HA(`dragon_mesh.bin`),HA(`dragon_mesh_lod.bin`),BA(o,1)]);v.setMeshGeometry(Q.dragon,t,e)}},x=e=>Object.keys(b).map(Number).filter(t=>(!e||e.includes(t))&&!S.has(t)),S=new Set,C=e=>Promise.all(x(e).map(e=>{let t=y.get(e);return t||(t=b[e]().then(()=>void S.add(e),t=>{throw y.delete(e),t}),y.set(e,t)),t})).then(()=>{}),w=()=>kA[PA.shape],T=()=>PA.count===1&&w().kinds!==null,E=()=>T()?w().look??{}:{},D=0,O=()=>{let e=new nr;for(let t=0;t<c.count;t++){let n=e=>{let n=Math.sin((t+1)*e+D)*43758.5453;return n-Math.floor(n)};$.colorize&&c.vary[t*3+2]===0?e.setHSL(n(12.9898),.55+.4*n(78.233),.5+.2*n(37.719)):e.setRGB(1,1,1),c.tint.set([e.r,e.g,e.b],t*3)}v.markChanged()},k=()=>{let e=T()?m(PA.shape):$;return[RA(e.glassColor.r),RA(e.glassColor.g),RA(e.glassColor.b),e.glassAlpha]},ee=()=>T()?m(PA.shape).bevel:$.bevel,te=()=>w().cmy?T()?Math.max(m(PA.shape).colour,.001):nA:0,ne=e=>$.solver===`GPU`||$.solver===`Auto`&&e>5e3?u:l,re=(e=!1)=>{let t=w();if(u.release(),T()){let n=m(PA.shape);$.ior=n.ior,$.dispersion=n.dispersion,e?(_=ne(1),_.reset(1,t.kinds,!1,()=>{h(PA.shape,!0),O()})):(h(PA.shape),O(),_=g)}else $.ior=t.ior??1.45,$.dispersion=t.dispersion??1,_=ne(PA.count),_.reset(PA.count,t.kinds,t.cubic??!1),O();v.markChanged()},ie=0,ae=(e=!1)=>{let t=++ie,n=x(w().kinds);if(!n.length)return re(e);let r=n.map(e=>e===Q.dragon?`dragon`:`Suzanne`).join(` and `);IA.again(`Downloading ${r}…`),C(w().kinds).then(()=>{t===ie&&(IA.done(),re(e))},e=>{console.error(e),t===ie&&(IA.stage(0,`Could not download the ${r}. Pick the shape again to retry.`),setTimeout(()=>t===ie&&IA.done(),4e3))})};Object.assign($,E()),await C(w().kinds).catch(e=>LA(`Could not load the models.\n${e instanceof Error?e.message:String(e)}`)),re();let oe=()=>{let e=T()?w().camera:void 0;if(e)r.position.set(e[0],e[1],e[2]),i.target.set(e[3],e[4],e[5]);else if(T())r.position.set(3.017,1.9,4.119),i.target.set(.35,.22,0);else{let e=_.footprint();r.position.set(e*2.2+3,e*1.5+3,e*3.6+5),i.target.set(0,e*.2,0)}i.update()},se=1;function ce(){let e=window.innerWidth,t=window.innerHeight,i=window.devicePixelRatio,a=T()?Math.min(i*2,Math.max(i,4096/Math.max(e,t))):i,o=Math.min(a,Math.sqrt(EA/(e*t)))*Math.sqrt(se);n.setPixelRatio(o),n.setSize(e,t,!1),r.aspect=e/t,r.updateProjectionMatrix(),v.resize(Math.round(e*o),Math.round(t*o))}window.addEventListener(`resize`,ce);let le=new gk({title:`Settings`,width:300});le.close();let ue={fps:`0`,triangles:`0`,moving:`0`},de={stats:DA.get(`stats`)===`1`},fe=()=>{let e=new URL(location.href);e.searchParams.delete(`demo`),e.searchParams.set(`shape`,FA(PA.shape)),e.searchParams.set(`count`,String(PA.count)),history.replaceState(null,``,e)},pe=()=>{fe(),Object.assign($,structuredClone(OA),E()),delete f[PA.shape],ae(),oe(),Ce(),ce(),le.controllersRecursive().forEach(e=>e.updateDisplay())},me=T();le.add(PA,`shape`,Object.keys(kA)).name(`Shape`).onChange(()=>{fe(),ae(),Ce(),ce(),le.controllersRecursive().forEach(e=>e.updateDisplay()),me=T()}),le.add(PA,`count`,1,AA,1).name(`Count`).onFinishChange(()=>{PA.count=Math.min(Math.max(Math.round(PA.count)||1,1),AA),T()===me?(fe(),ae()):pe(),me=T()}),le.add({drop:()=>ae(!0)},`drop`).name(`Drop`),le.add(de,`stats`).name(`Show stats`).onChange(e=>{let t=document.getElementById(`stats`);t&&(t.style.display=e?`grid`:`none`)});let he=(e,t)=>e.add({reset:()=>ge(e,t)},`reset`).name(`Reset`),ge=(e,t)=>{let n=$.solver,r=$,i=OA;for(let t of e.controllers){if(t.object!==$||!(t.property in i))continue;let e=i[t.property];typeof e==`object`&&e?Object.assign(r[t.property],e):r[t.property]=e,t.updateDisplay()}$.solver!==n&&ae(),v.markChanged(),t?.()},_e=le.addFolder(`Scene`).close();_e.add($,`physics`).name(`Physics running`);let ve=[_e.add($,`solver`,[`Auto`,`Box3D (CPU)`,`GPU`]).name(`Physics solver`).onChange(()=>ae())];_e.add($,`floorReflection`,0,1,.01).name(`Floor reflection`),_e.add($,`shadowSoftness`,.01,.6,.01).name(`Shadow softness`),_e.add($,`shadowDarkness`,0,1,.01).name(`Shadow darkness`),_e.add($,`objectShadows`).name(`Object shadows`),_e.add($,`seeThrough`).name(`Glass through glass`),_e.add($,`realCaustics`).name(`Real caustics`),_e.add($,`causticSoftness`,.005,.3,.005).name(`Caustic softness`),_e.add($,`causticStrength`,0,3,.01).name(`Caustic strength`),_e.add($,`floorGrid`).name(`Floor grid`),_e.add($,`fog`,0,2,.01).name(`Fog`),he(_e);let ye=null,be=!1,xe=null;function Se(){ye&&(be=!ye._closed),ye?.destroy(),xe?.destroy(),xe=null;let e=PA.shape,t=kA[e],n=T()?m(e):null,r=()=>{u.release(),_=g,h(e),O()},i=le.addFolder(`Glass settings`);ye=i,be||i.close();let a=i.add($,`wireframe`).name(`Wireframe only`),o=[i.addColor($,`wireColor`).name(`Wire color`),i.add($,`wireAlpha`,0,1,.01).name(`Wire alpha`)],s=()=>o.forEach(e=>e.show($.wireframe));a.onChange(s),s();let c=n??$,l=t.cmy?[]:[i.addColor(c,`glassColor`).name(`Glass color`),i.add(c,`glassAlpha`,0,1,.01).name(`Color alpha`)],y=()=>l.forEach(e=>e.enable(!$.colorize));i.add($,`colorize`).name(`Random colors`).onChange(e=>{e&&(D=Math.random()*1e3),O(),y()}),y(),n?(i.add(n,`ior`,1,2.5,.01).name(`IOR`).onChange(e=>$.ior=e),i.add(n,`dispersion`,0,5,.05).name(`Dispersion`).onChange(e=>$.dispersion=e),i.add(n,`turn`,-180,180,1).name(`Turn`).onChange(r)):(i.add($,`ior`,1,2.5,.01).name(`IOR`).listen(),i.add($,`dispersion`,0,5,.05).name(`Dispersion`).listen()),i.add({reset:()=>{if(Object.assign($,{wireframe:OA.wireframe,wireAlpha:OA.wireAlpha,colorize:OA.colorize}),Object.assign($.wireColor,OA.wireColor),n){let{measures:t,bevel:r,colour:i}=n;delete f[e],Object.assign(m(e),{measures:t,bevel:r,colour:i}),ae()}else $.ior=t.ior??1.45,$.dispersion=t.dispersion??1,Object.assign($.glassColor,OA.glassColor),$.glassAlpha=OA.glassAlpha,O();v.markChanged(),Se()}},`reset`).name(`Reset`);let b=!t.kinds||t.kinds.includes(Q.box);if(!n&&!b)return;let x=le.addFolder(n?`${e} shape`:`${e} pile shape`);xe=x,n?(d[p(e)].labels.forEach((e,t)=>x.add(n.measures,String(t),.1,1.5,.01).name(e).onChange(r)),p(e)===Q.box&&x.add(n,`bevel`,0,.15,.001).name(`Bevel`),t.cmy&&x.add(n,`colour`,0,1,.01).name(`Colour strength`),x.add({reset:()=>{let{ior:t,dispersion:r,glassColor:i,glassAlpha:a,turn:o}=n;delete f[e],Object.assign(m(e),{ior:t,dispersion:r,glassColor:i,glassAlpha:a,turn:o}),ae(),Se()}},`reset`).name(`Reset`)):(x.add($,`bevel`,0,.05,.001).name(`Box bevel`),he(x))}function Ce(){let e=T();for(let t of ve)t.show(!e);Se()}let we=le.addFolder(`Lighting`);we.add($,`dark`).name(`Dark studio`).onChange(()=>v.markChanged()),we.add($,`spotlight`).name(`Spotlight (dark studio)`).onChange(()=>v.markChanged()),we.add($,`lamp`,0,3,.01).name(`Main lamp`),we.add($,`lampHeight`,10,85,1).name(`Lamp height (deg)`),we.add($,`lampTurn`,-180,180,1).name(`Lamp direction (deg)`),we.add($,`ground`).name(`Ground`),we.addColor($,`groundColor`).name(`Ground color`),we.add($,`exposure`,.1,4,.01).name(`Exposure`),he(we),we.close();let Te=le.addFolder(`Camera`);Te.add($,`contactShadows`,0,1,.01).name(`Contact shadows`),Te.add($,`depthOfField`,0,1,.01).name(`Depth of field`),Te.add($,`glow`,0,1,.01).name(`Glow`),Te.add($,`filmic`).name(`Film-like tones`),he(Te),Te.close(),ce(),oe(),Ce();let Ee=0,De=0,Oe=performance.now(),ke=e=>[e*$.lamp,e*$.lamp,e*$.lamp];{let e=document.createElement(`div`);e.id=`stats`,e.style.cssText=`position:fixed;left:12px;bottom:12px;display:grid;grid-template-columns:auto auto;column-gap:16px;padding:8px 10px;font:12px/1.5 ui-monospace,monospace;font-variant-numeric:tabular-nums;color:#eee;background:rgba(20,20,20,0.8);border-radius:6px;pointer-events:none;z-index:10`,e.style.display=de.stats?`grid`:`none`,document.body.append(e);let t=t=>{e.replaceChildren(...t.flatMap(e=>{let t=document.createElement(`span`);if(t.textContent=e[0],e.length===1)return t.style.cssText=`grid-column:1 / -1;margin-top:6px;color:#aaa`,[t];let n=document.createElement(`span`);return n.textContent=e[1],n.style.textAlign=`right`,[t,n]}))},n=new Map,r=[`Shadow map`,`Caustics`,`Reflection`,`Ground`,`Far glass`,`Near glass`,`Finishing`,`Other`],i=async()=>{let a=performance.now();for(let[e,t]of Object.entries(await v.passTimes()??{}))n.set(e,{ms:t,at:a});e.style.display=de.stats?`grid`:`none`;let o=r.filter(e=>n.has(e)&&a-n.get(e).at<2e3).map(e=>[e,n.get(e).ms]),s=o.reduce((e,[,t])=>e+t,0),c=_===u?u.gpuMs():null,l=_===g?`-`:c===null?_===u?`-`:`${De.toFixed(2)} ms`:`${c.toFixed(2)} ms`;t([[`FPS`,ue.fps],[`Triangles`,ue.triangles],[`GPU time per frame`],...o.map(([e,t])=>[e,`${t.toFixed(2)} ms`]),[`Drawing`,`${s.toFixed(2)} ms`],[`Physics`,l],[`Moving`,ue.moving]]),setTimeout(i,500)};i()}let Ae=performance.now()+3e3,je=0;function Me(e,t){performance.now()<Ae||t>1500||(e<24&&se>.2?(se=Math.max(se*.7,.2),je=0,ce()):e>50&&se<1?++je>=6&&(se=Math.min(se/.8,1),je=0,ce()):je=0)}IA.stage(.94,`Compiling shaders…`);let Ne=!0;n.setAnimationLoop(()=>{Ne&&(Ne=!1,requestAnimationFrame(()=>{n.backend.device.queue.onSubmittedWorkDone().then(()=>IA.done(),()=>IA.done())})),i.update(),document.body.classList.contains(`dark-studio`)!==$.dark&&document.body.classList.toggle(`dark-studio`,$.dark),Ee+=1;let e=performance.now();if(e-Oe>=500){let t=Ee*1e3/(e-Oe);ue.fps=t.toFixed(0),Me(t,e-Oe),Ee=0,Oe=e}let t=performance.now(),a=$.physics?_.step():0;De+=(performance.now()-t-De)*.1;let o=$.dark&&$.spotlight,s=Xt.degToRad($.lampHeight),c=Xt.degToRad($.lampTurn);v.render({ior:$.ior,dispersion:$.dispersion,cmy:te(),bevel:ee(),color:k(),wireframe:$.wireframe,wireColor:[RA($.wireColor.r),RA($.wireColor.g),RA($.wireColor.b),$.wireAlpha]},{ground:$.ground,dark:$.dark,seeThrough:$.seeThrough,realCaustics:$.realCaustics,causticSoftness:$.causticSoftness,causticStrength:$.causticStrength,contactShadows:$.contactShadows,contactRadius:T()?.45:.22,focus:r.position.distanceTo(i.target),depthOfField:$.depthOfField,glow:$.glow,filmic:$.filmic,spotRadius:o?T()?5.5:_.footprint()*1.5+2:0,floorReflection:$.floorReflection,shadowSoftness:$.shadowSoftness,shadowDarkness:$.shadowDarkness,objectShadows:$.objectShadows,floorGrid:$.floorGrid,fog:$.fog,groundColor:[$.groundColor.r,$.groundColor.g,$.groundColor.b].map(e=>RA(e)*($.dark?.2:1)),exposure:$.exposure,skyE:o?[.02,.02,.02]:$.dark?[.004,.004,.004]:[.26,.26,.26],sunE:ke(o?.3:$.dark?.022:.55),sunDir:[Math.cos(s)*Math.cos(c),Math.sin(s),Math.cos(s)*Math.sin(c)]},a>0),ue.triangles=v.triangles().toLocaleString(`en-US`),ue.moving=a.toLocaleString(`en-US`)})}UA().catch(e=>{console.error(e);let t=document.getElementById(`error`);t.style.display!==`flex`&&(t.textContent=`Failed to start: ${e instanceof Error?e.message:String(e)}`,t.style.display=`flex`)});
+`,pA=131072,mA=32,hA=1/240,gA=4,_A=Math.min(Math.max(Number(new URLSearchParams(location.search).get(`substeps`))||0,0),16),vA=64,yA={MAP_READ:1,COPY_SRC:4,COPY_DST:8,UNIFORM:64,STORAGE:128},bA={COMPUTE:4},xA={READ:1};function SA(e,t,n,r){switch(e){case Q.box:return[t,n,r];case Q.sphere:return[t*.8,t*.8,t*.8];case Q.cylinder:case Q.hexprism:return[t,n,t];case Q.capsule:return[t,n+t,t];case Q.cone:return[t*.7,n,t*.7];case Q.torus:return[t+n,n,t+n];case Q.octahedron:return[t*.6,t*.6,t*.6];case Q.prism:return[t*.7,t*.7,r];case Q.suzanne:return[t,t*.7,t*.6];case Q.dragon:return[t,t*.7,t*.45];default:return[t,t*.6,t]}}function CA(e,t,n){let r=lA(n.suzanne),i=lA(n.dragon),a=e=>Math.sqrt(Math.max(...Array.from({length:e.length/3},(t,n)=>e[n*3]**2+e[n*3+1]**2+e[n*3+2]**2))),o=a(r.points),s=a(i.points),c=r.points.length/3,l=i.points.length/3,u=[`const SUZ_POINTS_N = ${c};`,`const DRAGON_POINTS_N = ${l};`,`const MESH_POINTS_N = ${c+l};`].join(`
+`),d=new Float32Array((8+c+l+52)*4);for(let e=0;e<8;e++)d.set([Math.cos(e*Math.PI/4),Math.sin(e*Math.PI/4),0,0],e*4);[...r.points,...i.points].forEach((e,t)=>d[(8+Math.floor(t/3))*4+t%3]=e),d.set([...r.planes,...i.planes],(8+c+l)*4);let f=e.createShaderModule({code:fA.replace(`/*SUZANNE*/`,u)});f.getCompilationInfo().then(e=>{for(let t of e.messages)t.type===`error`&&console.error(`gpuPhysics.wgsl:${t.lineNum}: ${t.message}`)});let p=yA.STORAGE|yA.COPY_DST,m=e.createBuffer({size:16,usage:yA.UNIFORM|yA.COPY_DST}),h=e.createBuffer({size:Wk*2*16,usage:p|yA.COPY_SRC}),g=e.createBuffer({size:Wk*8*16,usage:p}),_=e.createBuffer({size:pA*4,usage:p}),v=e.createBuffer({size:pA*mA*4,usage:p}),y=e.createBuffer({size:d.byteLength,usage:yA.UNIFORM|yA.COPY_DST}),b=e.createBuffer({size:Wk*4,usage:p}),x=e.createBuffer({size:Wk*4,usage:p}),S=e.createBuffer({size:4,usage:p}),C=e.createBuffer({size:12,usage:p|256});e.queue.writeBuffer(y,0,d);let w=e.createBindGroupLayout({entries:[{binding:0,visibility:bA.COMPUTE,buffer:{type:`uniform`}},...[1,2,3,4].map(e=>({binding:e,visibility:bA.COMPUTE,buffer:{type:`storage`}})),{binding:5,visibility:bA.COMPUTE,buffer:{type:`uniform`}},...[6,7,8].map(e=>({binding:e,visibility:bA.COMPUTE,buffer:{type:`storage`}}))]}),T=e.createBindGroup({layout:w,entries:[m,h,g,_,v,y,b,x,S].map((e,t)=>({binding:t,resource:{buffer:e}}))}),E=e.createPipelineLayout({bindGroupLayouts:[w]}),D=t=>e.createComputePipeline({layout:E,compute:{module:f,entryPoint:t}}),O=e.createBindGroupLayout({entries:[{binding:0,visibility:bA.COMPUTE,buffer:{type:`storage`}}]}),k=e.createBindGroup({layout:O,entries:[{binding:0,resource:{buffer:C}}]}),ee=e.createPipelineLayout({bindGroupLayouts:[w,O]}),te=D(`integrate`),ne=D(`clearGrid`),re=D(`fillGrid`),ie=D(`solve`),ae=D(`clearActive`),oe=D(`markActive`),se=D(`compact`),ce=e.createComputePipeline({layout:ee,compute:{module:f,entryPoint:`sizeSolve`}}),le=0,ue=1,de=2,fe=0,pe=0,me=0,he=0,ge=0,_e=!1,ve=e.features.has(`timestamp-query`)?{queries:e.createQuerySet({type:`timestamp`,count:2}),resolved:e.createBuffer({size:16,usage:512|yA.COPY_SRC}),read:e.createBuffer({size:16,usage:yA.MAP_READ|yA.COPY_DST}),frame:0,busy:!1,ms:0}:null,ye=[],be=0,xe=new ArrayBuffer(16),Se=new Uint32Array(xe),Ce=new Float32Array(xe);function we(n,r=null,i=!1,a){de=cA(t,n,r,i,a),le=t.count,pe+=1,fe=0,ge=0,_e=!1;let c=new Float32Array(le*8),l=new Float32Array(le*32),u=0;for(let e=0;e<le;e++){let n=t.kind[e],[r,i,a]=t.size.subarray(e*3,e*3+3),d;d=n===Q.box?Math.hypot(r,i,a):n===Q.sphere||n===Q.octahedron?r:n===Q.cylinder||n===Q.cone?Math.hypot(r,i):n===Q.capsule||n===Q.torus?r+i:n===Q.prism?Math.hypot(r,a):n===Q.hexprism?Math.hypot(r*1.1547,i):n===Q.suzanne?o*r:n===Q.dragon?s*r:1.0824*r,d+=.01,u=Math.max(u,d);let[f,p,m]=SA(n,r,i,a),h=8*f*p*m;c.set(t.center.subarray(e*3,e*3+3),e*8),c[e*8+3]=d,c.set(t.quat.subarray(e*4,e*4+4),e*8+4);let g=e*32;l.set([r,i,a,n],g+24),l.set([3/(h*(p*p+m*m)),3/(h*(f*f+m*m)),3/(h*(f*f+p*p)),1/h],g+28)}ue=2*u,e.queue.writeBuffer(h,0,c),e.queue.writeBuffer(g,0,l)}function Te(){if(be>=3)return;let n=le*32,r=ye.pop()??e.createBuffer({size:64e4,usage:yA.MAP_READ|yA.COPY_DST}),i=e.createCommandEncoder();i.copyBufferToBuffer(h,0,r,0,n),e.queue.submit([i.finish()]);let a=pe;be+=1,r.mapAsync(xA.READ,0,n).then(()=>{if(a===pe){let e=new Float32Array(r.getMappedRange(0,n)),i=n/32,a=0,o=0;for(let n=0;n<i;n++){let r=n*8,i=n*3,s=n*4,c=Math.abs(e[r]-t.center[i])+Math.abs(e[r+1]-t.center[i+1])+Math.abs(e[r+2]-t.center[i+2])+Math.abs(e[r+4]-t.quat[s])+Math.abs(e[r+5]-t.quat[s+1]);c>2e-4&&(a+=1),c>.001&&(o+=1),t.center[i]=e[r],t.center[i+1]=e[r+1],t.center[i+2]=e[r+2],t.quat[s]=e[r+4],t.quat[s+1]=e[r+5],t.quat[s+2]=e[r+6],t.quat[s+3]=e[r+7]}me+=a,he+=o}r.unmap(),ye.push(r)}).catch(()=>r.destroy()).finally(()=>--be)}function Ee(){if(!le||_e)return 0;let t=performance.now(),n=fe?Math.min(Math.max((t-fe)/1e3,1/240),1/30):1/60;fe=t,Se[0]=le;let r=_A||Math.min(Math.max(Math.round(n/hA),1),gA);Ce[1]=n/r,Ce[2]=ue,e.queue.writeBuffer(m,0,xe);let i=Math.ceil(le/vA),a=e.createCommandEncoder(),o=ve!==null&&!ve.busy&&++ve.frame%4==0,s=a.beginComputePass(o?{timestampWrites:{querySet:ve.queries,beginningOfPassWriteIndex:0,endOfPassWriteIndex:1}}:void 0);s.setBindGroup(0,T);for(let e=0;e<r;e++)s.setPipeline(te),s.dispatchWorkgroups(i),s.setPipeline(ne),s.dispatchWorkgroups(pA/vA),s.setPipeline(re),s.dispatchWorkgroups(i),s.setPipeline(ae),s.dispatchWorkgroups(i),s.setPipeline(oe),s.dispatchWorkgroups(i),s.setPipeline(se),s.dispatchWorkgroups(i),s.setPipeline(ce),s.setBindGroup(1,k),s.dispatchWorkgroups(1),s.setPipeline(ie),s.dispatchWorkgroupsIndirect(C,0);if(s.end(),o&&(a.resolveQuerySet(ve.queries,0,2,ve.resolved,0),a.copyBufferToBuffer(ve.resolved,0,ve.read,0,16)),e.queue.submit([a.finish()]),o){let e=ve;e.busy=!0,e.read.mapAsync(xA.READ).then(()=>{let[t,n]=new BigUint64Array(e.read.getMappedRange()),r=Number(n-t)/1e6;e.ms=e.ms?e.ms+(r-e.ms)*.5:r,e.read.unmap()}).catch(()=>{}).finally(()=>e.busy=!1)}Te();let c=me,l=he;return me=he=0,l>Math.max(2,le/400)?ge=0:ge?t-ge>1500&&(_e=!0):ge=t,c}function De(){pe+=1,le=0}return{reset:we,step:Ee,release:De,footprint:()=>de,label:()=>`GPU`,gpuMs:()=>ve&&!_e&&le?ve.ms:null}}var wA=[`suzanne_sdf_128.bin`,`dragon_sdf_128.bin`],TA=128,EA=`mesh_hulls.bin`,DA=matchMedia(`(pointer: coarse)`).matches?16e5:84e5,$={dark:!1,spotlight:!0,lamp:1,lampHeight:45,lampTurn:150,ground:!0,groundColor:{r:238/255,g:238/255,b:238/255},exposure:1,floorReflection:.4,shadowSoftness:.15,shadowDarkness:.85,objectShadows:!0,floorGrid:!0,fog:.15,realCaustics:!0,seeThrough:!1,causticSoftness:.3,causticStrength:.3,contactShadows:.7,depthOfField:.05,glow:.35,filmic:!0,physics:!0,solver:`Auto`,ior:1.45,dispersion:1,bevel:0,glassColor:{r:1,g:1,b:1},glassAlpha:1,colorize:!1,wireframe:!1,wireColor:{r:1,g:170/255,b:64/255},wireAlpha:1},OA=new URLSearchParams(location.search);OA.get(`physics`)===`gpu`&&($.solver=`GPU`),OA.get(`physics`)===`box3d`&&($.solver=`Box3D (CPU)`);var kA=structuredClone($),AA={"Mixed shapes":{kinds:null},Diamond:{kinds:[Q.diamond],ior:2.42,dispersion:.4,camera:[3,1.2,4.1,.35,.4,0]},Sphere:{kinds:[Q.sphere],look:{spotlight:!0,lamp:1.7,lampHeight:32,lampTurn:-93,fog:0,causticSoftness:.26,glow:.5,depthOfField:0},camera:[2.35,2.76,3.1,.35,.3,.04]},Cube:{kinds:[Q.box],cubic:!0},"CMY cube":{kinds:[Q.box],cubic:!0,cmy:!0},Box:{kinds:[Q.box]},Cylinder:{kinds:[Q.cylinder]},Capsule:{kinds:[Q.capsule]},Cone:{kinds:[Q.cone]},Torus:{kinds:[Q.torus]},Octahedron:{kinds:[Q.octahedron]},Prism:{kinds:[Q.prism]},"Hex prism":{kinds:[Q.hexprism]},Suzanne:{kinds:[Q.suzanne]},Dragon:{kinds:[Q.dragon]}},jA=15e3,MA=e=>e.toLowerCase().replace(/[^a-z0-9]+/g,``),NA=e=>{let t=MA(e);if(t)return Object.keys(AA).filter(e=>t.startsWith(MA(e))||MA(e).startsWith(t)).sort((e,t)=>t.length-e.length)[0]},PA=MA(OA.get(`demo`)??``),FA={shape:NA(OA.get(`shape`)??PA.replace(/^(single|pile)/,``))??`Diamond`,count:OA.has(`count`)?Number(OA.get(`count`)):PA.startsWith(`pile`)?2e3:1};FA.count=Math.min(Math.max(Math.round(FA.count)||1,1),jA);var IA=e=>e.toLowerCase().replace(/[^a-z0-9]+/g,`-`),LA=(()=>{let e=document.getElementById(`loading`),t=document.getElementById(`loading-fill`),n=document.getElementById(`loading-text`),r=new Map,i=[.1,.9],a=(e,r)=>{t.style.width=`${(Math.min(Math.max(e,0),1)*100).toFixed(1)}%`,n.textContent=r},o=()=>{let e=[...r.values()],t=e.reduce((e,t)=>e+t.loaded,0),n=e.every(e=>e.total!==null),o=e.reduce((e,t)=>e+(t.total??0),0),s=n&&o>0?t/o:e.filter(e=>e.done).length/Math.max(e.length,1),c=e=>(e/1048576).toFixed(1);a(i[0]+s*(i[1]-i[0]),n?`Downloading models… ${c(t)} / ${c(o)} MB`:`Downloading models… ${c(t)} MB`)};return{stage:(e,t)=>a(e,t),async fetch(e){let t=await fetch(e),n=t.headers.get(`content-length`),i={loaded:0,total:n&&!t.headers.get(`content-encoding`)?Number(n):null,done:!1};return r.set(e,i),Object.assign(t,{buffer:async()=>{if(!t.body)return t.arrayBuffer();let e=[],n=t.body.getReader();for(;;){let{done:t,value:r}=await n.read();if(t)break;e.push(r),i.loaded+=r.byteLength,o()}i.done=!0,o();let r=new Uint8Array(i.loaded),a=0;for(let t of e)r.set(t,a),a+=t.byteLength;return r.buffer}})},again(t){r.clear(),i=[0,1],e.classList.add(`over`),e.classList.remove(`done`),a(0,t)},done(){a(1,`Ready`),e.classList.add(`done`)}}})();function RA(e){document.getElementById(`loading`)?.remove();let t=document.getElementById(`error`);throw t.textContent=e,t.style.display=`flex`,Error(e)}var zA=e=>e<=.04045?e/12.92:((e+.055)/1.055)**2.4;function BA(){let e=TA,t=new bn(new Uint16Array(16384*e*wA.length),e,e,e*wA.length);return t.format=ee,t.type=y,t.minFilter=t.magFilter=l,t.wrapS=t.wrapT=t.wrapR=i,t.needsUpdate=!0,t}async function VA(e,t){let n=TA,r=wA[t],i=await LA.fetch(r);if(!i.ok)throw Error(`Could not load the mesh volume (${r}).`);e.image.data.set(new Uint16Array(await i.buffer()),t*n*n*n),e.needsUpdate=!0}async function HA(){let e=await fetch(EA);e.ok||RA(`Could not load the mesh hulls (${EA}).`);let t=await e.arrayBuffer(),[n,r]=new Uint32Array(t,0,2);return{suzanne:new Float32Array(t,8,n*3),dragon:new Float32Array(t,8+n*12,r*3)}}async function UA(e){let t=await LA.fetch(e);if(!t.ok)throw Error(`Could not load the mesh (${e}).`);let n=await t.buffer(),[r,i]=new Uint32Array(n,0,2),a=new Float32Array(n,12,r*3),o=new Float32Array(n,12+r*12,r*3),s=new Uint32Array(n,12+r*24,i),c=new ri;return c.setAttribute(`position`,new Vr(a,3)),c.setAttribute(`normal`,new Vr(o,3)),c.setIndex(new Vr(s,1)),c}async function WA(){let t=document.getElementById(`view`);self.crossOriginIsolated?e(()=>import(`./box3d.mt-yp6rVgHQ.js`),__vite__mapDeps([0,1,2])):e(()=>import(`./box3d-CoffnFtk.js`),__vite__mapDeps([3,1,2])),LA.stage(0,`Starting WebGPU…`);let n=new PO({canvas:t,antialias:!0,trackTimestamp:!0});await n.init(),n.backend.isWebGPUBackend||RA(`This demo needs WebGPU.
+Open it in a recent Chrome, Edge or another WebGPU-enabled browser.`),n.toneMapping=0,n.onDeviceLost=e=>{console.error(`WebGPU device lost`,e);let t=document.getElementById(`error`);document.getElementById(`loading`)?.remove(),t.textContent=`The GPU stopped (${e.message||e.reason||`device lost`}).\nThis device may not have enough GPU memory for the demo. Reload to try again.`,t.style.display=`flex`,n.setAnimationLoop(null)};let r=new ds(28.8,1,.1,500),i=new GO(r,t);i.enableDamping=!0,i.dampingFactor=.08,i.zoomToCursor=!0,i.maxPolarAngle=Math.PI/2-Xt.degToRad(8);let a=await HA(),o=BA(),s=new Yi(2,2,2);LA.stage(.05,`Setting up physics…`);let c=qk(),l=await dA(c,a),u=CA(n.backend.device,c,a),d={[Q.box]:{labels:[`Half width`,`Half height`,`Half depth`],measures:[.6,.6,.6],turn:-15},[Q.sphere]:{labels:[`Radius`],measures:[.6],turn:0},[Q.cylinder]:{labels:[`Radius`,`Half height`],measures:[.5,.6],turn:0},[Q.capsule]:{labels:[`Radius`,`Half length`],measures:[.4,.4],turn:0},[Q.cone]:{labels:[`Radius`,`Half height`],measures:[.55,.6],turn:0},[Q.torus]:{labels:[`Ring radius`,`Tube radius`],measures:[.62,.22],turn:0},[Q.octahedron]:{labels:[`Size`],measures:[.85],turn:20},[Q.prism]:{labels:[`Size`,`Half length`],measures:[.65,.6],turn:55},[Q.hexprism]:{labels:[`Radius`,`Half height`],measures:[.5,.5],turn:-15},[Q.suzanne]:{labels:[`Size`],measures:[.8],turn:-20},[Q.diamond]:{labels:[`Size`],measures:[.6],turn:240},[Q.dragon]:{labels:[`Size`],measures:[.9],turn:-30}},f={},p=e=>AA[e].kinds?.[0]??Q.box,m=e=>{let t=AA[e],n=d[p(e)];return f[e]??={measures:e===`Box`?[.75,.42,.55]:[...n.measures],turn:n.turn,ior:t.ior??1.45,dispersion:t.dispersion??1,bevel:t.cmy?.008:0,colour:rA,glassColor:{r:1,g:1,b:1},glassAlpha:1}},h=(e,t=!1)=>{let n=p(e),r=m(e),[i,a=i,o=i]=r.measures,s=[i,i,i],l=i,u=null;n===Q.box?(s=[i,a,o],l=a):n===Q.cylinder||n===Q.cone||n===Q.hexprism?(s=[i,a,i],l=a):n===Q.capsule?(s=[i,a,i],l=i+a):n===Q.torus?(s=[i,a,a],l=a):n===Q.octahedron?(l=i*.57735,u=new Zt().setFromUnitVectors(new P(-1,-1,-1).normalize(),new P(0,-1,0))):n===Q.prism?(s=[i,i,a],l=i/2):n===Q.suzanne?l=i*.72:n===Q.dragon?l=i*.7053:n===Q.diamond&&(l=Bk*i,u=new Zt().setFromAxisAngle(new P(0,0,1),-Vk));let d=new Zt().setFromAxisAngle(new P(0,1,0),Xt.degToRad(r.turn));if(u&&d.multiply(u),t){let e=Math.random()*Math.PI*2,t=new P(Math.cos(e),0,Math.sin(e));d.premultiply(new Zt().setFromAxisAngle(t,Xt.degToRad(20+Math.random()*30))),l+=1.6}c.count=1,c.kind[0]=n,c.size.set(s,0),c.center.set([0,l,0],0),c.quat.set([d.x,d.y,d.z,d.w],0),c.vary.set([0,1,0],0),c.tint.set([1,1,1],0)},g={reset:()=>{},step:()=>0,footprint:()=>1,label:()=>`still`},_=l,v=nA(n,r,c,{suzanne:s,dragon:s,dragonLod:s,volume:o}),y=new Map,b={[Q.suzanne]:async()=>{let[e]=await Promise.all([UA(`suzanne_mesh.bin`),VA(o,0)]);v.setMeshGeometry(Q.suzanne,e)},[Q.dragon]:async()=>{let[e,t]=await Promise.all([UA(`dragon_mesh.bin`),UA(`dragon_mesh_lod.bin`),VA(o,1)]);v.setMeshGeometry(Q.dragon,t,e)}},x=e=>Object.keys(b).map(Number).filter(t=>(!e||e.includes(t))&&!S.has(t)),S=new Set,C=e=>Promise.all(x(e).map(e=>{let t=y.get(e);return t||(t=b[e]().then(()=>void S.add(e),t=>{throw y.delete(e),t}),y.set(e,t)),t})).then(()=>{}),w=()=>AA[FA.shape],T=()=>FA.count===1&&w().kinds!==null,E=()=>T()?w().look??{}:{},D=0,O=()=>{let e=new nr;for(let t=0;t<c.count;t++){let n=e=>{let n=Math.sin((t+1)*e+D)*43758.5453;return n-Math.floor(n)};$.colorize&&c.vary[t*3+2]===0?e.setHSL(n(12.9898),.55+.4*n(78.233),.5+.2*n(37.719)):e.setRGB(1,1,1),c.tint.set([e.r,e.g,e.b],t*3)}v.markChanged()},k=()=>{let e=T()?m(FA.shape):$;return[zA(e.glassColor.r),zA(e.glassColor.g),zA(e.glassColor.b),e.glassAlpha]},ee=()=>T()?m(FA.shape).bevel:$.bevel,te=()=>w().cmy?T()?Math.max(m(FA.shape).colour,.001):rA:0,ne=e=>$.solver===`GPU`||$.solver===`Auto`&&e>5e3?u:l,re=(e=!1)=>{let t=w();if(u.release(),T()){let n=m(FA.shape);$.ior=n.ior,$.dispersion=n.dispersion,e?(_=ne(1),_.reset(1,t.kinds,!1,()=>{h(FA.shape,!0),O()})):(h(FA.shape),O(),_=g)}else $.ior=t.ior??1.45,$.dispersion=t.dispersion??1,_=ne(FA.count),_.reset(FA.count,t.kinds,t.cubic??!1),O();v.markChanged()},ie=0,ae=(e=!1)=>{let t=++ie,n=x(w().kinds);if(!n.length)return re(e);let r=n.map(e=>e===Q.dragon?`dragon`:`Suzanne`).join(` and `);LA.again(`Downloading ${r}…`),C(w().kinds).then(()=>{t===ie&&(LA.done(),re(e))},e=>{console.error(e),t===ie&&(LA.stage(0,`Could not download the ${r}. Pick the shape again to retry.`),setTimeout(()=>t===ie&&LA.done(),4e3))})};Object.assign($,E()),await C(w().kinds).catch(e=>RA(`Could not load the models.\n${e instanceof Error?e.message:String(e)}`)),re();let oe=()=>{let e=T()?w().camera:void 0;if(e)r.position.set(e[0],e[1],e[2]),i.target.set(e[3],e[4],e[5]);else if(T())r.position.set(3.017,1.9,4.119),i.target.set(.35,.22,0);else{let e=_.footprint();r.position.set(e*2.2+3,e*1.5+3,e*3.6+5),i.target.set(0,e*.2,0)}i.update()},se=1;function ce(){let e=window.innerWidth,t=window.innerHeight,i=window.devicePixelRatio,a=T()?Math.min(i*2,Math.max(i,4096/Math.max(e,t))):i,o=Math.min(a,Math.sqrt(DA/(e*t)))*Math.sqrt(se);n.setPixelRatio(o),n.setSize(e,t,!1),r.aspect=e/t,r.updateProjectionMatrix(),v.resize(Math.round(e*o),Math.round(t*o))}window.addEventListener(`resize`,ce);let le=new gk({title:`Settings`,width:300});le.close();let ue={fps:`0`,triangles:`0`,moving:`0`},de={stats:OA.get(`stats`)===`1`},fe=()=>{let e=new URL(location.href);e.searchParams.delete(`demo`),e.searchParams.set(`shape`,IA(FA.shape)),e.searchParams.set(`count`,String(FA.count)),history.replaceState(null,``,e)},pe=()=>{fe(),Object.assign($,structuredClone(kA),E()),delete f[FA.shape],ae(),oe(),Ce(),ce(),le.controllersRecursive().forEach(e=>e.updateDisplay())},me=T();le.add(FA,`shape`,Object.keys(AA)).name(`Shape`).onChange(()=>{fe(),ae(),Ce(),ce(),le.controllersRecursive().forEach(e=>e.updateDisplay()),me=T()}),le.add(FA,`count`,1,jA,1).name(`Count`).onFinishChange(()=>{FA.count=Math.min(Math.max(Math.round(FA.count)||1,1),jA),T()===me?(fe(),ae()):pe(),me=T()}),le.add({drop:()=>ae(!0)},`drop`).name(`Drop`),le.add(de,`stats`).name(`Show stats`).onChange(e=>{let t=document.getElementById(`stats`);t&&(t.style.display=e?`grid`:`none`)});let he=(e,t)=>e.add({reset:()=>ge(e,t)},`reset`).name(`Reset`),ge=(e,t)=>{let n=$.solver,r=$,i=kA;for(let t of e.controllers){if(t.object!==$||!(t.property in i))continue;let e=i[t.property];typeof e==`object`&&e?Object.assign(r[t.property],e):r[t.property]=e,t.updateDisplay()}$.solver!==n&&ae(),v.markChanged(),t?.()},_e=le.addFolder(`Scene`).close();_e.add($,`physics`).name(`Physics running`);let ve=[_e.add($,`solver`,[`Auto`,`Box3D (CPU)`,`GPU`]).name(`Physics solver`).onChange(()=>ae())];_e.add($,`floorReflection`,0,1,.01).name(`Floor reflection`),_e.add($,`shadowSoftness`,.01,.6,.01).name(`Shadow softness`),_e.add($,`shadowDarkness`,0,1,.01).name(`Shadow darkness`),_e.add($,`objectShadows`).name(`Object shadows`),_e.add($,`seeThrough`).name(`Glass through glass`),_e.add($,`realCaustics`).name(`Real caustics`),_e.add($,`causticSoftness`,.005,.3,.005).name(`Caustic softness`),_e.add($,`causticStrength`,0,3,.01).name(`Caustic strength`),_e.add($,`floorGrid`).name(`Floor grid`),_e.add($,`fog`,0,2,.01).name(`Fog`),he(_e);let ye=null,be=!1,xe=null;function Se(){ye&&(be=!ye._closed),ye?.destroy(),xe?.destroy(),xe=null;let e=FA.shape,t=AA[e],n=T()?m(e):null,r=()=>{u.release(),_=g,h(e),O()},i=le.addFolder(`Glass settings`);ye=i,be||i.close();let a=i.add($,`wireframe`).name(`Wireframe only`),o=[i.addColor($,`wireColor`).name(`Wire color`),i.add($,`wireAlpha`,0,1,.01).name(`Wire alpha`)],s=()=>o.forEach(e=>e.show($.wireframe));a.onChange(s),s();let c=n??$,l=t.cmy?[]:[i.addColor(c,`glassColor`).name(`Glass color`),i.add(c,`glassAlpha`,0,1,.01).name(`Color alpha`)],y=()=>l.forEach(e=>e.enable(!$.colorize));i.add($,`colorize`).name(`Random colors`).onChange(e=>{e&&(D=Math.random()*1e3),O(),y()}),y(),n?(i.add(n,`ior`,1,2.5,.01).name(`IOR`).onChange(e=>$.ior=e),i.add(n,`dispersion`,0,5,.05).name(`Dispersion`).onChange(e=>$.dispersion=e),i.add(n,`turn`,-180,180,1).name(`Turn`).onChange(r)):(i.add($,`ior`,1,2.5,.01).name(`IOR`).listen(),i.add($,`dispersion`,0,5,.05).name(`Dispersion`).listen()),i.add({reset:()=>{if(Object.assign($,{wireframe:kA.wireframe,wireAlpha:kA.wireAlpha,colorize:kA.colorize}),Object.assign($.wireColor,kA.wireColor),n){let{measures:t,bevel:r,colour:i}=n;delete f[e],Object.assign(m(e),{measures:t,bevel:r,colour:i}),ae()}else $.ior=t.ior??1.45,$.dispersion=t.dispersion??1,Object.assign($.glassColor,kA.glassColor),$.glassAlpha=kA.glassAlpha,O();v.markChanged(),Se()}},`reset`).name(`Reset`);let b=!t.kinds||t.kinds.includes(Q.box);if(!n&&!b)return;let x=le.addFolder(n?`${e} shape`:`${e} pile shape`);xe=x,n?(d[p(e)].labels.forEach((e,t)=>x.add(n.measures,String(t),.1,1.5,.01).name(e).onChange(r)),p(e)===Q.box&&x.add(n,`bevel`,0,.15,.001).name(`Bevel`),t.cmy&&x.add(n,`colour`,0,1,.01).name(`Colour strength`),x.add({reset:()=>{let{ior:t,dispersion:r,glassColor:i,glassAlpha:a,turn:o}=n;delete f[e],Object.assign(m(e),{ior:t,dispersion:r,glassColor:i,glassAlpha:a,turn:o}),ae(),Se()}},`reset`).name(`Reset`)):(x.add($,`bevel`,0,.05,.001).name(`Box bevel`),he(x))}function Ce(){let e=T();for(let t of ve)t.show(!e);Se()}let we=le.addFolder(`Lighting`);we.add($,`dark`).name(`Dark studio`).onChange(()=>v.markChanged()),we.add($,`spotlight`).name(`Spotlight (dark studio)`).onChange(()=>v.markChanged()),we.add($,`lamp`,0,3,.01).name(`Main lamp`),we.add($,`lampHeight`,10,85,1).name(`Lamp height (deg)`),we.add($,`lampTurn`,-180,180,1).name(`Lamp direction (deg)`),we.add($,`ground`).name(`Ground`),we.addColor($,`groundColor`).name(`Ground color`),we.add($,`exposure`,.1,4,.01).name(`Exposure`),he(we),we.close();let Te=le.addFolder(`Camera`);Te.add($,`contactShadows`,0,1,.01).name(`Contact shadows`),Te.add($,`depthOfField`,0,1,.01).name(`Depth of field`),Te.add($,`glow`,0,1,.01).name(`Glow`),Te.add($,`filmic`).name(`Film-like tones`),he(Te),Te.close(),ce(),oe(),Ce();let Ee=0,De=0,Oe=performance.now(),ke=e=>[e*$.lamp,e*$.lamp,e*$.lamp];{let e=document.createElement(`div`);e.id=`stats`,e.style.cssText=`position:fixed;left:12px;bottom:12px;display:grid;grid-template-columns:auto auto;column-gap:16px;padding:8px 10px;font:12px/1.5 ui-monospace,monospace;font-variant-numeric:tabular-nums;color:#eee;background:rgba(20,20,20,0.8);border-radius:6px;pointer-events:none;z-index:10`,e.style.display=de.stats?`grid`:`none`,document.body.append(e);let t=t=>{e.replaceChildren(...t.flatMap(e=>{let t=document.createElement(`span`);if(t.textContent=e[0],e.length===1)return t.style.cssText=`grid-column:1 / -1;margin-top:6px;color:#aaa`,[t];let n=document.createElement(`span`);return n.textContent=e[1],n.style.textAlign=`right`,[t,n]}))},n=new Map,r=[`Shadow map`,`Caustics`,`Reflection`,`Ground`,`Far glass`,`Near glass`,`Finishing`,`Other`],i=async()=>{let a=performance.now();for(let[e,t]of Object.entries(await v.passTimes()??{}))n.set(e,{ms:t,at:a});e.style.display=de.stats?`grid`:`none`;let o=r.filter(e=>n.has(e)&&a-n.get(e).at<2e3).map(e=>[e,n.get(e).ms]),s=o.reduce((e,[,t])=>e+t,0),c=_===u?u.gpuMs():null,l=_===g?`-`:c===null?_===u?`-`:`${De.toFixed(2)} ms`:`${c.toFixed(2)} ms`;t([[`FPS`,ue.fps],[`Triangles`,ue.triangles],[`GPU time per frame`],...o.map(([e,t])=>[e,`${t.toFixed(2)} ms`]),[`Drawing`,`${s.toFixed(2)} ms`],[`Physics`,l],[`Moving`,ue.moving]]),setTimeout(i,500)};i()}let Ae=performance.now()+3e3,je=0;function Me(e,t){performance.now()<Ae||t>1500||(e<24&&se>.2?(se=Math.max(se*.7,.2),je=0,ce()):e>50&&se<1?++je>=6&&(se=Math.min(se/.8,1),je=0,ce()):je=0)}LA.stage(.94,`Compiling shaders…`);let Ne=!0;n.setAnimationLoop(()=>{Ne&&(Ne=!1,requestAnimationFrame(()=>{n.backend.device.queue.onSubmittedWorkDone().then(()=>LA.done(),()=>LA.done())})),i.update(),document.body.classList.contains(`dark-studio`)!==$.dark&&document.body.classList.toggle(`dark-studio`,$.dark),Ee+=1;let e=performance.now();if(e-Oe>=500){let t=Ee*1e3/(e-Oe);ue.fps=t.toFixed(0),Me(t,e-Oe),Ee=0,Oe=e}let t=performance.now(),a=$.physics?_.step():0;De+=(performance.now()-t-De)*.1;let o=$.dark&&$.spotlight,s=Xt.degToRad($.lampHeight),c=Xt.degToRad($.lampTurn);v.render({ior:$.ior,dispersion:$.dispersion,cmy:te(),bevel:ee(),color:k(),wireframe:$.wireframe,wireColor:[zA($.wireColor.r),zA($.wireColor.g),zA($.wireColor.b),$.wireAlpha]},{ground:$.ground,dark:$.dark,seeThrough:$.seeThrough,realCaustics:$.realCaustics,causticSoftness:$.causticSoftness,causticStrength:$.causticStrength,contactShadows:$.contactShadows,contactRadius:T()?.45:.22,focus:r.position.distanceTo(i.target),depthOfField:$.depthOfField,glow:$.glow,filmic:$.filmic,spotRadius:o?T()?5.5:_.footprint()*1.5+2:0,floorReflection:$.floorReflection,shadowSoftness:$.shadowSoftness,shadowDarkness:$.shadowDarkness,objectShadows:$.objectShadows,floorGrid:$.floorGrid,fog:$.fog,groundColor:[$.groundColor.r,$.groundColor.g,$.groundColor.b].map(e=>zA(e)*($.dark?.2:1)),exposure:$.exposure,skyE:o?[.02,.02,.02]:$.dark?[.004,.004,.004]:[.26,.26,.26],sunE:ke(o?.3:$.dark?.022:.55),sunDir:[Math.cos(s)*Math.cos(c),Math.sin(s),Math.cos(s)*Math.sin(c)]},a>0),ue.triangles=v.triangles().toLocaleString(`en-US`),ue.moving=a.toLocaleString(`en-US`)})}WA().catch(e=>{console.error(e);let t=document.getElementById(`error`);t.style.display!==`flex`&&(t.textContent=`Failed to start: ${e instanceof Error?e.message:String(e)}`,t.style.display=`flex`)});
