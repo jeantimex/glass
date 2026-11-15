@@ -1,0 +1,29 @@
+# Dependencies and build output
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Editor and OS files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Old comparison renders, if any are still lying around locally.
+renders/
+
+# The original shader file is a third-party asset: keep it local.
+*.blend
+*.blend1
