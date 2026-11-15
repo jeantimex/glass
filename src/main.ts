@@ -144,7 +144,75 @@ view.count = Math.min(Math.max(Math.round(view.count) || 1, 1), MAX_COUNT);
 /** A shape's name as it is written in the address: "CMY cube" is cmy-cube. */
 const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
+/**
+ * The loading screen: a bar and a line of text over the canvas until the first
+ * frame is on screen. Downloads fill most of the bar; the rest is setting up the
+ * physics and compiling the shaders.
+ */
+const loading = (() => {
+  const root = document.getElementById('loading')!;
+  const fill = document.getElementById('loading-fill')!;
+  const text = document.getElementById('loading-text')!;
+  /** Per file: bytes so far and the size, when the server says (and isn't compressing). */
+  const files = new Map<string, { loaded: number; total: number | null; done: boolean }>();
+  const DOWNLOAD_SHARE = 0.85;
+  const set = (fraction: number, message: string) => {
+    fill.style.width = `${(Math.min(Math.max(fraction, 0), 1) * 100).toFixed(1)}%`;
+    text.textContent = message;
+  };
+  const showDownloads = () => {
+    const all = [...files.values()];
+    const loaded = all.reduce((s, f) => s + f.loaded, 0);
+    const known = all.every((f) => f.total !== null);
+    const total = all.reduce((s, f) => s + (f.total ?? 0), 0);
+    // With every size known, by bytes; otherwise by files finished.
+    const fraction = known && total > 0 ? loaded / total : all.filter((f) => f.done).length / Math.max(all.length, 1);
+    const mb = (n: number) => (n / 1048576).toFixed(1);
+    set(fraction * DOWNLOAD_SHARE, known ? `Downloading models… ${mb(loaded)} / ${mb(total)} MB` : `Downloading models… ${mb(loaded)} MB`);
+  };
+  return {
+    stage: (fraction: number, message: string) => set(fraction, message),
+    /** Fetch a file as bytes, counting its progress on the bar. */
+    async fetch(url: string): Promise<Response & { buffer: () => Promise<ArrayBuffer> }> {
+      const res = await fetch(url);
+      const length = res.headers.get('content-length');
+      // A compressed response's length is the compressed size, not what the stream yields.
+      const total = length && !res.headers.get('content-encoding') ? Number(length) : null;
+      const entry = { loaded: 0, total, done: false };
+      files.set(url, entry);
+      const buffer = async () => {
+        if (!res.body) return res.arrayBuffer();
+        const chunks: Uint8Array[] = [];
+        const reader = res.body.getReader();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          entry.loaded += value.byteLength;
+          showDownloads();
+        }
+        entry.done = true;
+        showDownloads();
+        const out = new Uint8Array(entry.loaded);
+        let at = 0;
+        for (const c of chunks) {
+          out.set(c, at);
+          at += c.byteLength;
+        }
+        return out.buffer;
+      };
+      return Object.assign(res, { buffer });
+    },
+    done() {
+      set(1, 'Ready');
+      root.classList.add('done');
+      setTimeout(() => root.remove(), 500);
+    },
+  };
+})();
+
 function fail(message: string): never {
+  document.getElementById('loading')?.remove();
   const el = document.getElementById('error')!;
   el.textContent = message;
   el.style.display = 'flex';
@@ -163,9 +231,9 @@ async function loadMeshVolumes(): Promise<THREE.Data3DTexture> {
   const all = new Uint16Array(n * n * n * MESH_SDF_URLS.length);
   await Promise.all(
     MESH_SDF_URLS.map(async (url, k) => {
-      const res = await fetch(url);
+      const res = await loading.fetch(url);
       if (!res.ok) fail(`Could not load the mesh volume (${url}).`);
-      all.set(new Uint16Array(await res.arrayBuffer()), k * n * n * n);
+      all.set(new Uint16Array(await res.buffer()), k * n * n * n);
     }),
   );
   const tex = new THREE.Data3DTexture(all, n, n, n * MESH_SDF_URLS.length);
@@ -184,9 +252,9 @@ async function loadMeshVolumes(): Promise<THREE.Data3DTexture> {
  * normals (float32 x 3 each), indices (uint32) and hull points (float32 x 3).
  */
 async function loadMesh(url: string): Promise<{ geometry: THREE.BufferGeometry; hull: Float32Array }> {
-  const res = await fetch(url);
+  const res = await loading.fetch(url);
   if (!res.ok) fail(`Could not load the mesh (${url}).`);
-  const buffer = await res.arrayBuffer();
+  const buffer = await res.buffer();
   const [vertices, indices, hullPoints] = new Uint32Array(buffer, 0, 3);
   let offset = 12;
   const take = <T>(make: (start: number, length: number) => T, length: number): T => {
@@ -211,6 +279,10 @@ async function main() {
   // Anti-aliased (4x multisampling): it smooths the edges of the glass.
   // GPU timestamps: the time each part of the frame takes, for the stats panel.
   // (They can only be turned on here, before the renderer starts; they cost little.)
+  // Start fetching the physics engine (about 1 MB) now, alongside everything else,
+  // rather than after the models; createPile's own import then finds it ready.
+  void (self.crossOriginIsolated ? import('box3d.js/mt-inline') : import('box3d.js/inline'));
+  loading.stage(0, 'Starting WebGPU…');
   const renderer = new THREE.WebGPURenderer({ canvas, antialias: true, trackTimestamp: true });
   await renderer.init();
   if (!(renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend) {
@@ -244,6 +316,7 @@ async function main() {
 
   // ------------------------------------------------------------- scene ---
   // Thousands of random objects, dropped into a pile.
+  loading.stage(0.88, 'Setting up physics…');
   const glassObjects = createGlassObjects();
   const boxPile = await createPile(glassObjects, hulls);
   const gpuPile = createGpuPile((renderer.backend as unknown as { device: GPUDevice }).device, glassObjects, hulls);
@@ -760,7 +833,17 @@ async function main() {
     show();
   }
 
+  // The first frame compiles the shaders, which can take a moment: keep the loading
+  // screen up until the GPU has finished that frame.
+  loading.stage(0.94, 'Compiling shaders…');
+  let firstFrame = true;
   renderer.setAnimationLoop(() => {
+    if (firstFrame) {
+      firstFrame = false;
+      requestAnimationFrame(() => {
+        (renderer.backend as unknown as { device: GPUDevice }).device.queue.onSubmittedWorkDone().then(() => loading.done(), () => loading.done());
+      });
+    }
     orbit.update();
     // The page knows which studio is on, so what is drawn over it (the link in the
     // corner) can be dark on the white one and light on the dark one.
