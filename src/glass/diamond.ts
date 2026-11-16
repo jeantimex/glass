@@ -76,12 +76,6 @@ for (const c of CORNERS) {
   }
 }
 
-/** The facet planes as WGSL constants, for the shaders. */
-export function diamondWgsl(prefix: string): string {
-  const rows = Array.from({ length: DIAMOND_PLANE_COUNT }, (_, p) => `vec4f(${DIAMOND_PLANES.slice(p * 4, p * 4 + 4).map((x) => x.toFixed(7)).join(', ')})`);
-  return `const ${prefix}_N = ${DIAMOND_PLANE_COUNT};\nconst ${prefix} = array<vec4f, ${DIAMOND_PLANE_COUNT}>(\n  ${rows.join(',\n  ')});`;
-}
-
 /**
  * A coarser convex shape for collisions (x, y, z, ...): the table's corners, every
  * other girdle corner top and bottom, and the point.

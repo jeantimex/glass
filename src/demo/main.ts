@@ -282,12 +282,20 @@ async function main() {
   // Start fetching the physics engine (about 1 MB) now, alongside everything else,
   // rather than after the models; createPile's own import then finds it ready.
   void (self.crossOriginIsolated ? import('box3d.js/mt-inline') : import('box3d.js/inline'));
-  loading.stage(0, 'Starting WebGPU…');
-  const renderer = new THREE.WebGPURenderer({ canvas, antialias: true, trackTimestamp: true });
-  await renderer.init();
-  if (!(renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend) {
-    fail('This demo needs WebGPU.\nOpen it in a recent Chrome, Edge or another WebGPU-enabled browser.');
+  // WebGPU where the browser has it, otherwise WebGL 2 (the shaders are TSL, which
+  // three.js compiles for either). ?renderer=webgl uses WebGL 2 even so, to try it.
+  loading.stage(0, 'Starting the renderer…');
+  const forceWebGL = query.get('renderer') === 'webgl';
+  const renderer = new THREE.WebGPURenderer({ canvas, antialias: true, trackTimestamp: true, forceWebGL });
+  try {
+    await renderer.init();
+  } catch {
+    fail('This demo needs WebGPU or WebGL 2.\nOpen it in a recent Chrome, Edge, Safari or Firefox.');
   }
+  /** The GPU device, with WebGPU (the GPU physics solver needs it); null on WebGL. */
+  const device = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend
+    ? (renderer.backend as unknown as { device: GPUDevice }).device
+    : null;
   renderer.toneMapping = THREE.NoToneMapping;
 
   // ------------------------------------------------------------ camera ---
@@ -319,7 +327,8 @@ async function main() {
   loading.stage(0.88, 'Setting up physics…');
   const glassObjects = createGlassObjects();
   const boxPile = await createPile(glassObjects, hulls);
-  const gpuPile = createGpuPile((renderer.backend as unknown as { device: GPUDevice }).device, glassObjects, hulls);
+  // (The GPU solver is WebGPU compute: on WebGL every pile falls with Box3D.)
+  const gpuPile = device ? createGpuPile(device, glassObjects, hulls) : null;
   /** Above this many objects Box3D can no longer keep up, and the GPU solver takes over. */
   const GPU_PHYSICS_FROM = 5000;
   /**
@@ -469,7 +478,7 @@ async function main() {
   };
   /** The solver for this many objects. */
   const solverFor = (count: number): Pile =>
-    settings.solver === 'GPU' || (settings.solver === 'Auto' && count > GPU_PHYSICS_FROM) ? gpuPile : boxPile;
+    gpuPile && (settings.solver === 'GPU' || (settings.solver === 'Auto' && count > GPU_PHYSICS_FROM)) ? gpuPile : boxPile;
   /**
    * Set the scene up: a shape on its own resting in place, or a fresh pile dropped.
    * @param fall drop the shape on its own too, from high up, instead of placing it
@@ -477,7 +486,7 @@ async function main() {
   const dropObjects = (fall = false) => {
     const shape = current();
     // Whatever the GPU solver still has on its way back belongs to the old scene.
-    gpuPile.release();
+    gpuPile?.release();
     if (isSingle()) {
       const single = singleFor(view.shape);
       settings.ior = single.ior;
@@ -626,6 +635,8 @@ async function main() {
   const pileControls: { show(show?: boolean): unknown }[] = [
     scene.add(settings, 'solver', ['Auto', 'Box3D (CPU)', 'GPU']).name('Physics solver').onChange(() => dropObjects()),
   ];
+  // (Without WebGPU there is only Box3D to choose.)
+  if (!gpuPile) pileControls.pop()?.show(false);
   scene.add(settings, 'floorReflection', 0, 1, 0.01).name('Floor reflection');
   scene.add(settings, 'shadowSoftness', 0.01, 0.6, 0.01).name('Shadow softness');
   scene.add(settings, 'shadowDarkness', 0, 1, 0.01).name('Shadow darkness');
@@ -659,7 +670,7 @@ async function main() {
     const single = isSingle() ? singleFor(name) : null;
     const place = () => {
       // Back to resting in place (it may have been dropped).
-      gpuPile.release();
+      gpuPile?.release();
       pile = stillPile;
       placeShowcase(name);
       colourObjects();
@@ -820,7 +831,7 @@ async function main() {
       const recent = order.filter((name) => seen.has(name) && now - seen.get(name)!.at < 2000).map((name) => [name, seen.get(name)!.ms] as const);
       const total = recent.reduce((a, [, ms]) => a + ms, 0);
       // The physics: GPU time on the GPU solver, the time it takes on Box3D (none when still).
-      const gpuPhysicsMs = pile === gpuPile ? gpuPile.gpuMs() : null;
+      const gpuPhysicsMs = gpuPile && pile === gpuPile ? gpuPile.gpuMs() : null;
       const physics = pile === stillPile ? '-' : gpuPhysicsMs !== null ? `${gpuPhysicsMs.toFixed(2)} ms` : pile === gpuPile ? '-' : `${physicsMs.toFixed(2)} ms`;
       fill([
         ['FPS', status.fps],
@@ -844,7 +855,9 @@ async function main() {
     if (firstFrame) {
       firstFrame = false;
       requestAnimationFrame(() => {
-        (renderer.backend as unknown as { device: GPUDevice }).device.queue.onSubmittedWorkDone().then(() => loading.done(), () => loading.done());
+        // (WebGL cannot say when the GPU is done: by the next frame is close enough.)
+        if (device) device.queue.onSubmittedWorkDone().then(() => loading.done(), () => loading.done());
+        else requestAnimationFrame(() => loading.done());
       });
     }
     orbit.update();
@@ -896,7 +909,7 @@ async function main() {
         groundColor: [settings.groundColor.r, settings.groundColor.g, settings.groundColor.b].map((c) => srgbToLinear(c) * (settings.dark ? 0.2 : 1)) as [number, number, number],
         exposure: settings.exposure,
         // The studio lights the ground white: mostly soft light from all round, the
-        // rest from the main lamp, which is up and to the left (as in instanced.wgsl).
+        // rest from the main lamp, which is up and to the left (as in tsl/scene.ts).
         // In the dark studio the floor gets next to nothing but a pool from that lamp.
         // (One strong lamp and little fill: shadows are dark, and what the glass
         // gathers stands out in them.)

@@ -4,11 +4,11 @@
 
 export const MAX_OBJECTS = 20000;
 
-/** Shape ids, shared with instanced.wgsl. */
+/** Shape ids, shared with the shaders (tsl/glass.ts). */
 export const KIND = { box: 0, sphere: 1, cylinder: 2, capsule: 3, cone: 4, torus: 5, octahedron: 6, prism: 7, hexprism: 8, suzanne: 9, diamond: 10, dragon: 11 } as const;
 
 /**
- * The objects to draw. `size` is per shape (see the table in instanced.wgsl):
+ * The objects to draw. `size` is per shape (see the table in tsl/glass.ts):
  * box half-extents; sphere radius; cylinder, capsule, cone and hex prism radius
  * in x and half-height in y; torus ring and tube radius; octahedron size;
  * triangular prism size in x and half-length in z; Suzanne and dragon half-width;

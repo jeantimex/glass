@@ -17,7 +17,7 @@
 // Two bodies touch where a sample point of one (its corners and edge middles, or
 // the centres of the balls it is made of) is inside the other's exact shape.
 //
-// Shape ids and `size` are those of instanced.wgsl.
+// Shape ids and `size` are those of the glass shaders (src/glass/tsl/glass.ts).
 
 struct Params {
   count: u32,

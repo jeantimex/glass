@@ -1,4 +1,5 @@
-// Real-time renderer for thousands of glass objects (see instanced.wgsl).
+// Real-time renderer for thousands of glass objects. The shaders are in tsl/, in
+// TSL: three.js compiles them to WGSL for WebGPU or GLSL for WebGL 2.
 //
 // Per frame:
 //   1. caustic map   every object drawn from the main lamp's direction, multiplying
@@ -12,10 +13,12 @@
 // The layers carry each pixel's distance from the camera in their alpha, which is
 // what the finishing passes work from.
 import * as THREE from 'three/webgpu';
-import { diamondGeometry, diamondWgsl } from './diamond';
-import { attribute, cross, normalLocal, positionGeometry, positionWorld, sampler, screenCoordinate, texture, texture3D, uniform, vec2, vec3, wgslFn, float, uv, vec4, varying, instanceIndex } from 'three/tsl';
-import source from './instanced.wgsl?raw';
+import { diamondGeometry } from './diamond';
+import { attribute, cross, normalLocal, positionGeometry, positionWorld, screenCoordinate, texture, texture3D, uniform, vec2, vec3, float, uv, vec4, varying, instanceIndex } from 'three/tsl';
 import { KIND, MAX_OBJECTS, type GlassObjects } from './objects';
+import { blurNode, contactShadeNode, lensNode } from './tsl/finish';
+import { groundNode } from './tsl/ground';
+import { causticNode, glassNode, photonNode as photonRayNode } from './tsl/glass';
 
 const KIND_COUNT = 12;
 
@@ -48,7 +51,7 @@ export interface InstancedLighting {
   /** Studio shadows: how far their edges are blurred (m), and how dark they are (0 to 1). */
   shadowSoftness: number;
   shadowDarkness: number;
-  /** Objects cast the lamp's shadow on each other (see icLampVisible). */
+  /** Objects cast the lamp's shadow on each other (see lampVisible in tsl/glass.ts). */
   objectShadows: boolean;
   /** A grid of lines drawn on the floor, and how thick the fog over it is (0: none). */
   floorGrid: boolean;
@@ -72,21 +75,6 @@ const PHOTON_MAP_SIZE = 1024;
 const FINE_UP_TO = 64;
 /** Above this many objects, the less visible passes are drawn more cheaply. */
 const MANY_OBJECTS = 3000;
-
-type Pass = 'CAUSTIC' | 'GROUND' | 'GLASS' | 'BLUR' | 'SHADE' | 'LENS' | 'PHOTON';
-function programFor(pass: Pass): string {
-  const kept: string[] = [];
-  let keep = true;
-  // (Either line ending: with Windows ones, the \r left on each `//#if` line kept it
-  // from being seen, and every pass got every section.)
-  for (const line of source.split(/\r?\n/)) {
-    const open = line.match(/^\s*\/\/#if (.+)$/);
-    if (open) keep = open[1].trim().split(/\s+/).includes(pass);
-    else if (/^\s*\/\/#endif/.test(line)) keep = true;
-    else if (keep) kept.push(line);
-  }
-  return kept.join('\n');
-}
 
 /** One batch of instances of one shape: per-instance centre, rotation and size. */
 class Batch {
@@ -182,7 +170,7 @@ export function createInstancedGlass(
   });
   // How far toward the lamp the nearest object reaches, seen from the lamp (red, plus
   // 100 so that 0, as cleared, means nothing there): the shadows objects cast on
-  // each other (see icLampVisible).
+  // each other (see lampVisible in tsl/glass.ts).
   const lampDepth = new THREE.RenderTarget(LAMP_DEPTH_SIZE, LAMP_DEPTH_SIZE, {
     type: THREE.HalfFloatType,
     format: THREE.RGBAFormat,
@@ -248,7 +236,7 @@ export function createInstancedGlass(
 
   // ----------------------------------------------------------- uniforms ---
   const uRes = uniform(new THREE.Vector2(4, 4));
-  // 1 when few enough objects are on show for light to enter a baked mesh through its volume (see icEntry).
+  // 1 when few enough objects are on show for light to enter a baked mesh through its volume (see entry in tsl/glass.ts).
   const uMeshEntry = uniform(0);
   const uCamPos = uniform(new THREE.Vector3());
   const uCamRight = uniform(new THREE.Vector4());
@@ -277,15 +265,14 @@ export function createInstancedGlass(
   const uBlurDir = uniform(new THREE.Vector2());
   const uMirrorCam = uniform(new THREE.Vector3()); // the camera, mirrored in the floor
 
-  // Named so the shader's helper functions can read them as globals.
-  const lightNode = texture(causticMap.texture).setName('icLightTex');
-  const behindNode = texture(background.texture).setName('icBehindTex');
-  const lampDepthNode = texture(lampDepth.texture).setName('icLampDepthTex');
+  const lightNode = texture(causticMap.texture);
+  const behindNode = texture(background.texture);
+  const lampDepthNode = texture(lampDepth.texture);
   const mirrorNode = texture(mirrorLayer.texture);
-  const shadeNode = texture(shadeNear.texture).setName('icShadeTex');
-  const shadeFarNode = texture(shadeFar.texture).setName('icShadeFarTex');
+  const shadeNode = texture(shadeNear.texture);
+  const shadeFarNode = texture(shadeFar.texture);
   const blurSource = texture(causticMap.texture);
-  const volumeNode = texture3D(meshes.volume).setName('icSdfTex');
+  const volumeNode = texture3D(meshes.volume);
 
   // ------------------------------------------------- per-instance nodes ---
   const instCenter = attribute('instCenter', 'vec3');
@@ -293,6 +280,20 @@ export function createInstancedGlass(
   const instSize = attribute('instSize', 'vec3');
   const instVary = attribute('instVary', 'vec3');
   const instTint = attribute('instTint', 'vec3');
+  /** What every glass pass reads of the object being drawn, and of the glass settings. */
+  const glassInputs = {
+    center: instCenter,
+    quat: instQuat,
+    size: instSize,
+    vary: instVary,
+    tintOwn: instTint,
+    tintAll: uTint,
+    cmyAll: uCmy,
+    bevel: uBevel,
+    meshEntry: uMeshEntry,
+    glassP: uGlass,
+    sdfTex: volumeNode,
+  };
   // v rotated by the instance quaternion: v + 2 q.xyz x (q.xyz x v + q.w v)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TSL node types are too loose to spell out here
   const rotate = (v: any) => v.add(cross(instQuat.xyz, cross(instQuat.xyz, v).add(v.mul(instQuat.w))).mul(2));
@@ -319,7 +320,6 @@ export function createInstancedGlass(
   const scaledNormal = rotate(normalLocal.div(instSize).normalize());
 
   // ---------------------------------------------------------- materials ---
-  const causticProgram = wgslFn(programFor('CAUSTIC'));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const makeLampDepthMaterial = (position: any) => {
     const material = new THREE.NodeMaterial();
@@ -332,16 +332,7 @@ export function createInstancedGlass(
   const makeCausticMaterial = (position: any, normal: any) => {
     const material = new THREE.NodeMaterial();
     material.positionNode = position;
-    material.fragmentNode = causticProgram({
-      normalW: normal,
-      worldPos: positionWorld,
-      size: instSize,
-      quat: instQuat,
-      cmyAll: uCmy,
-      vary: instVary,
-      tintAll: uTint,
-      tintOwn: instTint,
-    });
+    material.fragmentNode = causticNode(normal, positionWorld, glassInputs);
     material.side = THREE.DoubleSide;
     material.depthTest = false;
     material.depthWrite = false;
@@ -354,13 +345,7 @@ export function createInstancedGlass(
   };
 
   const groundMaterial = new THREE.NodeMaterial();
-  groundMaterial.fragmentNode = wgslFn(programFor('GROUND'))({
-    fragCoord: screenCoordinate,
-    res: uRes,
-    camPos: uCamPos,
-    camRight: uCamRight,
-    camUp: uCamUp,
-    camFwd: uCamFwd,
+  const sceneInputs = {
     room: uRoom,
     skyE: uSkyE,
     sunE: uSunE,
@@ -369,16 +354,14 @@ export function createInstancedGlass(
     lightR: uLightR,
     lightU: uLightU,
     floorP: uFloor,
-    spot: uSpot, lamp: uSunDir,
+    spot: uSpot,
+    lamp: uSunDir,
     lightTex: lightNode,
-    lightSamp: sampler(lightNode),
-    mirrorTex: mirrorNode,
-    mirrorSamp: sampler(mirrorNode),
-    shadeTex: shadeNode,
-    shadeSamp: sampler(shadeNode),
-    shadeFarTex: shadeFarNode,
-    shadeFarSamp: sampler(shadeFarNode),
-  });
+    lightTexSize: CAUSTIC_MAP_SIZE,
+  };
+  /** The camera as the passes over the whole picture see it. */
+  const screenCamera = { fragCoord: screenCoordinate, res: uRes, camPos: uCamPos, camRight: uCamRight, camUp: uCamUp, camFwd: uCamFwd };
+  groundMaterial.fragmentNode = groundNode(screenCamera, { ...sceneInputs, shadeTex: shadeNode, shadeFarTex: shadeFarNode }, mirrorNode);
   // (Its alpha is the distance of each pixel, so it is written as it is.)
   groundMaterial.transparent = true;
   groundMaterial.blending = THREE.NoBlending;
@@ -387,7 +370,7 @@ export function createInstancedGlass(
   const groundQuad = new THREE.QuadMesh(groundMaterial);
 
   const blurMaterial = new THREE.NodeMaterial();
-  blurMaterial.fragmentNode = wgslFn(programFor('BLUR'))({ uv: uv(), dir: uBlurDir, cut: uBlurCut, reach: uBlurReach, src: blurSource, srcSamp: sampler(blurSource) });
+  blurMaterial.fragmentNode = blurNode(uv(), uBlurDir, uBlurCut, uBlurReach, blurSource);
   blurMaterial.depthTest = blurMaterial.depthWrite = false;
   const blurQuad = new THREE.QuadMesh(blurMaterial);
   /**
@@ -416,8 +399,6 @@ export function createInstancedGlass(
     }
   };
 
-  const glassSource = programFor('GLASS').replace('/*DIAMOND*/', diamondWgsl('IC_DIAMOND'));
-  const photonSource = programFor('PHOTON').replace('/*DIAMOND*/', diamondWgsl('IC_DIAMOND'));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const makePhotonMaterial = (kind: number, position: any, normal: any) => {
     // Its output is data (which way each ray is thrown, negative as often as not, and
@@ -427,26 +408,7 @@ export function createInstancedGlass(
     material.transparent = true;
     material.blending = THREE.NoBlending;
     material.positionNode = position;
-    const program = wgslFn(photonSource.replace('const IC_SHAPE = 0;', `const IC_SHAPE = ${kind};`));
-    material.fragmentNode = program({
-      worldPos: positionWorld,
-      nrmW: normal,
-      center: instCenter,
-      quat: instQuat,
-      size: instSize,
-      vary: instVary,
-      tintAll: uTint,
-      tintOwn: instTint,
-      sunDir: uSunDir,
-      lightR: uLightR,
-      lightU: uLightU,
-      glassP: uGlass,
-      cmyAll: uCmy,
-      bevel: uBevel,
-      raysAcross: float(PHOTON_MAP_SIZE),
-      meshEntry: uMeshEntry,
-      sdfTex: volumeNode,
-    });
+    material.fragmentNode = photonRayNode(kind, positionWorld, normal, glassInputs, uSunDir, uLightR, uLightU, PHOTON_MAP_SIZE);
     return material;
   };
 
@@ -458,7 +420,7 @@ export function createInstancedGlass(
   openMaterial.depthTest = openMaterial.depthWrite = false;
   const openQuad = new THREE.QuadMesh(openMaterial);
   // ... then every ray that went through glass, as a square one texel wide (wider
-  // if the glass fanned it out: see icPhoton), moved to where it landed and added on.
+  // if the glass fanned it out: see photonNode in tsl/glass.ts), moved to where it landed and added on.
   const rayIndex = float(instanceIndex);
   const rayRow = rayIndex.div(PHOTON_MAP_SIZE).floor();
   const rayAt = vec2(rayIndex.sub(rayRow.mul(PHOTON_MAP_SIZE)), rayRow).add(0.5).div(PHOTON_MAP_SIZE);
@@ -499,39 +461,14 @@ export function createInstancedGlass(
       material.side = THREE.BackSide; // mirroring turns the triangles inside out
     }
     // One program per shape, so each only contains (and compiles) its own formulas.
-    const program = wgslFn(glassSource.replace('const IC_SHAPE = 0;', `const IC_SHAPE = ${kind};`));
-    // The WGSL function returns a vec4; the typings cannot see that.
-    material.colorNode = program({
-      worldPos: mirrored ? positionWorld.mul(upsideDown) : positionWorld,
-      nrmW: normal,
-      center: instCenter,
-      quat: instQuat,
-      size: instSize,
-      vary: instVary,
-      tintAll: uTint,
-      tintOwn: instTint,
+    const worldPos = mirrored ? positionWorld.mul(upsideDown) : positionWorld;
+    material.colorNode = glassNode(kind, mirrored, worldPos, normal, glassInputs, sceneInputs, {
       camPos: mirrored ? uMirrorCam : uCamPos,
-      glassP: uGlass,
       viewProj: uViewProj,
-      room: uRoom,
-      skyE: uSkyE,
-      sunE: uSunE,
-      albedo: uAlbedo,
-      lightC: uLightC,
-      lightR: uLightR,
-      lightU: uLightU,
-      cmyAll: uCmy,
-      mirror: float(mirrored ? 1 : 0),
-      bevel: uBevel,
-      spot: uSpot, lamp: uSunDir,
-      lightTex: lightNode,
-      lightSamp: sampler(lightNode),
       behindTex: behindNode,
-      behindSamp: sampler(behindNode),
       lampDepthTex: lampDepthNode,
-      meshEntry: uMeshEntry,
-      sdfTex: volumeNode,
-    }) as unknown as THREE.MeshBasicNodeMaterial['colorNode'];
+      lampDepthSize: LAMP_DEPTH_SIZE,
+    });
     return material;
   };
 
@@ -578,17 +515,7 @@ export function createInstancedGlass(
   // The finishing passes.
   const shadeSource = texture(nearLayer.texture);
   const shadeMaterial = new THREE.NodeMaterial();
-  shadeMaterial.fragmentNode = wgslFn(programFor('SHADE'))({
-    fragCoord: screenCoordinate,
-    res: uRes,
-    camPos: uCamPos,
-    camRight: uCamRight,
-    camUp: uCamUp,
-    camFwd: uCamFwd,
-    p: uShade,
-    src: shadeSource,
-    srcSamp: sampler(shadeSource),
-  });
+  shadeMaterial.fragmentNode = contactShadeNode(screenCamera, uShade, shadeSource);
   shadeMaterial.transparent = true;
   shadeMaterial.blending = THREE.NoBlending;
   shadeMaterial.depthTest = shadeMaterial.depthWrite = false;
@@ -597,17 +524,7 @@ export function createInstancedGlass(
   const glowNode = texture(glowLayer.texture);
   // (A basic material, so that three.js converts its colour for the screen.)
   const lensMaterial = new THREE.MeshBasicNodeMaterial();
-  lensMaterial.colorNode = (
-    wgslFn(programFor('LENS'))({
-      fragCoord: screenCoordinate,
-      res: uRes,
-      p: uLens,
-      src: lensSource,
-      srcSamp: sampler(lensSource),
-      glowTex: glowNode,
-      glowSamp: sampler(glowNode),
-    }) as unknown as { rgb: THREE.MeshBasicNodeMaterial['colorNode'] }
-  ).rgb;
+  lensMaterial.colorNode = (lensNode(screenCoordinate, uRes, uLens, lensSource, glowNode) as { rgb: THREE.MeshBasicNodeMaterial['colorNode'] }).rgb;
   lensMaterial.depthTest = lensMaterial.depthWrite = false;
   const lensQuad = new THREE.QuadMesh(lensMaterial);
 
@@ -654,10 +571,20 @@ export function createInstancedGlass(
   const far: Batch[] = [];
   const near: Batch[] = [];
   // The same objects drawn as glass, mirrored in the floor, or as wireframe.
-  const glassMeshes: THREE.Mesh[] = [];
-  const mirrorMeshes: THREE.Mesh[] = [];
-  const wireMeshes: THREE.Mesh[] = [];
+  /**
+   * Every mesh, with its batch and what it draws. A mesh is only visible while its
+   * batch holds objects: three.js compiles a program for whatever is visible, and
+   * with every shape's programs compiled up front the first frame took seconds on
+   * WebGPU and over a minute on WebGL. A shape is compiled when it first appears.
+   */
+  const drawn: { mesh: THREE.Mesh; batch: Batch; role: 'glass' | 'wire' | 'other' }[] = [];
   let wireOn = false;
+  const updateVisibility = () => {
+    for (const { mesh, batch, role } of drawn) {
+      // Wireframe only: the edges in place of the glass, and nothing mirrored in the floor.
+      mesh.visible = batch.count > 0 && (role === 'other' || (role === 'wire') === wireOn);
+    }
+  };
   const fineFar: Batch[] = [];
   const fineNear: Batch[] = [];
   for (let kind = 0; kind < KIND_COUNT; kind++) {
@@ -675,13 +602,9 @@ export function createInstancedGlass(
       for (const [material, target] of [[glass, scene], [caustic, lightScene], [lampDepthMaterial, lampDepthScene], [mirrored, mirrorScene], [photon, photonScene], [wire, scene]] as const) {
         const m = new THREE.Mesh(batch.geometry, material);
         m.frustumCulled = false;
+        m.visible = false;
         target.add(m);
-        if (material === glass) glassMeshes.push(m);
-        if (material === mirrored) mirrorMeshes.push(m);
-        if (material === wire) {
-          m.visible = false;
-          wireMeshes.push(m);
-        }
+        drawn.push({ mesh: m, batch, role: material === glass || material === mirrored ? 'glass' : material === wire ? 'wire' : 'other' });
       }
     }
   }
@@ -752,6 +675,7 @@ export function createInstancedGlass(
       (depth[i] >= split ? farSet : nearSet)[objects.kind[i]].push(objects, i);
     }
     for (const b of all) b.commit();
+    updateVisibility();
   }
 
   /** Half-width of the square of ground the objects (and their shadows) cover. */
@@ -786,9 +710,7 @@ export function createInstancedGlass(
     const wantWire = glass.wireframe ?? false;
     if (wantWire !== wireOn) {
       wireOn = wantWire;
-      for (const m of glassMeshes) m.visible = !wireOn;
-      for (const m of mirrorMeshes) m.visible = !wireOn;
-      for (const m of wireMeshes) m.visible = wireOn;
+      updateVisibility();
     }
     // The colour of the lines (linear rgb) and how opaque they are.
     const [wr, wg, wb, wa] = glass.wireColor ?? [0.01, 0.01, 0.01, 1];
@@ -869,7 +791,7 @@ export function createInstancedGlass(
       blur(causticMap.texture, shadeNear, light.shadowSoftness * perMetre);
       blur(shadeNear.texture, shadeFar, Math.max(light.shadowSoftness * 3, 0.25) * perMetre);
       // Real caustics take the place of the near map: every ray of the lamp's light
-      // followed to where it lands (see icPhoton), then added up there.
+      // followed to where it lands (see photonNode in tsl/glass.ts), then added up there.
       if (light.realCaustics) {
         uGlass.value.set(glass.ior, glass.dispersion, 6, 0);
         mark('Caustics');
@@ -943,7 +865,7 @@ export function createInstancedGlass(
     renderer.autoClear = false;
     // With glass showing through glass, the near half sees the far half: it is given
     // the picture with the far half in it, and looks for it along its refracted rays
-    // (see icLook). Without, it is given the floor alone, as the far half was.
+    // (see lookThrough in tsl/glass.ts). Without, it is given the floor alone, as the far half was.
     uGlass.value.set(glass.ior, glass.dispersion, many ? 5 : 6, light.seeThrough ? (many ? 5 : 8) : 0);
     behindNode.value = light.seeThrough ? farLayer.texture : background.texture;
     renderer.render(nearScene, camera);
