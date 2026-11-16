@@ -1,7 +1,7 @@
 // The diamond: a round brilliant cut (table, 8 star, 8 kite and 16 upper girdle
 // facets on the crown; a 16-sided girdle; 16 lower girdle and 8 main facets on the
 // pavilion, down to a point). Everything that needs its shape - the drawn mesh,
-// the facet planes the shader follows light through, the physics hull - comes
+// the facet planes the shader follows light through - comes
 // from here, for a stone of size 1 (its girdle corners are GIRDLE from the axis).
 import * as THREE from 'three/webgpu';
 
@@ -74,17 +74,6 @@ for (const c of CORNERS) {
     const d = DIAMOND_PLANES[p * 4] * c[0] + DIAMOND_PLANES[p * 4 + 1] * c[1] + DIAMOND_PLANES[p * 4 + 2] * c[2] - DIAMOND_PLANES[p * 4 + 3];
     if (d > 1e-6) console.warn(`diamond: corner ${c} is ${d.toFixed(4)} outside facet ${p}`);
   }
-}
-
-/**
- * A coarser convex shape for collisions (x, y, z, ...): the table's corners, every
- * other girdle corner top and bottom, and the point.
- */
-export function diamondPoints(size: number): number[] {
-  const points: number[] = [];
-  for (let k = 0; k < 8; k++) points.push(...tableCorner(k), ...girdleTop(2 * k), ...girdleBottom(2 * k));
-  points.push(...culet);
-  return points.map((x) => x * size);
 }
 
 /** How far below its centre the facet it rests on is, at size 1 (a pavilion main). */

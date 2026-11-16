@@ -1,11 +1,13 @@
-// The objects of a pile: which shapes, how big, and where they are dropped from.
-// Shared by the two physics solvers (box3d.ts on the CPU, gpu.ts on the GPU).
-import { KIND, MAX_OBJECTS, type GlassObjects } from '../glass';
+// Many objects at once, for testing how fast they draw: random shapes of random
+// proportions, each resting on the floor in its own place in a spaced grid.
+// Nothing moves (there is no physics): every frame draws the same scene.
+import * as THREE from 'three/webgpu';
+import { DIAMOND_LEAN, DIAMOND_REST, KIND, MAX_OBJECTS, type GlassObjects } from '../glass';
 
 /** How strong a CMY cube's colour filters are, unless set otherwise. */
 export const CMY_STRENGTH = 0.85;
 
-/** Horizontal spacing of the grid the objects are dropped from (m): room for the largest. */
+/** Spacing of the grid (m): room for the largest object, with a gap round it. */
 const CELL = 1.35;
 
 /** Objects are scaled at random by up to this (most stay near their usual size). */
@@ -20,7 +22,7 @@ function reachOf(kind: number, s: [number, number, number]): number {
   return 1.1 * Math.max(s[0], s[1], s[2]); // sphere, octahedron, diamond, the meshes
 }
 
-/** Where each shape sits in the 0..1 range that the mixed pile draws from. */
+/** Where each shape sits in the 0..1 range that the mix of every shape draws from. */
 const PICK_FOR_KIND: Record<number, number> = {
   [KIND.box]: 0.1,
   [KIND.sphere]: 0.2,
@@ -37,25 +39,46 @@ const PICK_FOR_KIND: Record<number, number> = {
 };
 
 /**
- * Fill `objects` with `count` random objects above the ground, ready to drop.
+ * How a shape of this size rests on the floor, turned `turn` radians round the
+ * upright: how high its centre is, and its rotation. Most stand on their base; an
+ * octahedron lies on a face and a diamond on a pavilion facet, its table turned up.
+ */
+export function restingPose(kind: number, size: ArrayLike<number>, turn: number): { height: number; quat: THREE.Quaternion } {
+  const [a, b] = [size[0], size[1]];
+  let height = a;
+  let lean: THREE.Quaternion | null = null;
+  if (kind === KIND.box || kind === KIND.cylinder || kind === KIND.cone || kind === KIND.hexprism || kind === KIND.torus) height = b;
+  else if (kind === KIND.capsule) height = a + b;
+  else if (kind === KIND.octahedron) {
+    height = a * 0.57735;
+    lean = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(-1, -1, -1).normalize(), new THREE.Vector3(0, -1, 0));
+  } else if (kind === KIND.prism) height = a / 2;
+  else if (kind === KIND.suzanne) height = a * 0.72; // her chin is 0.72 below her centre at size 1
+  else if (kind === KIND.dragon) height = a * 0.7053; // its feet are 0.7053 below its centre at size 1
+  else if (kind === KIND.diamond) {
+    height = DIAMOND_REST * a;
+    lean = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -DIAMOND_LEAN);
+  }
+  const quat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), turn);
+  if (lean) quat.multiply(lean);
+  return { height, quat };
+}
+
+/**
+ * Fill `objects` with `count` random objects, each resting on the floor in its own
+ * cell of a square grid centred on the middle of the floor.
  * @param only  shape ids to draw from; null for the mix of every shape
  * @param cubic make boxes cubes (equal sides)
- * @param adjust called once they are spawned, to change any of them by hand
- * @returns half-width of the square they are dropped over (m)
+ * @returns half-width of the grid (m)
  */
-export function spawnObjects(objects: GlassObjects, count: number, only: number[] | null = null, cubic = false, adjust?: () => void): number {
+export function layoutGrid(objects: GlassObjects, count: number, only: number[] | null = null, cubic = false): number {
   count = Math.min(Math.max(1, Math.round(count)), MAX_OBJECTS);
   let seed = (count * 2654435761) >>> 0;
   const rnd = () => {
     seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
     return seed / 4294967296;
   };
-
-  // Dropped from a column of layers over a square footprint, so they land in a pile.
-  // (Wider in proportion to the spacing, so the column is no taller.)
-  const footprint = Math.min(Math.max(Math.sqrt(count) * 0.11, 1.2), 12) * (CELL / 0.95);
-  const perSide = Math.max(1, Math.floor((2 * footprint) / CELL));
-  const perLayer = perSide * perSide;
+  const perSide = Math.ceil(Math.sqrt(count));
 
   objects.count = count;
   for (let i = 0; i < count; i++) {
@@ -125,29 +148,14 @@ export function spawnObjects(objects: GlassObjects, count: number, only: number[
     const scale = Math.min(0.85 + (MAX_SCALE - 0.85) * rnd() ** 2.5, Math.max(1, MAX_REACH / reachOf(kind, size)));
     size = [size[0] * scale, size[1] * scale, size[2] * scale];
 
-    // A random orientation (uniform over rotations).
-    const u1 = rnd();
-    const u2 = rnd() * 2 * Math.PI;
-    const u3 = rnd() * 2 * Math.PI;
-    const quat: [number, number, number, number] = [
-      Math.sqrt(1 - u1) * Math.sin(u2),
-      Math.sqrt(1 - u1) * Math.cos(u2),
-      Math.sqrt(u1) * Math.sin(u3),
-      Math.sqrt(u1) * Math.cos(u3),
-    ];
-
-    const cell = i % perLayer;
-    const layer = Math.floor(i / perLayer);
-    const position: [number, number, number] = [
-      ((cell % perSide) - (perSide - 1) / 2) * CELL + (rnd() - 0.5) * 0.15,
-      1.2 + layer * CELL,
-      (Math.floor(cell / perSide) - (perSide - 1) / 2) * CELL + (rnd() - 0.5) * 0.15,
-    ];
+    // Resting on the floor, turned any way round, in the middle of its cell.
+    const { height, quat } = restingPose(kind, size, rnd() * 2 * Math.PI);
+    const position = [(i % perSide - (perSide - 1) / 2) * CELL, height, (Math.floor(i / perSide) - (perSide - 1) / 2) * CELL];
 
     objects.kind[i] = kind;
     objects.size.set(size, i * 3);
     objects.center.set(position, i * 3);
-    objects.quat.set(quat, i * 4);
+    objects.quat.set([quat.x, quat.y, quat.z, quat.w], i * 4);
     // Its own glass: the IOR up to 0.15 either side of the setting, the dispersion
     // from half to one and a half times it.
     // (A CMY cube keeps the settings as they are, with its usual colour strength.)
@@ -155,37 +163,5 @@ export function spawnObjects(objects: GlassObjects, count: number, only: number[
     const dispersion = 0.5 + rnd();
     objects.vary.set(cmyCube ? [0, 1, CMY_STRENGTH] : [ior, dispersion, 0], i * 3);
   }
-  adjust?.();
-  return footprint;
-}
-
-/**
- * A mesh shape's extreme points along 26 directions (a coarse convex hull), at half-width 1.
- * `planes` are those directions with how far the hull reaches along each (x, y, z, reach).
- */
-export function meshExtremes(hull: Float32Array): { points: number[]; planes: number[] } {
-  const kept = new Set<number>();
-  const planes: number[] = [];
-  for (let dx = -1; dx <= 1; dx++) {
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dz = -1; dz <= 1; dz++) {
-        if (!dx && !dy && !dz) continue;
-        const length = Math.hypot(dx, dy, dz);
-        let best = 0;
-        let bestDot = -Infinity;
-        for (let k = 0; k < hull.length / 3; k++) {
-          const d = (hull[k * 3] * dx + hull[k * 3 + 1] * dy + hull[k * 3 + 2] * dz) / length;
-          if (d > bestDot) {
-            bestDot = d;
-            best = k;
-          }
-        }
-        kept.add(best);
-        planes.push(dx / length, dy / length, dz / length, bestDot);
-      }
-    }
-  }
-  const points: number[] = [];
-  for (const k of kept) points.push(hull[k * 3], hull[k * 3 + 1], hull[k * 3 + 2]);
-  return { points, planes };
+  return (perSide * CELL) / 2;
 }

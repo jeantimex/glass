@@ -1,11 +1,8 @@
 import * as THREE from 'three/webgpu';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import GUI from 'three/addons/libs/lil-gui.module.min.js';
-import { KIND, createGlassObjects, createInstancedGlass, DIAMOND_LEAN, DIAMOND_REST } from '../glass';
-import { createPile } from '../physics/box3d';
-import { createGpuPile } from '../physics/gpu';
-import type { Pile } from '../physics/pile';
-import { CMY_STRENGTH } from '../physics/spawn';
+import { KIND, createGlassObjects, createInstancedGlass } from '../glass';
+import { CMY_STRENGTH, layoutGrid, restingPose } from './grid';
 
 /** The volumes of the shapes made from meshes: 128^3 each, Suzanne's then the dragon's. */
 const MESH_SDF_URLS = ['suzanne_sdf_128.bin', 'dragon_sdf_128.bin'];
@@ -56,10 +53,7 @@ const settings = {
   glow: 0.35,
   filmic: true,
 
-  // Piles: random objects dropped onto the floor.
-  physics: true,
-  /** Auto: Box3D (exact shapes) for small piles, the GPU solver for large ones. */
-  solver: 'Auto' as 'Auto' | 'Box3D (CPU)' | 'GPU',
+  // The glass (of a grid of objects; one on its own has its own settings).
   ior: 1.45,
   dispersion: 1,
   /** How much is cut off the edges of boxes (m). */
@@ -67,7 +61,7 @@ const settings = {
   /** The colour of the glass, and how strongly it applies (0: clear, whatever the colour). */
   glassColor: { r: 1, g: 1, b: 1 } as RGB,
   glassAlpha: 1,
-  /** Give every object in a pile a random colour of its own. */
+  /** Give every object in a grid a random colour of its own. */
   colorize: false,
   /** Draw only the edges of the triangles the objects are made of, in this colour and opacity. */
   wireframe: false,
@@ -77,14 +71,12 @@ const settings = {
 };
 
 const query = new URLSearchParams(location.search);
-if (query.get('physics') === 'gpu') settings.solver = 'GPU';
-if (query.get('physics') === 'box3d') settings.solver = 'Box3D (CPU)';
 /** The settings as the page opened with them: what choosing a shape goes back to. */
 const DEFAULTS = structuredClone(settings);
 
 /**
  * The shapes to choose from. One of them on its own is placed close up, like a
- * product photo, with settings of its own; more are dropped into a pile.
+ * product photo, with settings of its own; more are set out in a grid.
  */
 type Shape = {
   /** The kinds of object it is made of (null: every kind, mixed). */
@@ -146,8 +138,8 @@ const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
 /**
  * The loading screen: a bar and a line of text over the canvas until the first
- * frame is on screen. Downloads fill most of the bar; the rest is setting up the
- * physics and compiling the shaders.
+ * frame is on screen. Downloads fill most of the bar; the rest is compiling the
+ * shaders.
  */
 const loading = (() => {
   const root = document.getElementById('loading')!;
@@ -246,16 +238,16 @@ async function loadMeshVolumes(): Promise<THREE.Data3DTexture> {
 }
 
 /**
- * A mesh shape as triangles: the mesh to draw and the points of its convex hull
- * for collisions, in the same space as its volume.
+ * A mesh shape as triangles, in the same space as its volume.
  * File layout: vertex, index and hull-point counts (uint32), then positions,
- * normals (float32 x 3 each), indices (uint32) and hull points (float32 x 3).
+ * normals (float32 x 3 each), indices (uint32) and hull points (float32 x 3, the
+ * convex hull once used for collisions, not read).
  */
-async function loadMesh(url: string): Promise<{ geometry: THREE.BufferGeometry; hull: Float32Array }> {
+async function loadMesh(url: string): Promise<{ geometry: THREE.BufferGeometry }> {
   const res = await loading.fetch(url);
   if (!res.ok) fail(`Could not load the mesh (${url}).`);
   const buffer = await res.buffer();
-  const [vertices, indices, hullPoints] = new Uint32Array(buffer, 0, 3);
+  const [vertices, indices] = new Uint32Array(buffer, 0, 2);
   let offset = 12;
   const take = <T>(make: (start: number, length: number) => T, length: number): T => {
     const out = make(offset, length);
@@ -265,12 +257,11 @@ async function loadMesh(url: string): Promise<{ geometry: THREE.BufferGeometry; 
   const positions = take((o, n) => new Float32Array(buffer.slice(o, o + n * 4)), vertices * 3);
   const normals = take((o, n) => new Float32Array(buffer.slice(o, o + n * 4)), vertices * 3);
   const index = take((o, n) => new Uint32Array(buffer.slice(o, o + n * 4)), indices);
-  const hull = take((o, n) => new Float32Array(buffer.slice(o, o + n * 4)), hullPoints * 3);
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
   geometry.setIndex(new THREE.BufferAttribute(index, 1));
-  return { geometry, hull };
+  return { geometry };
 }
 
 
@@ -279,9 +270,6 @@ async function main() {
   // Anti-aliased (4x multisampling): it smooths the edges of the glass.
   // GPU timestamps: the time each part of the frame takes, for the stats panel.
   // (They can only be turned on here, before the renderer starts; they cost little.)
-  // Start fetching the physics engine (about 1 MB) now, alongside everything else,
-  // rather than after the models; createPile's own import then finds it ready.
-  void (self.crossOriginIsolated ? import('box3d.js/mt-inline') : import('box3d.js/inline'));
   // WebGPU where the browser has it, otherwise WebGL 2 (the shaders are TSL, which
   // three.js compiles for either). ?renderer=webgl uses WebGL 2 even so, to try it.
   loading.stage(0, 'Starting the renderer…');
@@ -292,7 +280,7 @@ async function main() {
   } catch {
     fail('This demo needs WebGPU or WebGL 2.\nOpen it in a recent Chrome, Edge, Safari or Firefox.');
   }
-  /** The GPU device, with WebGPU (the GPU physics solver needs it); null on WebGL. */
+  /** The GPU device, with WebGPU (to know when the first frame is done); null on WebGL. */
   const device = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend
     ? (renderer.backend as unknown as { device: GPUDevice }).device
     : null;
@@ -320,17 +308,12 @@ async function main() {
     loadMesh('dragon_mesh.bin'),
     loadMesh('dragon_mesh_lod.bin'),
   ]);
-  const hulls = { suzanne: suzanneMesh.hull, dragon: dragonMesh.hull };
 
   // ------------------------------------------------------------- scene ---
-  // Thousands of random objects, dropped into a pile.
-  loading.stage(0.88, 'Setting up physics…');
+  // One object on its own, or thousands of random ones set out in a grid.
   const glassObjects = createGlassObjects();
-  const boxPile = await createPile(glassObjects, hulls);
-  // (The GPU solver is WebGPU compute: on WebGL every pile falls with Box3D.)
-  const gpuPile = device ? createGpuPile(device, glassObjects, hulls) : null;
-  /** Above this many objects Box3D can no longer keep up, and the GPU solver takes over. */
-  const GPU_PHYSICS_FROM = 5000;
+  /** Half-width of the grid the objects are set out in (m). */
+  let gridReach = 1;
   /**
    * The single-shape demos: one object placed by hand in the middle of the floor,
    * about a metre tall, resting the way it would lie. Each demo keeps its own
@@ -371,66 +354,25 @@ async function main() {
       glassAlpha: 1,
     });
   };
-  /**
-   * Put a shape on its own in the middle of the floor, resting the way it would lie;
-   * or, to drop it, high above, tipped at random.
-   */
-  const placeShowcase = (name: string, drop = false) => {
+  /** Put a shape on its own in the middle of the floor, resting the way it would lie. */
+  const placeShowcase = (name: string) => {
     const kind = singleKind(name);
     const single = singleFor(name);
     const [a, b = a, c = a] = single.measures;
     let size: [number, number, number] = [a, a, a];
-    let height = a; // of the centre above the floor
-    let lean: THREE.Quaternion | null = null;
-    if (kind === KIND.box) {
-      size = [a, b, c];
-      height = b;
-    } else if (kind === KIND.cylinder || kind === KIND.cone || kind === KIND.hexprism) {
-      size = [a, b, a];
-      height = b;
-    } else if (kind === KIND.capsule) {
-      size = [a, b, a];
-      height = a + b;
-    } else if (kind === KIND.torus) {
-      size = [a, b, b];
-      height = b;
-    } else if (kind === KIND.octahedron) {
-      // Resting on one of its faces.
-      height = a * 0.57735;
-      lean = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(-1, -1, -1).normalize(), new THREE.Vector3(0, -1, 0));
-    } else if (kind === KIND.prism) {
-      size = [a, a, b];
-      height = a / 2;
-    } else if (kind === KIND.suzanne) {
-      height = a * 0.72; // her chin is 0.72 below her centre at size 1
-    } else if (kind === KIND.dragon) {
-      height = a * 0.7053; // its feet are 0.7053 below its centre at size 1
-    } else if (kind === KIND.diamond) {
-      // Lying on one of its pavilion facets, its table turned up.
-      height = DIAMOND_REST * a;
-      lean = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -DIAMOND_LEAN);
-    }
-    const pose = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(single.turn));
-    if (lean) pose.multiply(lean);
-    if (drop) {
-      // Tipped up to 50 degrees about a random level axis, so it lands on an edge and tumbles.
-      const axisAngle = Math.random() * Math.PI * 2;
-      const axis = new THREE.Vector3(Math.cos(axisAngle), 0, Math.sin(axisAngle));
-      pose.premultiply(new THREE.Quaternion().setFromAxisAngle(axis, THREE.MathUtils.degToRad(20 + Math.random() * 30)));
-      height += 1.6;
-    }
+    if (kind === KIND.box) size = [a, b, c];
+    else if (kind === KIND.cylinder || kind === KIND.cone || kind === KIND.hexprism || kind === KIND.capsule) size = [a, b, a];
+    else if (kind === KIND.torus) size = [a, b, b];
+    else if (kind === KIND.prism) size = [a, a, b];
+    const { height, quat } = restingPose(kind, size, THREE.MathUtils.degToRad(single.turn));
     glassObjects.count = 1;
     glassObjects.kind[0] = kind;
     glassObjects.size.set(size, 0);
     glassObjects.center.set([0, height, 0], 0);
-    glassObjects.quat.set([pose.x, pose.y, pose.z, pose.w], 0);
+    glassObjects.quat.set([quat.x, quat.y, quat.z, quat.w], 0);
     glassObjects.vary.set([0, 1, 0], 0); // exactly the IOR and dispersion it is set to
     glassObjects.tint.set([1, 1, 1], 0); // and the colour
   };
-  /** Nothing moves: for objects placed by hand. */
-
-  const stillPile: Pile = { reset: () => {}, step: () => 0, footprint: () => 1, label: () => 'still' };
-  let pile: Pile = boxPile;
   const instanced = createInstancedGlass(renderer, camera, glassObjects, {
     suzanne: suzanneMesh.geometry,
     dragon: dragonMesh.geometry,
@@ -439,12 +381,12 @@ async function main() {
   });
   /** The shape chosen. */
   const current = () => SHAPES[view.shape];
-  /** One object on its own (one of a mix is dropped like a pile, of one). */
+  /** One object on its own (one of the mix is a grid of one). */
   const isSingle = () => view.count === 1 && current().kinds !== null;
   /** The settings and camera the scene opens with, when they are not the usual ones. */
   const lookOf = () => (isSingle() ? (current().look ?? {}) : {});
   /**
-   * Give the objects of a pile their own colours: a random one each if asked for,
+   * Give the objects of a grid their own colours: a random one each if asked for,
    * otherwise none (white). CMY cubes keep to their own colours.
    */
   /** A new one each time random colours are turned on, for a new set of colours. */
@@ -469,51 +411,32 @@ async function main() {
     const from = isSingle() ? singleFor(view.shape) : settings;
     return [srgbToLinear(from.glassColor.r), srgbToLinear(from.glassColor.g), srgbToLinear(from.glassColor.b), from.glassAlpha];
   };
-  /** How much is cut off the edges of boxes: set on a single cube, one value for a pile. */
+  /** How much is cut off the edges of boxes: set on a single cube, one value for a grid. */
   const boxBevel = () => (isSingle() ? singleFor(view.shape).bevel : settings.bevel);
   /** How strong the colour filters of a CMY cube are (0: not a CMY cube). */
   const cmyStrength = () => {
     if (!current().cmy) return 0;
     return isSingle() ? Math.max(singleFor(view.shape).colour, 0.001) : CMY_STRENGTH;
   };
-  /** The solver for this many objects. */
-  const solverFor = (count: number): Pile =>
-    gpuPile && (settings.solver === 'GPU' || (settings.solver === 'Auto' && count > GPU_PHYSICS_FROM)) ? gpuPile : boxPile;
-  /**
-   * Set the scene up: a shape on its own resting in place, or a fresh pile dropped.
-   * @param fall drop the shape on its own too, from high up, instead of placing it
-   */
-  const dropObjects = (fall = false) => {
+  /** Set the scene up: a shape on its own resting in place, or a grid of them. */
+  const placeObjects = () => {
     const shape = current();
-    // Whatever the GPU solver still has on its way back belongs to the old scene.
-    gpuPile?.release();
     if (isSingle()) {
       const single = singleFor(view.shape);
       settings.ior = single.ior;
       settings.dispersion = single.dispersion;
-      if (fall) {
-        pile = solverFor(1);
-        pile.reset(1, shape.kinds, false, () => {
-          placeShowcase(view.shape, true);
-          colourObjects();
-        });
-      } else {
-        placeShowcase(view.shape);
-        colourObjects(); // (white, unless random colours are on)
-        pile = stillPile;
-      }
+      placeShowcase(view.shape);
     } else {
       // Each shape sets its own glass.
       settings.ior = shape.ior ?? 1.45;
       settings.dispersion = shape.dispersion ?? 1;
-      pile = solverFor(view.count);
-      pile.reset(view.count, shape.kinds, shape.cubic ?? false);
-      colourObjects();
+      gridReach = layoutGrid(glassObjects, view.count, shape.kinds, shape.cubic ?? false);
     }
+    colourObjects(); // (white, unless random colours are on)
     instanced.markChanged();
   };
   Object.assign(settings, lookOf());
-  dropObjects();
+  placeObjects();
   /** Put the camera where the whole scene is in view. */
   const frameScene = () => {
     const start = isSingle() ? current().camera : undefined;
@@ -524,10 +447,10 @@ async function main() {
       camera.position.set(3.017, 1.9, 4.119); // 30 degrees round to the right of straight on
       orbit.target.set(0.35, 0.22, 0);
     } else {
-      const r = pile.footprint();
-      // The pile spreads to roughly twice the footprint it was dropped from.
-      camera.position.set(r * 2.2 + 3, r * 1.5 + 3, r * 3.6 + 5);
-      orbit.target.set(0, r * 0.2, 0);
+      // From in front, above, a little to the right: the whole grid in view.
+      const r = gridReach;
+      camera.position.set(r * 1.3 + 2, r * 1.6 + 2, r * 2.8 + 3);
+      orbit.target.set(0, 0, 0);
     }
     orbit.update();
   };
@@ -549,10 +472,10 @@ async function main() {
   window.addEventListener('resize', resize);
 
   // --------------------------------------------------------------- GUI ---
-  const gui = new GUI({ title: 'Glass Cube', width: 300 });
+  const gui = new GUI({ title: 'Settings', width: 300 });
   // Folded to its title bar at first, so the scene is not covered.
   gui.close();
-  const status = { fps: '0', triangles: '0', moving: '0' };
+  const status = { fps: '0', triangles: '0' };
   /** Settings of the page itself, kept whatever the scene (?stats=1 shows the panel). */
   const ui = { stats: query.get('stats') === '1' };
 
@@ -572,20 +495,20 @@ async function main() {
     updateAddress();
     Object.assign(settings, structuredClone(DEFAULTS), lookOf());
     delete singles[view.shape];
-    dropObjects();
+    placeObjects();
     frameScene();
     showPanels();
     resize(); // a shape on its own is drawn larger than the screen
     gui.controllersRecursive().forEach((c) => c.updateDisplay());
   };
   let wasSingle = isSingle();
-  /** A new count: a fresh pile, or, between one object on its own and a pile, a fresh start. */
+  /** A new count: a new grid, or, between one object on its own and a grid, a fresh start. */
   const changeCount = () => {
     view.count = Math.min(Math.max(Math.round(view.count) || 1, 1), MAX_COUNT);
     if (isSingle() !== wasSingle) startOver();
     else {
       updateAddress();
-      dropObjects();
+      placeObjects();
     }
     wasSingle = isSingle();
   };
@@ -593,15 +516,13 @@ async function main() {
   // settings, the camera, the count): only the objects change.
   gui.add(view, 'shape', Object.keys(SHAPES)).name('Shape').onChange(() => {
     updateAddress();
-    dropObjects();
+    placeObjects();
     showPanels();
     resize(); // a shape on its own is drawn larger than the screen
     gui.controllersRecursive().forEach((c) => c.updateDisplay());
     wasSingle = isSingle();
   });
   gui.add(view, 'count', 1, MAX_COUNT, 1).name('Count').onFinishChange(changeCount);
-  // Drops the objects from up high and lets them fall: one on its own as well as a pile.
-  gui.add({ drop: () => dropObjects(true) }, 'drop').name('Drop');
   // The stats panel in the corner: frame rate, triangles, and GPU time per part.
   gui.add(ui, 'stats').name('Show stats').onChange((on: boolean) => {
     const panel = document.getElementById('stats');
@@ -615,7 +536,6 @@ async function main() {
   const addReset = (folder: Folder, after?: () => void) =>
     folder.add({ reset: () => resetFolder(folder, after) }, 'reset').name('Reset');
   const resetFolder = (folder: Folder, after?: () => void) => {
-    const solver = settings.solver;
     const all = settings as unknown as Record<string, unknown>;
     const start = DEFAULTS as unknown as Record<string, unknown>;
     for (const c of folder.controllers) {
@@ -625,18 +545,10 @@ async function main() {
       else all[c.property] = value;
       c.updateDisplay();
     }
-    if (settings.solver !== solver) dropObjects(); // a new solver means a new pile
     instanced.markChanged();
     after?.();
   };
   const scene = gui.addFolder('Scene').close(); // folded until opened
-  scene.add(settings, 'physics').name('Physics running');
-  // The controls that only make sense for a pile.
-  const pileControls: { show(show?: boolean): unknown }[] = [
-    scene.add(settings, 'solver', ['Auto', 'Box3D (CPU)', 'GPU']).name('Physics solver').onChange(() => dropObjects()),
-  ];
-  // (Without WebGPU there is only Box3D to choose.)
-  if (!gpuPile) pileControls.pop()?.show(false);
   scene.add(settings, 'floorReflection', 0, 1, 0.01).name('Floor reflection');
   scene.add(settings, 'shadowSoftness', 0.01, 0.6, 0.01).name('Shadow softness');
   scene.add(settings, 'shadowDarkness', 0, 1, 0.01).name('Shadow darkness');
@@ -652,9 +564,9 @@ async function main() {
    * Two folders, rebuilt for each shape and count:
    * - Glass settings, the same for every shape: wireframe, colour, IOR, dispersion
    *   (and on its own, how far it is turned). On its own they are that shape's;
-   *   in a pile, the whole pile's.
+   *   in a grid, the whole grid's.
    * - The shape's own settings, only what belongs to that shape: on its own, its
-   *   measurements (and a box's bevel, a CMY cube's colour strength); in a pile,
+   *   measurements (and a box's bevel, a CMY cube's colour strength); in a grid,
    *   the bevel of its boxes. (Left out when there is nothing.)
    */
   let glassFolder: ReturnType<typeof gui.addFolder> | null = null;
@@ -669,9 +581,6 @@ async function main() {
     const demo = SHAPES[name];
     const single = isSingle() ? singleFor(name) : null;
     const place = () => {
-      // Back to resting in place (it may have been dropped).
-      gpuPile?.release();
-      pile = stillPile;
       placeShowcase(name);
       colourObjects();
     };
@@ -718,7 +627,7 @@ async function main() {
           const { measures, bevel, colour } = single;
           delete singles[name];
           Object.assign(singleFor(name), { measures, bevel, colour });
-          dropObjects();
+          placeObjects();
         } else {
           settings.ior = demo.ior ?? 1.45;
           settings.dispersion = demo.dispersion ?? 1;
@@ -734,7 +643,7 @@ async function main() {
     // ---- The shape's own settings.
     const hasBoxes = !demo.kinds || demo.kinds.includes(KIND.box);
     if (!single && !hasBoxes) return;
-    const folder = gui.addFolder(single ? `${name} shape` : `${name} pile shape`);
+    const folder = gui.addFolder(single ? `${name} shape` : `${name} grid shape`);
     shapeFolder = folder;
     if (!single) {
       folder.add(settings, 'bevel', 0, 0.05, 0.001).name('Box bevel');
@@ -751,15 +660,13 @@ async function main() {
       const { ior, dispersion, glassColor, glassAlpha, turn } = single;
       delete singles[name];
       Object.assign(singleFor(name), { ior, dispersion, glassColor, glassAlpha, turn });
-      dropObjects();
+      placeObjects();
       rebuildShapeFolder();
     };
     folder.add({ reset }, 'reset').name('Reset');
   }
-  /** A pile has a count, physics and one IOR for all; a single has its own settings. */
+  /** A grid has one IOR for all; a single has its own settings. */
   function showPanels() {
-    const single = isSingle();
-    for (const c of pileControls) c.show(!single);
     rebuildShapeFolder();
   }
 
@@ -789,7 +696,6 @@ async function main() {
   frameScene();
   showPanels();
   let fpsFrames = 0;
-  let physicsMs = 0;
   let fpsSince = performance.now();
 
   const scaled = (v: number): [number, number, number] => [v * settings.lamp, v * settings.lamp, v * settings.lamp];
@@ -830,17 +736,12 @@ async function main() {
       panel.style.display = ui.stats ? 'grid' : 'none';
       const recent = order.filter((name) => seen.has(name) && now - seen.get(name)!.at < 2000).map((name) => [name, seen.get(name)!.ms] as const);
       const total = recent.reduce((a, [, ms]) => a + ms, 0);
-      // The physics: GPU time on the GPU solver, the time it takes on Box3D (none when still).
-      const gpuPhysicsMs = gpuPile && pile === gpuPile ? gpuPile.gpuMs() : null;
-      const physics = pile === stillPile ? '-' : gpuPhysicsMs !== null ? `${gpuPhysicsMs.toFixed(2)} ms` : pile === gpuPile ? '-' : `${physicsMs.toFixed(2)} ms`;
       fill([
         ['FPS', status.fps],
         ['Triangles', status.triangles],
         ['GPU time per frame'],
         ...recent.map(([name, ms]) => [name, `${ms.toFixed(2)} ms`] as [string, string]),
         ['Drawing', `${total.toFixed(2)} ms`],
-        ['Physics', physics],
-        ['Moving', status.moving],
       ]);
       setTimeout(show, 500);
     };
@@ -871,9 +772,6 @@ async function main() {
       fpsFrames = 0;
       fpsSince = nowMs;
     }
-    const physicsStart = performance.now();
-    const moved = settings.physics ? pile.step() : 0;
-    physicsMs += (performance.now() - physicsStart - physicsMs) * 0.1; // smoothed
     const spot = settings.dark && settings.spotlight;
     const lampUp = THREE.MathUtils.degToRad(settings.lampHeight);
     const lampRound = THREE.MathUtils.degToRad(settings.lampTurn);
@@ -888,7 +786,7 @@ async function main() {
         causticSoftness: settings.causticSoftness,
         causticStrength: settings.causticStrength,
         contactShadows: settings.contactShadows,
-        // They reach about as far as an object is big: a single is a metre, a pile's objects a third of that.
+        // They reach about as far as an object is big: a single is a metre, a grid's objects a third of that.
         contactRadius: isSingle() ? 0.45 : 0.22,
         // In focus: whatever is in the middle of the picture (the shader finds it). This
         // is only the distance to fall back on when the middle is empty backdrop.
@@ -896,8 +794,8 @@ async function main() {
         depthOfField: settings.depthOfField,
         glow: settings.glow,
         filmic: settings.filmic,
-        // The pool of the spotlight takes in the single object, or the whole pile.
-        spotRadius: spot ? (isSingle() ? 5.5 : pile.footprint() * 1.5 + 2) : 0,
+        // The pool of the spotlight takes in the single object, or the whole grid.
+        spotRadius: spot ? (isSingle() ? 5.5 : gridReach * 1.5 + 2) : 0,
         floorReflection: settings.floorReflection,
         shadowSoftness: settings.shadowSoftness,
         shadowDarkness: settings.shadowDarkness,
@@ -917,11 +815,10 @@ async function main() {
         sunE: scaled(spot ? 0.3 : settings.dark ? 0.022 : 0.55),
         sunDir: [Math.cos(lampUp) * Math.cos(lampRound), Math.sin(lampUp), Math.cos(lampUp) * Math.sin(lampRound)],
       },
-      moved > 0,
+      // (Nothing moves by itself: a new scene marks itself changed.)
+      false,
     );
     status.triangles = instanced.triangles().toLocaleString('en-US');
-    // How many objects moved since the last frame (for the stats panel).
-    status.moving = moved.toLocaleString('en-US');
   });
 }
 
