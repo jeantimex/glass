@@ -3,7 +3,8 @@
 // pile. It owns no rendering; it only writes positions and rotations into the
 // shared GlassObjects arrays.
 import type { Box3DModule, b3BodyId, b3WorldId } from 'box3d.js';
-import { KIND, MAX_OBJECTS, diamondPoints, type GlassObjects } from './instanced';
+import { KIND, MAX_OBJECTS, diamondPoints, type GlassObjects } from '../glass';
+import type { Pile } from './pile';
 import { spawnObjects, meshExtremes } from './spawn';
 
 /** The unit torus as a ring of capsules (Box3D has no torus shape). */
@@ -13,7 +14,7 @@ const TORUS_SEGMENTS = 8;
  * @param hulls points (x, y, z, ...) of the convex hulls of the shapes made from
  *   meshes (Suzanne, the dragon), at half-width 1
  */
-export async function createPile(objects: GlassObjects, hulls: { suzanne: Float32Array; dragon: Float32Array }) {
+export async function createPile(objects: GlassObjects, hulls: { suzanne: Float32Array; dragon: Float32Array }): Promise<Pile> {
   // The multithreaded build needs SharedArrayBuffer, which browsers only allow on
   // cross-origin-isolated pages (see the headers in vite.config.ts). Elsewhere it
   // falls back to one thread.

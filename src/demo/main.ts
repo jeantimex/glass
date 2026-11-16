@@ -1,11 +1,11 @@
 import * as THREE from 'three/webgpu';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import GUI from 'three/addons/libs/lil-gui.module.min.js';
-import { KIND, createGlassObjects, createInstancedGlass } from './instanced';
-import { createPile } from './physics';
-import { createGpuPile } from './gpuPhysics';
-import { CMY_STRENGTH } from './spawn';
-import { DIAMOND_LEAN, DIAMOND_REST } from './diamond';
+import { KIND, createGlassObjects, createInstancedGlass, DIAMOND_LEAN, DIAMOND_REST } from '../glass';
+import { createPile } from '../physics/box3d';
+import { createGpuPile } from '../physics/gpu';
+import type { Pile } from '../physics/pile';
+import { CMY_STRENGTH } from '../physics/spawn';
 
 /** The volumes of the shapes made from meshes: 128^3 each, Suzanne's then the dragon's. */
 const MESH_SDF_URLS = ['suzanne_sdf_128.bin', 'dragon_sdf_128.bin'];
@@ -419,7 +419,7 @@ async function main() {
     glassObjects.tint.set([1, 1, 1], 0); // and the colour
   };
   /** Nothing moves: for objects placed by hand. */
-  type Pile = Pick<typeof gpuPile, 'reset' | 'step' | 'footprint' | 'label'>;
+
   const stillPile: Pile = { reset: () => {}, step: () => 0, footprint: () => 1, label: () => 'still' };
   let pile: Pile = boxPile;
   const instanced = createInstancedGlass(renderer, camera, glassObjects, {

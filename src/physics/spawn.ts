@@ -1,6 +1,6 @@
 // The objects of a pile: which shapes, how big, and where they are dropped from.
-// Shared by the two physics solvers (physics.ts on the CPU, gpuPhysics.ts on the GPU).
-import { KIND, MAX_OBJECTS, type GlassObjects } from './instanced';
+// Shared by the two physics solvers (box3d.ts on the CPU, gpu.ts on the GPU).
+import { KIND, MAX_OBJECTS, type GlassObjects } from '../glass';
 
 /** How strong a CMY cube's colour filters are, unless set otherwise. */
 export const CMY_STRENGTH = 0.85;

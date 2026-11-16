@@ -1,10 +1,11 @@
 // Rigid-body physics on the GPU (WebGPU compute), for piles too large for Box3D.
-// See gpuPhysics.wgsl for how it works. Like physics.ts it owns no rendering: it
+// See gpu.wgsl for how it works. Like box3d.ts it owns no rendering: it
 // writes positions and rotations into the shared GlassObjects arrays, a frame or
 // two after the GPU has worked them out.
-import { KIND, MAX_OBJECTS, type GlassObjects } from './instanced';
+import { KIND, MAX_OBJECTS, type GlassObjects } from '../glass';
+import type { Pile } from './pile';
 import { spawnObjects, meshExtremes } from './spawn';
-import source from './gpuPhysics.wgsl?raw';
+import source from './gpu.wgsl?raw';
 
 const GRID_CELLS = 64 * 32 * 64;
 const SLOTS = 32;
@@ -70,7 +71,7 @@ export function createGpuPile(device: GPUDevice, objects: GlassObjects, hulls: {
     `const DRAGON_POINTS_N = ${dragonPoints};`,
     `const MESH_POINTS_N = ${suzannePoints + dragonPoints};`,
   ].join('\n');
-  // The tables themselves go in a uniform buffer (see Tables in gpuPhysics.wgsl):
+  // The tables themselves go in a uniform buffer (see Tables in gpu.wgsl):
   // 8 directions, the meshes' points, then 26 planes for each mesh.
   const tableData = new Float32Array((8 + suzannePoints + dragonPoints + 52) * 4);
   for (let k = 0; k < 8; k++) tableData.set([Math.cos((k * Math.PI) / 4), Math.sin((k * Math.PI) / 4), 0, 0], k * 4);
@@ -78,7 +79,7 @@ export function createGpuPile(device: GPUDevice, objects: GlassObjects, hulls: {
   tableData.set([...suzanne.planes, ...dragon.planes], (8 + suzannePoints + dragonPoints) * 4);
   const module = device.createShaderModule({ code: source.replace('/*SUZANNE*/', meshTables) });
   module.getCompilationInfo().then((info) => {
-    for (const m of info.messages) if (m.type === 'error') console.error(`gpuPhysics.wgsl:${m.lineNum}: ${m.message}`);
+    for (const m of info.messages) if (m.type === 'error') console.error(`gpu.wgsl:${m.lineNum}: ${m.message}`);
   });
 
   const storage = GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST;
@@ -88,7 +89,7 @@ export function createGpuPile(device: GPUDevice, objects: GlassObjects, hulls: {
   const gridCount = device.createBuffer({ size: GRID_CELLS * 4, usage: storage });
   const gridCells = device.createBuffer({ size: GRID_CELLS * SLOTS * 4, usage: storage });
   const tables = device.createBuffer({ size: tableData.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-  // The bodies to solve each substep (see markActive in gpuPhysics.wgsl).
+  // The bodies to solve each substep (see markActive in gpu.wgsl).
   const activeMark = device.createBuffer({ size: MAX_OBJECTS * 4, usage: storage });
   const activeList = device.createBuffer({ size: MAX_OBJECTS * 4, usage: storage });
   const activeCount = device.createBuffer({ size: 4, usage: storage });
@@ -325,5 +326,6 @@ export function createGpuPile(device: GPUDevice, objects: GlassObjects, hulls: {
 
   /** How long the GPU took over a step lately (ms), or null if it cannot tell (or nothing is moving). */
   const gpuMs = () => (timing && !settled && count ? timing.ms : null);
-  return { reset, step, release, footprint: () => footprint, label: () => 'GPU', gpuMs };
+  const pile: Pile = { reset, step, footprint: () => footprint, label: () => 'GPU' };
+  return { ...pile, release, gpuMs };
 }
