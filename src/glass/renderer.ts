@@ -162,7 +162,14 @@ export function createInstancedGlass(
   meshes: { suzanne: THREE.BufferGeometry; dragon: THREE.BufferGeometry; dragonLod: THREE.BufferGeometry; volume: THREE.Data3DTexture },
 ) {
   // ------------------------------------------------------------ targets ---
-  const causticMap = new THREE.RenderTarget(CAUSTIC_MAP_SIZE, CAUSTIC_MAP_SIZE, {
+  const isMobile =
+    typeof navigator !== 'undefined' &&
+    (/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+      (navigator.maxTouchPoints > 1 && typeof window !== 'undefined' && Math.min(window.innerWidth, window.innerHeight) < 900));
+  const causticMapSize = isMobile ? 1024 : CAUSTIC_MAP_SIZE;
+  const photonMapSize = isMobile ? 512 : PHOTON_MAP_SIZE;
+  const msaaSamples = isMobile ? 0 : 2;
+  const causticMap = new THREE.RenderTarget(causticMapSize, causticMapSize, {
     type: THREE.HalfFloatType,
     format: THREE.RGBAFormat,
     depthBuffer: false,
@@ -190,14 +197,14 @@ export function createInstancedGlass(
     });
   const shadeScratch = makeShade();
   // Real caustics: where each ray of the lamp's light lands, and the rays added up there.
-  const photonMap = new THREE.RenderTarget(PHOTON_MAP_SIZE, PHOTON_MAP_SIZE, {
+  const photonMap = new THREE.RenderTarget(photonMapSize, photonMapSize, {
     type: THREE.HalfFloatType,
     format: THREE.RGBAFormat,
     depthBuffer: true,
     minFilter: THREE.NearestFilter,
     magFilter: THREE.NearestFilter,
   });
-  const landedMap = new THREE.RenderTarget(PHOTON_MAP_SIZE, PHOTON_MAP_SIZE, {
+  const landedMap = new THREE.RenderTarget(photonMapSize, photonMapSize, {
     type: THREE.HalfFloatType,
     format: THREE.RGBAFormat,
     depthBuffer: false,
@@ -215,7 +222,7 @@ export function createInstancedGlass(
       format: THREE.RGBAFormat,
       depthBuffer,
       // The layers that glass is drawn into are multisampled, like the canvas.
-      samples: depthBuffer ? 4 : 0,
+      samples: depthBuffer ? msaaSamples : 0,
       minFilter: THREE.LinearFilter,
       magFilter: THREE.LinearFilter,
     });
@@ -365,7 +372,7 @@ export function createInstancedGlass(
     spot: uSpot,
     lamp: uSunDir,
     lightTex: lightNode,
-    lightTexSize: CAUSTIC_MAP_SIZE,
+    lightTexSize: causticMapSize,
   };
   /** The camera as the passes over the whole picture see it. */
   const screenCamera = { fragCoord: screenCoordinate, res: uRes, camPos: uCamPos, camRight: uCamRight, camUp: uCamUp, camFwd: uCamFwd };
@@ -416,7 +423,7 @@ export function createInstancedGlass(
     material.transparent = true;
     material.blending = THREE.NoBlending;
     material.positionNode = position;
-    material.fragmentNode = photonRayNode(kind, positionWorld, normal, glassInputs, uSunDir, uLightR, uLightU, PHOTON_MAP_SIZE, diamondPlanes);
+    material.fragmentNode = photonRayNode(kind, positionWorld, normal, glassInputs, uSunDir, uLightR, uLightU, photonMapSize, diamondPlanes);
     return material;
   };
 
@@ -430,14 +437,14 @@ export function createInstancedGlass(
   // ... then every ray that went through glass, as a square one texel wide (wider
   // if the glass fanned it out: see photonNode in tsl/glass.ts), moved to where it landed and added on.
   const rayIndex = float(instanceIndex);
-  const rayRow = rayIndex.div(PHOTON_MAP_SIZE).floor();
-  const rayAt = vec2(rayIndex.sub(rayRow.mul(PHOTON_MAP_SIZE)), rayRow).add(0.5).div(PHOTON_MAP_SIZE);
+  const rayRow = rayIndex.div(photonMapSize).floor();
+  const rayAt = vec2(rayIndex.sub(rayRow.mul(photonMapSize)), rayRow).add(0.5).div(photonMapSize);
   const ray = texture(photonMap.texture, rayAt);
   const landMaterial = new THREE.NodeMaterial();
   landMaterial.vertexNode = vec4(
     vec2(rayAt.x.mul(2).sub(1), float(1).sub(rayAt.y.mul(2)))
       .add(ray.xy)
-      .add(vec2(positionGeometry.x, positionGeometry.y).mul(ray.a.sub(1).max(1).mul(2 / PHOTON_MAP_SIZE))),
+      .add(vec2(positionGeometry.x, positionGeometry.y).mul(ray.a.sub(1).max(1).mul(2 / photonMapSize))),
     0,
     1,
   );
@@ -449,7 +456,7 @@ export function createInstancedGlass(
   const square = new THREE.PlaneGeometry(1, 1);
   landGeometry.index = square.index;
   landGeometry.setAttribute('position', square.getAttribute('position'));
-  landGeometry.instanceCount = PHOTON_MAP_SIZE * PHOTON_MAP_SIZE;
+  landGeometry.instanceCount = photonMapSize * photonMapSize;
   const landMesh = new THREE.Mesh(landGeometry, landMaterial);
   landMesh.frustumCulled = false;
   const landScene = new THREE.Scene();
@@ -912,7 +919,8 @@ export function createInstancedGlass(
     // the far half (seen through the near half) skip dispersion and follow the
     // light through fewer bounces.
     const many = objects.count > MANY_OBJECTS;
-    uGlass.value.set(ior, many ? 0 : dispersion, many ? 3 : 4, 0);
+    // Floor mirror reflection is half-res and blurred: skip dispersion & cap bounces.
+    uGlass.value.set(ior, 0, many ? 2 : 3, 0);
     uFloor.value.x = light.ground ? light.floorReflection : 0;
     uFloor.value.y = light.realCaustics ? -light.shadowDarkness : light.shadowDarkness; // (negative: see icGroundColor)
     uFloor.value.z = light.floorGrid ? 1 : 0;
@@ -947,30 +955,43 @@ export function createInstancedGlass(
       }
     };
     if (rough > 0.001) frostBlur(background.texture);
-    uGlass.value.set(ior, many ? 0 : dispersion, many ? 4 : 6, 0);
-    mark('Far glass');
-    renderer.setRenderTarget(farLayer);
-    copySource.value = background.texture;
-    copyQuad.render(renderer);
-    renderer.autoClear = false;
-    behindNode.value = background.texture;
-    renderer.render(farScene, camera);
+    const twoLayer = light.seeThrough && objects.count > 1;
+    if (!twoLayer) {
+      // Single-pass fast path (single object, or Glass through glass disabled):
+      // skip farLayer and its full-screen copy, and disable lookThrough raymarching.
+      uGlass.value.set(ior, dispersion, many ? 5 : 6, 0);
+      mark('Glass');
+      renderer.setRenderTarget(nearLayer);
+      copySource.value = background.texture;
+      copyQuad.render(renderer);
+      renderer.autoClear = false;
+      behindNode.value = background.texture;
+      renderer.render(farScene, camera);
+      renderer.render(nearScene, camera);
+      renderer.autoClear = true;
+    } else {
+      uGlass.value.set(ior, many ? 0 : dispersion, many ? 4 : 6, 0);
+      mark('Far glass');
+      renderer.setRenderTarget(farLayer);
+      copySource.value = background.texture;
+      copyQuad.render(renderer);
+      renderer.autoClear = false;
+      behindNode.value = background.texture;
+      renderer.render(farScene, camera);
 
-    // 5. Near half over a copy of that, seeing the far half refracted.
-    renderer.autoClear = true;
-    if (rough > 0.001 && light.seeThrough) frostBlur(farLayer.texture);
-    mark('Near glass');
-    renderer.setRenderTarget(nearLayer);
-    copySource.value = farLayer.texture;
-    copyQuad.render(renderer);
-    renderer.autoClear = false;
-    // With glass showing through glass, the near half sees the far half: it is given
-    // the picture with the far half in it, and looks for it along its refracted rays
-    // (see lookThrough in tsl/glass.ts). Without, it is given the floor alone, as the far half was.
-    uGlass.value.set(ior, dispersion, many ? 5 : 6, light.seeThrough ? (many ? 5 : 8) : 0);
-    behindNode.value = light.seeThrough ? farLayer.texture : background.texture;
-    renderer.render(nearScene, camera);
-    renderer.autoClear = true;
+      // 5. Near half over a copy of that, seeing the far half refracted.
+      renderer.autoClear = true;
+      if (rough > 0.001) frostBlur(farLayer.texture);
+      mark('Near glass');
+      renderer.setRenderTarget(nearLayer);
+      copySource.value = farLayer.texture;
+      copyQuad.render(renderer);
+      renderer.autoClear = false;
+      uGlass.value.set(ior, dispersion, many ? 5 : 6, many ? 4 : 6);
+      behindNode.value = farLayer.texture;
+      renderer.render(nearScene, camera);
+      renderer.autoClear = true;
+    }
 
     // 6. Finishing: contact shadows (and exposure) ...
     uShade.value.set(light.contactShadows, light.contactRadius, light.exposure, 0);

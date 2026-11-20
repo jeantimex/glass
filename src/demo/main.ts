@@ -483,14 +483,15 @@ async function main() {
     orbit.update();
   };
 
+  const isMobile =
+    /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (navigator.maxTouchPoints > 1 && Math.min(window.innerWidth, window.innerHeight) < 900);
   function resize() {
     const w = window.innerWidth;
     const h = window.innerHeight;
-    const screenRatio = window.devicePixelRatio;
-    // A single object close up is drawn at twice the size and shrunk: multisampling
-    // smooths the outline of each facet, but not the edges of the facets seen
-    // through the glass, which only show up inside the shader.
-    const pixelRatio = isSingle() ? Math.min(screenRatio * 2, Math.max(screenRatio, 4096 / Math.max(w, h))) : screenRatio;
+    const screenRatio = window.devicePixelRatio || 1;
+    // Cap pixel ratio to keep full-screen HalfFloat passes fast on Retina/mobile GPUs.
+    const pixelRatio = Math.min(screenRatio, isMobile ? 1.5 : 2);
     renderer.setPixelRatio(pixelRatio);
     renderer.setSize(w, h, false);
     camera.aspect = w / h;

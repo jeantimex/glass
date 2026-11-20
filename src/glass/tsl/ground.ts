@@ -130,11 +130,19 @@ export function groundNode(cam: ScreenCamera, s: SceneInputs, mirror: N): N {
       // and more blurred.
       const m = mirror.sample(uv).level(0).toVar();
       const px = vec2(mix(9, 1, clamp(m.a.mul(1.3), 0, 1))).div(res).toVar();
-      Loop(12, ({ i }: { i: N }) => {
-        const a = float(i).mul(2.3999632);
-        m.addAssign(mirror.sample(uv.add(vec2(cos(a), sin(a)).mul(sqrt(float(i).add(0.5).div(12))).mul(px))).level(0));
+      // Cheap probe: skip the spiral blur on empty floor far from any mirrored object.
+      const probe = m.a
+        .add(mirror.sample(uv.add(vec2(px.x, 0))).level(0).a)
+        .add(mirror.sample(uv.sub(vec2(px.x, 0))).level(0).a)
+        .add(mirror.sample(uv.add(vec2(0, px.y))).level(0).a)
+        .add(mirror.sample(uv.sub(vec2(0, px.y))).level(0).a);
+      If(probe.greaterThan(1e-4), () => {
+        Loop(8, ({ i }: { i: N }) => {
+          const a = float(i).mul(2.3999632);
+          m.addAssign(mirror.sample(uv.add(vec2(cos(a), sin(a)).mul(sqrt(float(i).add(0.5).div(8))).mul(px))).level(0));
+        });
+        m.divAssign(9);
       });
-      m.divAssign(13);
       const grazing = float(1).sub(clamp(rd.y.negate(), 0, 1)).toVar();
       // (A black floor shows its reflections the more clearly: twice as strong in the dark studio.)
       const k = min(floorP.x.mul(select(dark.greaterThan(0.5), 2, 1)).mul(grazing.mul(grazing).mul(0.65).add(0.35)), 1).mul(m.a);

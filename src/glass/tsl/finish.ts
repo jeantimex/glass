@@ -101,10 +101,10 @@ export function contactShadeNode(cam: ScreenCamera, p: N, src: N): N {
       const reach = p.y.div(dist.mul(2).mul(cam.camFwd.w)).toVar(); // the radius on screen, as a share of its height
       const turn = pixelTurn(fragCoord).toVar();
       const crowded = float(0).toVar();
-      Loop(24, ({ i }: { i: N }) => {
+      Loop(12, ({ i }: { i: N }) => {
         const k = float(i);
         const a = turn.add(k.mul(2.3999632));
-        const r = reach.mul(sqrt(k.add(0.5).div(24)));
+        const r = reach.mul(sqrt(k.add(0.5).div(12)));
         const suv = uv.add(vec2(cos(a).mul(r).mul(res.y).div(res.x), sin(a).mul(r))).toVar();
         const sd = src.sample(suv).level(0).a.toVar();
         const point = pointAt(cam, suv, sd).toVar();
@@ -124,7 +124,7 @@ export function contactShadeNode(cam: ScreenCamera, p: N, src: N): N {
           max(dot(n, there).div(far.add(1e-4)).sub(0.1), 0).mul(float(1).sub(smoothstep(p.y.mul(0.7), p.y.mul(1.6), far))),
         );
       });
-      shade.assign(float(1).sub(p.x.mul(select(onFloor, 1.0, 0.3)).mul(clamp(crowded.div(24).mul(2.6), 0, 1))));
+      shade.assign(float(1).sub(p.x.mul(select(onFloor, 1.0, 0.3)).mul(clamp(crowded.div(12).mul(2.6), 0, 1))));
     });
     return vec4(here.rgb.mul(shade).mul(p.z), dist);
   })();
@@ -168,6 +168,8 @@ export function lensNode(fragCoord: N, res: N, p: N, src: N, glow: N): N {
     // Autofocus: on whatever is in the middle of the picture (a few points round
     // the centre, in case one falls in a gap). Only if all of them see the
     // backdrop does it fall back on the distance it was given.
+    // Skip autofocus & DoF completely when aperture is 0.
+    If(p.y.greaterThan(0.001), () => {
     const focus = float(0).toVar();
     const found = float(0).toVar();
     Loop(5, ({ i }: { i: N }) => {
@@ -187,10 +189,10 @@ export function lensNode(fragCoord: N, res: N, p: N, src: N, glow: N): N {
       const turn = pixelTurn(fragCoord).toVar();
       const sum = here.rgb.toVar();
       const weight = float(1).toVar();
-      Loop(24, ({ i }: { i: N }) => {
+      Loop(16, ({ i }: { i: N }) => {
         const k = float(i);
         const a = turn.add(k.mul(2.3999632));
-        const r = blur.mul(sqrt(k.add(0.5).div(24))).toVar();
+        const r = blur.mul(sqrt(k.add(0.5).div(16))).toVar();
         const there = src.sample(uv.add(vec2(cos(a).mul(r).mul(res.y).div(res.x), sin(a).mul(r)))).level(0).toVar();
         const w = float(1).toVar();
         If(there.a.lessThan(here.a.sub(0.05)), () => {
@@ -200,6 +202,7 @@ export function lensNode(fragCoord: N, res: N, p: N, src: N, glow: N): N {
         weight.addAssign(w);
       });
       col.assign(sum.div(weight));
+    });
     });
     col.addAssign(glow.sample(uv).level(0).rgb.mul(p.z));
     If(p.w.greaterThan(0.5), () => {
