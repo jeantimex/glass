@@ -71,14 +71,17 @@ export function restingPose(kind: number, size: ArrayLike<number>, turn: number)
  * @param cubic make boxes cubes (equal sides)
  * @returns half-width of the grid (m)
  */
-export function layoutGrid(objects: GlassObjects, count: number, only: number[] | null = null, cubic = false): number {
+export type GridLayout = 'flat' | 'grid';
+
+export function layoutGrid(objects: GlassObjects, count: number, only: number[] | null = null, cubic = false, layout: GridLayout = 'flat'): { reach: number; centerY: number } {
   count = Math.min(Math.max(1, Math.round(count)), MAX_OBJECTS);
   let seed = (count * 2654435761) >>> 0;
   const rnd = () => {
     seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
     return seed / 4294967296;
   };
-  const perSide = Math.ceil(Math.sqrt(count));
+  const perSide = layout === 'grid' ? Math.ceil(Math.cbrt(count)) : Math.ceil(Math.sqrt(count));
+  const perLayer = perSide * perSide;
 
   objects.count = count;
   for (let i = 0; i < count; i++) {
@@ -150,7 +153,10 @@ export function layoutGrid(objects: GlassObjects, count: number, only: number[] 
 
     // Resting on the floor, turned any way round, in the middle of its cell.
     const { height, quat } = restingPose(kind, size, rnd() * 2 * Math.PI);
-    const position = [(i % perSide - (perSide - 1) / 2) * CELL, height, (Math.floor(i / perSide) - (perSide - 1) / 2) * CELL];
+    const ix = i % perSide;
+    const iz = layout === 'grid' ? Math.floor(i / perSide) % perSide : Math.floor(i / perSide);
+    const iy = layout === 'grid' ? Math.floor(i / perLayer) : 0;
+    const position = [(ix - (perSide - 1) / 2) * CELL, height + iy * CELL, (iz - (perSide - 1) / 2) * CELL];
 
     objects.kind[i] = kind;
     objects.size.set(size, i * 3);
@@ -163,5 +169,11 @@ export function layoutGrid(objects: GlassObjects, count: number, only: number[] 
     const dispersion = 0.5 + rnd();
     objects.vary.set(cmyCube ? [0, 1, CMY_STRENGTH] : [ior, dispersion, 0], i * 3);
   }
-  return (perSide * CELL) / 2;
+  const halfWidth = (perSide * CELL) / 2;
+  if (layout === 'grid') {
+    const layers = Math.ceil(count / perLayer);
+    const totalHeight = layers * CELL;
+    return { reach: Math.max(halfWidth, totalHeight / 2), centerY: totalHeight / 2 };
+  }
+  return { reach: halfWidth, centerY: 0 };
 }

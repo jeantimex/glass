@@ -19,7 +19,7 @@ import { sceneFunctions, type SceneInputs } from './scene';
 
 type N = any;
 const {
-  Break, Fn, If, Loop, abs, array, bool, clamp, cross, dFdx, dFdy, dot, exp, float, floor, int, ivec2, ivec3, length, max, min, mix, normalize,
+  Break, Fn, If, Loop, abs, array, bool, clamp, cross, dFdx, dFdy, dot, exp, float, floor, int, ivec2, ivec3, length, log, max, min, mix, normalize,
   reflect, refract, select, sign, smoothstep, sqrt, vec2, vec3, vec4,
 } = TSL as N;
 
@@ -96,15 +96,6 @@ function cmyTint(n: N, strength: N): N {
     select(a.y.greaterThanEqual(a.z), vec3(1, 0.9, 0.2), vec3(1, 0.14, 0.92)),
   );
   return mix(vec3(1), passed, strength);
-}
-
-/** Share of a back face that acts as exit glass (a smooth ramp over the distance the light travelled inside). */
-function exitFactor(x: N): N {
-  const a = x.div(0.9864);
-  const f = float(1).sub(x).div(0.0136);
-  const g = float(1).sub(f);
-  const ramp = g.mul(g).mul(g).div(6).add(f.mul(f).mul(f).mul(0.5)).sub(f.mul(f)).add(2 / 3);
-  return select(x.lessThan(0.9864), a.mul(a).mul(a).div(6), select(x.lessThan(1), ramp, 5 / 6));
 }
 
 // -------------------------------------------------------------- shapes ---
@@ -405,7 +396,8 @@ function shapeFunctions(shape: number, g: GlassInputs) {
         });
       }).ElseIf(abs(b).greaterThan(1e-9), () => {
         const tl = c.negate().div(b.mul(2)).toVar();
-        If(tl.greaterThan(1e-4), () => {
+        const yl = pos.y.add(dir.y.mul(tl));
+        If(tl.greaterThan(1e-4).and(yl.lessThanEqual(size.y)).and(yl.greaterThanEqual(size.y.negate().sub(1e-4))), () => {
           tSide.assign(tl);
         });
       });
@@ -424,14 +416,15 @@ function shapeFunctions(shape: number, g: GlassInputs) {
       });
     } else if (shape === KIND.torus) {
       // A quartic, so step along the ray using its exact distance instead.
-      t.assign(0.004);
+      const tube = max(size.y, 1e-4).toVar();
+      t.assign(tube.mul(0.04));
       Loop({ start: int(0), end: int(32), type: 'int', condition: '<', name: 'ts' }, () => {
         const q = pos.add(dir.mul(t)).toVar();
         const d = size.y.sub(length(vec2(length(q.xz).sub(size.x), q.y))).toVar();
-        If(d.lessThan(0.0006), () => {
+        If(d.lessThan(tube.mul(0.006)), () => {
           Break();
         });
-        t.addAssign(max(d, 0.0015));
+        t.addAssign(max(d, tube.mul(0.015)));
       });
       const q = pos.add(dir.mul(t)).toVar();
       const rho = max(length(q.xz), 1e-6);
@@ -637,7 +630,7 @@ export function glassNode(shape: number, mirrored: boolean, worldPos: N, nrmW: N
 
     // Each object can differ slightly from the settings: vary.x is added to the IOR,
     // vary.y multiplies the dispersion.
-    const ior = max(glassP.x.add(vary.x), 1.02).toVar();
+    const ior = max(glassP.x.add(vary.x), 1.0001).toVar();
     // How far apart the IOR is for blue and red light (n_F - n_C): 1/12 for each unit
     // of the dispersion setting, far more than real glass shows, for visible fire.
     const disp = glassP.y.mul(vary.y).div(12).toVar();
@@ -645,13 +638,16 @@ export function glassNode(shape: number, mirrored: boolean, worldPos: N, nrmW: N
     const maxEvents = isMesh(shape) ? min(glassP.z.toInt(), int(4)) : glassP.z.toInt();
     const layers = select(disp.greaterThan(0), int(3), int(1)).toVar();
     const col = vec3(0).toVar();
-    // The colour of the glass: the setting for all of it times the object's own,
-    // faded toward clear by the setting's alpha. (CMY cubes also colour the light
-    // where it enters.)
-    const tint = mix(vec3(1), tintAll.rgb.mul(tintOwn), tintAll.a).toVar();
+    // Volumetric Beer-Lambert absorption: `baseTint` is the transmittance across one
+    // characteristic object diameter (2 * reach), so sigma = -ln(baseTint) / (2 * reach).
+    // Clear glass (white) has sigma = 0. CMY cubes additionally apply dichroic surface
+    // filters at entry, internal bounces, and exit.
+    const baseTint = mix(vec3(1), tintAll.rgb.mul(tintOwn), tintAll.a).toVar();
+    const sigma = log(max(baseTint, vec3(1e-4))).negate().div(max(reach.mul(2), 1e-4)).toVar();
+    const entryFace = vec3(1).toVar();
     if (cmyBox)
       If(cmy.greaterThan(0), () => {
-        tint.mulAssign(cmyTint(n0, cmy));
+        entryFace.assign(cmyTint(n0, cmy));
       });
 
     Loop({ start: int(0), end: layers, type: 'int', condition: '<', name: 'lc' }, ({ lc }: { lc: N }) => {
@@ -660,55 +656,37 @@ export function glassNode(shape: number, mirrored: boolean, worldPos: N, nrmW: N
       const iorIn = max(ior.add(iorOffset(disp, ch)), 1.0001).toVar();
       const f0 = fresnel(dot(d0, n0), iorIn).toVar();
       const layer = f0.mul(scene(worldPos.add(toWorld(n0, quat).mul(0.003)), toWorld(reflect(d0, n0), quat), lampLit)).toVar();
-      const thr = float(1).sub(f0).toVar(); // light still inside, weighted by the chance of getting here
-      const prob = float(1).toVar();
+      const thr = float(1).sub(f0).toVar(); // light still inside, weighted by Fresnel transmission
       const dir = refract(d0, n0, float(1).div(iorIn)).toVar();
       const pos = vec3(p0).toVar();
       // A CMY cube's faces are colour filters: light is filtered by the face it enters
       // through, by each face it bounces off inside, and by the face it leaves
-      // through. Seen through one face, the others mix their colours into it: the
-      // cube inside the cube.
-      const filtered = vec3(tint).toVar();
-      If(dot(dir, dir).greaterThan(1e-6), () => {
+      // through. Volumetric Beer-Lambert absorption is accumulated per segment below.
+      const filtered = vec3(entryFace).toVar();
+      If(thr.greaterThan(0.004).and(dot(dir, dir).greaterThan(1e-6)), () => {
         Loop({ start: int(1), end: maxEvents, type: 'int', condition: '<', name: 'ev' }, () => {
           // Where the ray meets the inside of the surface again, exactly.
           const hit = exit(pos, dir, size);
           pos.assign(hit.pos);
           const nrm = hit.nrm.toVar();
+          filtered.mulAssign(exp(sigma.mul(hit.t.negate())));
           const face = vec3(1).toVar();
           if (cmyBox)
             If(cmy.greaterThan(0), () => {
               face.assign(cmyTint(nrm, cmy));
             });
-          // The exit glass picks one of the three layer IORs at random in the path
-          // tracer; here all three are taken at once, weighted by their chance.
-          const fx = exitFactor(min(hit.t.mul(8), 1)).toVar();
-          const reflProb = float(0).toVar();
-          const leave = (k: number, wk: N) => {
-            const iorK = max(ior.add(iorOffset(disp, k)), 1.0001).toVar();
-            const rf = refract(dir, nrm.negate(), iorK).toVar();
-            const f = fresnel(dot(dir, nrm), float(1).div(iorK)).toVar();
-            If(dot(rf, rf).lessThan(1e-6), () => {
-              f.assign(1);
-            });
-            reflProb.addAssign(wk.mul(f));
-            const outW = thr.mul(wk).mul(float(1).sub(f)).toVar();
-            If(outW.greaterThan(0.004), () => {
-              const seen = lookThrough(center.add(toWorld(pos.add(nrm.mul(0.003)), quat)), toWorld(rf, quat), reach, lampLit);
-              layer.addAssign(filtered.mul(face).mul(min(outW.mul(seen), vec3(prob.mul(10).mul(wk).mul(float(1).sub(f))))));
-            });
-          };
-          // With one layer only the middle IOR leaves; with three, each its share.
-          const share = (k: number) => fx.div(3).add(select(ch.equal(k), float(1).sub(fx), 0));
-          If(layers.equal(3), () => {
-            leave(0, share(0).toVar());
+          // Each wavelength channel exits with its own IOR (conservation of wavelength).
+          const rf = refract(dir, nrm.negate(), iorIn).toVar();
+          const f = fresnel(dot(dir, nrm), float(1).div(iorIn)).toVar();
+          If(dot(rf, rf).lessThan(1e-6), () => {
+            f.assign(1);
           });
-          leave(1, select(layers.equal(3), share(1), 1).toVar());
-          If(layers.equal(3), () => {
-            leave(2, share(2).toVar());
+          const outW = thr.mul(float(1).sub(f)).toVar();
+          If(outW.greaterThan(0.004), () => {
+            const seen = lookThrough(center.add(toWorld(pos.add(nrm.mul(0.003)), quat)), toWorld(rf, quat), reach, lampLit);
+            layer.addAssign(filtered.mul(face).mul(outW.mul(seen)));
           });
-          thr.mulAssign(reflProb);
-          prob.mulAssign(reflProb);
+          thr.mulAssign(f);
           If(thr.lessThan(0.004), () => {
             Break();
           });
@@ -718,7 +696,7 @@ export function glassNode(shape: number, mirrored: boolean, worldPos: N, nrmW: N
         // Light still bouncing around inside when the bounces run out (common in cones
         // and octahedra) is let out, rather than left as a black patch.
         If(thr.greaterThanEqual(0.004), () => {
-          layer.addAssign(filtered.mul(min(thr.mul(lookThrough(center.add(toWorld(pos, quat)), toWorld(dir, quat), reach, lampLit)), vec3(prob.mul(10)))));
+          layer.addAssign(filtered.mul(thr.mul(lookThrough(center.add(toWorld(pos, quat)), toWorld(dir, quat), reach, lampLit))));
         });
       });
       If(layers.equal(3), () => {
@@ -773,7 +751,7 @@ export function photonNode(shape: number, worldPos: N, nrmW: N, g: GlassInputs, 
     If(dot(d0, n0).greaterThan(0), () => {
       n0.assign(n0.negate());
     });
-    const ior = max(glassP.x.add(vary.x), 1.02).toVar();
+    const ior = max(glassP.x.add(vary.x), 1.0001).toVar();
     // Light that only grazes the surface is thrown wide in a thin, faint streak: it
     // is faded out, which keeps the pool of light clean.
     const left = float(1).sub(fresnel(dot(d0, n0), ior)).mul(smoothstep(0.05, 0.4, dot(d0, n0).negate())).toVar();

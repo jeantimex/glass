@@ -2,7 +2,7 @@ import * as THREE from 'three/webgpu';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import GUI from 'three/addons/libs/lil-gui.module.min.js';
 import { KIND, createGlassObjects, createInstancedGlass } from '../glass';
-import { CMY_STRENGTH, layoutGrid, restingPose } from './grid';
+import { CMY_STRENGTH, layoutGrid, restingPose, type GridLayout } from './grid';
 
 /** The volumes of the shapes made from meshes: 128^3 each, Suzanne's then the dragon's. */
 const MESH_SDF_URLS = ['suzanne_sdf_128.bin', 'dragon_sdf_128.bin'];
@@ -39,7 +39,7 @@ const settings = {
   /** Real caustics: the lamp's light traced through the glass onto the floor. */
   realCaustics: true,
   /** Glass shows other glass through it, along the bent rays. */
-  seeThrough: false,
+  seeThrough: true,
   /** How soft they are (m): the wider the lamp, the softer. */
   causticSoftness: 0.3,
   /** How much of the light gathered by the glass reaches the floor. */
@@ -54,7 +54,7 @@ const settings = {
   filmic: true,
 
   // The glass (of a grid of objects; one on its own has its own settings).
-  ior: 1.45,
+  ior: 1.52,
   dispersion: 1,
   /** How much is cut off the edges of boxes (m). */
   bevel: 0,
@@ -91,7 +91,7 @@ type Shape = {
   camera?: [number, number, number, number, number, number];
 };
 const SHAPES: Record<string, Shape> = {
-  'Mixed shapes': { kinds: null },
+  'Mixed shapes': { kinds: null, ior: 1.52 },
   // Diamonds get diamond's IOR and (small) dispersion.
   // On its own the diamond is seen from lower down, looking up at it a little.
   Diamond: { kinds: [KIND.diamond], ior: 2.42, dispersion: 0.4, camera: [3.0, 1.2, 4.1, 0.35, 0.4, 0] },
@@ -99,21 +99,22 @@ const SHAPES: Record<string, Shape> = {
   // toward the camera, with the light it gathers pooled inside it.
   Sphere: {
     kinds: [KIND.sphere],
+    ior: 1.52, // optical crown glass (BK7)
     look: { spotlight: true, lamp: 1.7, lampHeight: 32, lampTurn: -93, fog: 0, causticSoftness: 0.26, glow: 0.5, depthOfField: 0 },
     camera: [2.35, 2.76, 3.1, 0.35, 0.3, 0.04],
   },
-  Cube: { kinds: [KIND.box], cubic: true },
-  'CMY cube': { kinds: [KIND.box], cubic: true, cmy: true },
-  Box: { kinds: [KIND.box] },
-  Cylinder: { kinds: [KIND.cylinder] },
-  Capsule: { kinds: [KIND.capsule] },
-  Cone: { kinds: [KIND.cone] },
-  Torus: { kinds: [KIND.torus] },
-  Octahedron: { kinds: [KIND.octahedron] },
-  Prism: { kinds: [KIND.prism] },
-  'Hex prism': { kinds: [KIND.hexprism] },
-  Suzanne: { kinds: [KIND.suzanne] },
-  Dragon: { kinds: [KIND.dragon] },
+  Cube: { kinds: [KIND.box], cubic: true, ior: 1.52 }, // crown glass
+  'CMY cube': { kinds: [KIND.box], cubic: true, cmy: true, ior: 1.49 }, // acrylic (PMMA)
+  Box: { kinds: [KIND.box], ior: 1.52 }, // soda-lime glass
+  Cylinder: { kinds: [KIND.cylinder], ior: 1.47 }, // borosilicate (Pyrex)
+  Capsule: { kinds: [KIND.capsule], ior: 1.47 }, // borosilicate glass
+  Cone: { kinds: [KIND.cone], ior: 1.52 }, // crown glass
+  Torus: { kinds: [KIND.torus], ior: 1.52 }, // blown glass
+  Octahedron: { kinds: [KIND.octahedron], ior: 1.55 }, // quartz crystal
+  Prism: { kinds: [KIND.prism], ior: 1.62 }, // flint glass
+  'Hex prism': { kinds: [KIND.hexprism], ior: 1.55 }, // quartz crystal
+  Suzanne: { kinds: [KIND.suzanne], ior: 1.52 }, // crown glass
+  Dragon: { kinds: [KIND.dragon], ior: 1.66 }, // lead crystal
 };
 /** Up to this many objects. */
 const MAX_COUNT = 15000;
@@ -131,6 +132,7 @@ const oldDemo = lettersOnly(query.get('demo') ?? '');
 const view = {
   shape: findShape(query.get('shape') ?? oldDemo.replace(/^(single|pile)/, '')) ?? 'Diamond',
   count: query.has('count') ? Number(query.get('count')) : oldDemo.startsWith('pile') ? 2000 : 1,
+  layout: (query.get('layout') === 'grid' ? 'grid' : 'flat') as GridLayout,
 };
 view.count = Math.min(Math.max(Math.round(view.count) || 1, 1), MAX_COUNT);
 /** A shape's name as it is written in the address: "CMY cube" is cmy-cube. */
@@ -314,6 +316,7 @@ async function main() {
   const glassObjects = createGlassObjects();
   /** Half-width of the grid the objects are set out in (m). */
   let gridReach = 1;
+  let gridCenterY = 0;
   /**
    * The single-shape demos: one object placed by hand in the middle of the floor,
    * about a metre tall, resting the way it would lie. Each demo keeps its own
@@ -345,7 +348,7 @@ async function main() {
       // A box is not a cube: longer one way, flatter.
       measures: name === 'Box' ? [0.75, 0.42, 0.55] : [...shape.measures],
       turn: shape.turn,
-      ior: demo.ior ?? 1.45,
+      ior: demo.ior ?? 1.52,
       dispersion: demo.dispersion ?? 1,
       // A CMY cube gets fine bevels: its edges catch the light, as cut glass does.
       bevel: demo.cmy ? 0.008 : 0,
@@ -428,9 +431,11 @@ async function main() {
       placeShowcase(view.shape);
     } else {
       // Each shape sets its own glass.
-      settings.ior = shape.ior ?? 1.45;
+      settings.ior = shape.ior ?? 1.52;
       settings.dispersion = shape.dispersion ?? 1;
-      gridReach = layoutGrid(glassObjects, view.count, shape.kinds, shape.cubic ?? false);
+      const bounds = layoutGrid(glassObjects, view.count, shape.kinds, shape.cubic ?? false, view.layout);
+      gridReach = bounds.reach;
+      gridCenterY = bounds.centerY;
     }
     colourObjects(); // (white, unless random colours are on)
     instanced.markChanged();
@@ -449,8 +454,8 @@ async function main() {
     } else {
       // From in front, above, a little to the right: the whole grid in view.
       const r = gridReach;
-      camera.position.set(r * 1.3 + 2, r * 1.6 + 2, r * 2.8 + 3);
-      orbit.target.set(0, 0, 0);
+      camera.position.set(r * 1.3 + 2, gridCenterY + r * 1.6 + 2, r * 2.8 + 3);
+      orbit.target.set(0, gridCenterY, 0);
     }
     orbit.update();
   };
@@ -485,6 +490,8 @@ async function main() {
     address.searchParams.delete('demo');
     address.searchParams.set('shape', slug(view.shape));
     address.searchParams.set('count', String(view.count));
+    if (view.count > 1 && view.layout === 'grid') address.searchParams.set('layout', 'grid');
+    else address.searchParams.delete('layout');
     history.replaceState(null, '', address);
   };
   /**
@@ -509,6 +516,7 @@ async function main() {
     else {
       updateAddress();
       placeObjects();
+      layoutController.show(view.count > 1);
     }
     wasSingle = isSingle();
   };
@@ -523,6 +531,14 @@ async function main() {
     wasSingle = isSingle();
   });
   gui.add(view, 'count', 1, MAX_COUNT, 1).name('Count').onFinishChange(changeCount);
+  const layoutController = gui
+    .add(view, 'layout', { Flat: 'flat', '3D Grid': 'grid' })
+    .name('Layout')
+    .onChange(() => {
+      updateAddress();
+      placeObjects();
+      frameScene();
+    });
   // The stats panel in the corner: frame rate, triangles, and GPU time per part.
   gui.add(ui, 'stats').name('Show stats').onChange((on: boolean) => {
     const panel = document.getElementById('stats');
@@ -553,10 +569,6 @@ async function main() {
   scene.add(settings, 'shadowSoftness', 0.01, 0.6, 0.01).name('Shadow softness');
   scene.add(settings, 'shadowDarkness', 0, 1, 0.01).name('Shadow darkness');
   scene.add(settings, 'objectShadows').name('Object shadows');
-  scene.add(settings, 'seeThrough').name('Glass through glass');
-  scene.add(settings, 'realCaustics').name('Real caustics');
-  scene.add(settings, 'causticSoftness', 0.005, 0.3, 0.005).name('Caustic softness');
-  scene.add(settings, 'causticStrength', 0, 3, 0.01).name('Caustic strength');
   scene.add(settings, 'floorGrid').name('Floor grid');
   scene.add(settings, 'fog', 0, 2, 0.01).name('Fog');
   addReset(scene);
@@ -617,11 +629,23 @@ async function main() {
       glass.add(settings, 'ior', 1, 2.5, 0.01).name('IOR').listen();
       glass.add(settings, 'dispersion', 0, 5, 0.05).name('Dispersion').listen();
     }
+    glass.add(settings, 'seeThrough').name('Glass through glass');
+    glass.add(settings, 'realCaustics').name('Real caustics');
+    glass.add(settings, 'causticSoftness', 0.005, 0.3, 0.005).name('Caustic softness');
+    glass.add(settings, 'causticStrength', 0, 3, 0.01).name('Caustic strength');
     // Reset: the wireframe as the page starts, and the glass as the shape starts
     // (its own, on its own: its measurements are left as they are).
     glass.add({
       reset: () => {
-        Object.assign(settings, { wireframe: DEFAULTS.wireframe, wireAlpha: DEFAULTS.wireAlpha, colorize: DEFAULTS.colorize });
+        Object.assign(settings, {
+          wireframe: DEFAULTS.wireframe,
+          wireAlpha: DEFAULTS.wireAlpha,
+          colorize: DEFAULTS.colorize,
+          seeThrough: DEFAULTS.seeThrough,
+          realCaustics: DEFAULTS.realCaustics,
+          causticSoftness: DEFAULTS.causticSoftness,
+          causticStrength: DEFAULTS.causticStrength,
+        });
         Object.assign(settings.wireColor, DEFAULTS.wireColor);
         if (single) {
           const { measures, bevel, colour } = single;
@@ -629,7 +653,7 @@ async function main() {
           Object.assign(singleFor(name), { measures, bevel, colour });
           placeObjects();
         } else {
-          settings.ior = demo.ior ?? 1.45;
+          settings.ior = demo.ior ?? 1.52;
           settings.dispersion = demo.dispersion ?? 1;
           Object.assign(settings.glassColor, DEFAULTS.glassColor);
           settings.glassAlpha = DEFAULTS.glassAlpha;
@@ -667,6 +691,7 @@ async function main() {
   }
   /** A grid has one IOR for all; a single has its own settings. */
   function showPanels() {
+    layoutController.show(view.count > 1);
     rebuildShapeFolder();
   }
 
