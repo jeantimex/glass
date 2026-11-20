@@ -14,13 +14,14 @@
 // what the finishing passes work from.
 import * as THREE from 'three/webgpu';
 import { DIAMOND_CUTS, diamondGeometry, type DiamondCut } from './diamond';
+import { GlassMaterial } from './material';
 import { attribute, cross, normalLocal, positionGeometry, positionWorld, screenCoordinate, texture, texture3D, uniform, vec2, vec3, float, uv, vec4, varying, instanceIndex } from 'three/tsl';
 import { KIND, MAX_OBJECTS, type GlassObjects } from './objects';
 import { blurNode, contactShadeNode, lensNode } from './tsl/finish';
 import { groundNode } from './tsl/ground';
 import { causticNode, glassNode, photonNode as photonRayNode } from './tsl/glass';
 
-const KIND_COUNT = 12;
+const KIND_COUNT = 13;
 
 /** Tube radius of the unit torus geometry (its ring radius is 1). */
 const UNIT_TUBE = 0.25;
@@ -545,6 +546,15 @@ export function createInstancedGlass(
   };
   // Triangular prism: apex at y = 1, base at y = -0.5, from z = -1 to 1.
   const triangle = new THREE.Shape([new THREE.Vector2(0, 1), new THREE.Vector2(-0.8660254, -0.5), new THREE.Vector2(0.8660254, -0.5)]);
+  // Unit torus knot, centred and scaled so its bottom rests at y = -1.
+  const unitKnot = (tubular: number, radial: number) => {
+    const g = new THREE.TorusKnotGeometry(0.62, 0.2, tubular, radial);
+    g.computeBoundingBox();
+    const b = g.boundingBox!;
+    const cy = (b.min.y + b.max.y) * 0.5;
+    const s = 2 / (b.max.y - b.min.y);
+    return g.translate(0, -cy, 0).scale(s, s, s);
+  };
   const bases: THREE.BufferGeometry[] = [
     new THREE.BoxGeometry(2, 2, 2),
     new THREE.IcosahedronGeometry(1, 4),
@@ -559,6 +569,7 @@ export function createInstancedGlass(
     meshes.suzanne,
     diamondGeometry(),
     meshes.dragonLod,
+    unitKnot(96, 16),
   ];
   // The round shapes again, far finer: with only a few objects on show, each is
   // large on screen, and the corners of the coarse ones show on their outlines.
@@ -570,6 +581,7 @@ export function createInstancedGlass(
   fineBases[KIND.cone] = new THREE.ConeGeometry(1, 2, 120, 1);
   fineBases[KIND.torus] = new THREE.TorusGeometry(1, UNIT_TUBE, 40, 144).rotateX(Math.PI / 2);
   fineBases[KIND.dragon] = meshes.dragon; // the scan in full
+  fineBases[KIND.torusknot] = unitKnot(220, 36);
   const farScene = new THREE.Scene();
   const nearScene = new THREE.Scene();
   const lightScene = new THREE.Scene();
@@ -757,25 +769,44 @@ export function createInstancedGlass(
   }
 
   /** `moved`: some object changed since the last frame (redraws the caustic map). */
-  function render(glass: { ior: number; dispersion: number; roughness?: number; frostScale?: number; diamondCut?: DiamondCut; cmy?: number; bevel?: number; color?: [number, number, number, number]; wireframe?: boolean; wireColor?: [number, number, number, number] }, light: InstancedLighting, moved: boolean) {
-    setDiamondCut(glass.diamondCut ?? 'round');
+  function render(
+    glass:
+      | GlassMaterial
+      | { ior: number; dispersion: number; roughness?: number; frostScale?: number; diamondCut?: DiamondCut; cmy?: number; bevel?: number; color?: [number, number, number, number]; wireframe?: boolean; wireColor?: [number, number, number, number] },
+    light: InstancedLighting,
+    moved: boolean,
+    wireColorOverride?: [number, number, number, number],
+  ) {
+    const isMat = glass instanceof GlassMaterial;
+    const ior = glass.ior;
+    const dispersion = glass.dispersion;
+    const roughness = glass.roughness ?? 0;
+    const frostScale = glass.frostScale ?? 4;
+    const diamondCut = glass.diamondCut ?? 'round';
+    const cmy = glass.cmy ?? 0;
+    const bevel = glass.bevel ?? 0;
+    const color: [number, number, number, number] = isMat
+      ? [glass.color.r, glass.color.g, glass.color.b, glass.colorAlpha]
+      : (glass.color ?? [1, 1, 1, 1]);
+    const wantWire = glass.wireframe ?? false;
+    const wireColor = wireColorOverride ?? (!isMat ? glass.wireColor : undefined) ?? [0.01, 0.01, 0.01, 1];
+    setDiamondCut(diamondCut);
     marks = timed ? [] : null;
     // Wireframe only: the edges in place of the glass, and nothing mirrored in the floor.
-    const wantWire = glass.wireframe ?? false;
     if (wantWire !== wireOn) {
       wireOn = wantWire;
       updateVisibility();
     }
     // The colour of the lines (linear rgb) and how opaque they are.
-    const [wr, wg, wb, wa] = glass.wireColor ?? [0.01, 0.01, 0.01, 1];
+    const [wr, wg, wb, wa] = wireColor;
     uWireColor.value.setRGB(wr, wg, wb);
     for (const m of wireMaterials) m.blendColor.setRGB(wa, wa, wa);
-    uTint.value.fromArray(glass.color ?? [1, 1, 1, 1]);
-    uBevel.value = glass.bevel ?? 0;
-    uRoughness.value = glass.roughness ?? 0;
-    uFrostScale.value = glass.frostScale ?? 4;
-    if (uCmy.value !== (glass.cmy ?? 0)) lightDirty = true; // its shadow is coloured too
-    uCmy.value = glass.cmy ?? 0;
+    uTint.value.fromArray(color);
+    uBevel.value = bevel;
+    uRoughness.value = roughness;
+    uFrostScale.value = frostScale;
+    if (uCmy.value !== cmy) lightDirty = true; // its shadow is coloured too
+    uCmy.value = cmy;
     // Camera.
     camera.updateMatrixWorld();
     const e = camera.matrixWorld.elements;
@@ -794,7 +825,7 @@ export function createInstancedGlass(
     uSunE.value.fromArray(light.sunE);
     uAlbedo.value.fromArray(light.groundColor);
     sunDir.fromArray(light.sunDir);
-    const sunKey = light.sunDir.join() + light.shadowSoftness + light.causticSoftness + '/' + light.causticStrength + glass.ior + (glass.cmy ?? 0) + (glass.bevel ?? 0) + (glass.color ?? []).join() + String(light.realCaustics) + String(light.objectShadows);
+    const sunKey = light.sunDir.join() + light.shadowSoftness + light.causticSoftness + '/' + light.causticStrength + ior + cmy + bevel + color.join() + String(light.realCaustics) + String(light.objectShadows);
     if (sunKey !== lastSun) {
       lastSun = sunKey;
       lightDirty = true;
@@ -881,7 +912,7 @@ export function createInstancedGlass(
     // the far half (seen through the near half) skip dispersion and follow the
     // light through fewer bounces.
     const many = objects.count > MANY_OBJECTS;
-    uGlass.value.set(glass.ior, many ? 0 : glass.dispersion, many ? 3 : 4, 0);
+    uGlass.value.set(ior, many ? 0 : dispersion, many ? 3 : 4, 0);
     uFloor.value.x = light.ground ? light.floorReflection : 0;
     uFloor.value.y = light.realCaustics ? -light.shadowDarkness : light.shadowDarkness; // (negative: see icGroundColor)
     uFloor.value.z = light.floorGrid ? 1 : 0;
@@ -916,7 +947,7 @@ export function createInstancedGlass(
       }
     };
     if (rough > 0.001) frostBlur(background.texture);
-    uGlass.value.set(glass.ior, many ? 0 : glass.dispersion, many ? 4 : 6, 0);
+    uGlass.value.set(ior, many ? 0 : dispersion, many ? 4 : 6, 0);
     mark('Far glass');
     renderer.setRenderTarget(farLayer);
     copySource.value = background.texture;
@@ -936,7 +967,7 @@ export function createInstancedGlass(
     // With glass showing through glass, the near half sees the far half: it is given
     // the picture with the far half in it, and looks for it along its refracted rays
     // (see lookThrough in tsl/glass.ts). Without, it is given the floor alone, as the far half was.
-    uGlass.value.set(glass.ior, glass.dispersion, many ? 5 : 6, light.seeThrough ? (many ? 5 : 8) : 0);
+    uGlass.value.set(ior, dispersion, many ? 5 : 6, light.seeThrough ? (many ? 5 : 8) : 0);
     behindNode.value = light.seeThrough ? farLayer.texture : background.texture;
     renderer.render(nearScene, camera);
     renderer.autoClear = true;

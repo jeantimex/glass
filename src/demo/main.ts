@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import GUI from 'three/addons/libs/lil-gui.module.min.js';
-import { KIND, createGlassObjects, createInstancedGlass, type DiamondCut } from '../glass';
+import { GlassMaterial, KIND, createGlassObjects, createInstancedGlass, type DiamondCut } from '../glass';
 import { CMY_STRENGTH, layoutGrid, restingPose, type GridLayout } from './grid';
 
 /** The volumes of the shapes made from meshes: 128^3 each, Suzanne's then the dragon's. */
@@ -116,6 +116,7 @@ const SHAPES: Record<string, Shape> = {
   Capsule: { kinds: [KIND.capsule], ior: 1.47 }, // borosilicate glass
   Cone: { kinds: [KIND.cone], ior: 1.52 }, // crown glass
   Torus: { kinds: [KIND.torus], ior: 1.52 }, // blown glass
+  'Torus knot': { kinds: [KIND.torusknot], ior: 1.52 }, // blown crystal knot
   Octahedron: { kinds: [KIND.octahedron], ior: 1.55 }, // quartz crystal
   Prism: { kinds: [KIND.prism], ior: 1.62 }, // flint glass
   'Hex prism': { kinds: [KIND.hexprism], ior: 1.55 }, // quartz crystal
@@ -343,6 +344,7 @@ async function main() {
     [KIND.suzanne]: { labels: ['Size'], measures: [0.8], turn: -20 },
     [KIND.diamond]: { labels: ['Size'], measures: [0.6], turn: 240 },
     [KIND.dragon]: { labels: ['Size'], measures: [0.9], turn: -30 },
+    [KIND.torusknot]: { labels: ['Size'], measures: [0.75], turn: -20 },
   };
   const singles: Record<string, Single> = {};
   const singleKind = (name: string): number => SHAPES[name].kinds?.[0] ?? KIND.box;
@@ -384,6 +386,13 @@ async function main() {
     glassObjects.vary.set([0, 1, 0], 0); // exactly the IOR and dispersion it is set to
     glassObjects.tint.set([1, 1, 1], 0); // and the colour
   };
+  const glassMaterial = new GlassMaterial({
+    ior: settings.ior,
+    dispersion: settings.dispersion,
+    roughness: settings.roughness,
+    frostScale: settings.frostScale,
+    diamondCut: settings.diamondCut,
+  });
   const instanced = createInstancedGlass(renderer, camera, glassObjects, {
     suzanne: suzanneMesh.geometry,
     dragon: dragonMesh.geometry,
@@ -852,9 +861,19 @@ async function main() {
     const spot = settings.dark && settings.spotlight;
     const lampUp = THREE.MathUtils.degToRad(settings.lampHeight);
     const lampRound = THREE.MathUtils.degToRad(settings.lampTurn);
+    const [gr, gg, gb, ga] = glassColour();
+    glassMaterial.ior = settings.ior;
+    glassMaterial.dispersion = settings.dispersion;
+    glassMaterial.roughness = settings.roughness;
+    glassMaterial.frostScale = settings.frostScale;
+    glassMaterial.diamondCut = settings.diamondCut;
+    glassMaterial.cmy = cmyStrength();
+    glassMaterial.bevel = boxBevel();
+    glassMaterial.color.setRGB(gr, gg, gb);
+    glassMaterial.colorAlpha = ga;
+    glassMaterial.wireframe = settings.wireframe;
     instanced.render(
-      { ior: settings.ior, dispersion: settings.dispersion, roughness: settings.roughness, frostScale: settings.frostScale, diamondCut: settings.diamondCut, cmy: cmyStrength(), bevel: boxBevel(), color: glassColour(), wireframe: settings.wireframe,
-        wireColor: [srgbToLinear(settings.wireColor.r), srgbToLinear(settings.wireColor.g), srgbToLinear(settings.wireColor.b), settings.wireAlpha] },
+      glassMaterial,
       {
         ground: settings.ground,
         dark: settings.dark,
@@ -894,6 +913,7 @@ async function main() {
       },
       // (Nothing moves by itself: a new scene marks itself changed.)
       false,
+      [srgbToLinear(settings.wireColor.r), srgbToLinear(settings.wireColor.g), srgbToLinear(settings.wireColor.b), settings.wireAlpha],
     );
     status.triangles = instanced.triangles().toLocaleString('en-US');
   });

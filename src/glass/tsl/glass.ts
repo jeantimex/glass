@@ -59,7 +59,7 @@ const toLocal = (v: N, q: N) => {
 const toWorld = (v: N, q: N) => v.add(cross(q.xyz, cross(q.xyz, v).add(v.mul(q.w))).mul(2));
 
 /** Unpolarised dielectric Fresnel. eta = n_transmitted / n_incident. */
-const fresnel = Fn(([cosI, eta]: N[]) => {
+export const fresnel = Fn(([cosI, eta]: N[]) => {
   const c = abs(cosI).toVar();
   const g2 = eta.mul(eta).sub(1).add(c.mul(c)).toVar();
   const out = float(1).toVar();
@@ -79,7 +79,7 @@ const fresnel = Fn(([cosI, eta]: N[]) => {
  * the wavelengths glass makers measure at: red 656.3 nm, blue 486.1 nm. Blue bends
  * away from yellow more than twice as far as red does.
  */
-function iorOffset(spread: N, k: number | N): N {
+export function iorOffset(spread: N, k: number | N): N {
   if (typeof k === 'number') return k === 0 ? spread.mul(-0.301) : k === 2 ? spread.mul(0.699) : float(0);
   return select(k.equal(0), spread.mul(-0.301), select(k.equal(2), spread.mul(0.699), 0));
 }
@@ -92,7 +92,7 @@ function iorOffset(spread: N, k: number | N): N {
  * a little of the blocked one through, so three in a row stay a deep colour
  * instead of going grey.
  */
-function cmyTint(n: N, strength: N): N {
+export function cmyTint(n: N, strength: N): N {
   const a = abs(n).toVar();
   const passed = select(
     a.x.greaterThanEqual(a.y).and(a.x.greaterThanEqual(a.z)),
@@ -124,7 +124,7 @@ const valueNoise3 = Fn(([p]: N[]) => {
 }).setLayout({ name: 'icValueNoise3', type: 'float', inputs: [{ name: 'p', type: 'vec3' }] });
 
 /** 3-octave organic frost grain: fine (0.52) + medium (0.33) + broad (0.15). */
-const frostNoise3 = (p: N) =>
+export const frostNoise3 = (p: N) =>
   clamp(
     valueNoise3(p.mul(36)).mul(0.52)
       .add(valueNoise3(p.mul(14).add(vec3(19.7, 4.3, 11.2))).mul(0.33))
@@ -194,7 +194,7 @@ function planesOf(shape: number, size: N, bevel: N): N[] | null {
 }
 
 /** The shape functions for one shape: snapping a surface point onto it, and finding where a ray inside leaves. */
-function shapeFunctions(shape: number, g: GlassInputs, diamondPlanes: number[] = DIAMOND_PLANES) {
+export function shapeFunctions(shape: number, g: Pick<GlassInputs, 'bevel'> & Partial<Pick<GlassInputs, 'sdfTex' | 'meshEntry'>>, diamondPlanes: number[] = DIAMOND_PLANES) {
   const { bevel, sdfTex } = g;
   const diamondPlaneCount = diamondPlanes.length / 4;
   // The diamond's facets at size 1 (diamond.ts), read by index: a constant array
@@ -291,6 +291,8 @@ function shapeFunctions(shape: number, g: GlassInputs, diamondPlanes: number[] =
         // point and the mesh's own smooth normal.
         n.assign(meshNormal);
       });
+    } else if (shape === KIND.torusknot) {
+      n.assign(meshNormal);
     } else if (shape === KIND.cone) {
       const k = size.x.div(size.y.mul(2)).toVar();
       const rho = max(length(p.xz), 1e-6).toVar();
@@ -505,6 +507,10 @@ function shapeFunctions(shape: number, g: GlassInputs, diamondPlanes: number[] =
         });
       });
       n.assign(volumeNormal(pos.add(dir.mul(t)), s));
+    } else if (shape === KIND.torusknot) {
+      // Arbitrary smooth knot mesh: curved thick-shell exit estimate (fast, zero marching).
+      t.assign(size.x.mul(0.45));
+      n.assign(normalize(dir.add(normalize(pos).mul(0.35))));
     } else if (shape === KIND.box) {
       If(bevel.greaterThan(0), polyhedron).Else(() => {
         const along = (d: N, half: N, p: N) => select(abs(d).greaterThan(1e-7), sign(d).mul(half).sub(p).div(d), 1e9);
@@ -700,7 +706,7 @@ export function glassNode(shape: number, mirrored: boolean, worldPos: N, nrmW: N
     // of the dispersion setting, far more than real glass shows, for visible fire.
     const disp = glassP.y.mul(vary.y).div(12).toVar();
     // The baked mesh is the one shape that has to be marched, so it gets fewer bounces.
-    const maxEvents = isMesh(shape) ? min(glassP.z.toInt(), int(4)) : glassP.z.toInt();
+    const maxEvents = isMesh(shape) || shape === KIND.torusknot ? min(glassP.z.toInt(), int(4)) : glassP.z.toInt();
     const layers = select(disp.greaterThan(0), int(3), int(1)).toVar();
     const col = vec3(0).toVar();
     // Volumetric Beer-Lambert absorption: `baseTint` is the transmittance across one

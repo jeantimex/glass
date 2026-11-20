@@ -140,7 +140,7 @@ function softness(dist: N, focus: N, aperture: N): N {
  * instead of clipping, losing a little colour on the way (the Khronos "neutral"
  * curve).
  */
-function tones(cIn: N): N {
+export function tones(cIn: N): N {
   const c = vec3(cIn).toVar();
   const low = min(c.r, min(c.g, c.b)).toVar();
   c.subAssign(select(low.lessThan(0.08), low.sub(low.mul(low).mul(6.25)), 0.04));

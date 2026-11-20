@@ -35,7 +35,8 @@ const PICK_FOR_KIND: Record<number, number> = {
   [KIND.hexprism]: 0.9,
   [KIND.diamond]: 0.95,
   [KIND.suzanne]: 0.98,
-  [KIND.dragon]: 0.995,
+  [KIND.dragon]: 0.992,
+  [KIND.torusknot]: 0.998,
 };
 
 /**
@@ -140,10 +141,14 @@ export function layoutGrid(objects: GlassObjects, count: number, only: number[] 
       kind = KIND.suzanne;
       const r = 0.32 + rnd() * 0.12;
       size = [r, r, r];
-    } else {
+    } else if (pick < 0.995) {
       // (About as long as Suzanne is wide; a little lower and flatter.)
       kind = KIND.dragon;
       const r = 0.34 + rnd() * 0.12;
+      size = [r, r, r];
+    } else {
+      kind = KIND.torusknot;
+      const r = 0.28 + rnd() * 0.1;
       size = [r, r, r];
     }
     if (cubic && kind === KIND.box) size = [size[0], size[0], size[0]];
