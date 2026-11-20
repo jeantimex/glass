@@ -1,4 +1,4 @@
-# webgpu-glass-shader
+# Glass Material
 
 Real-time physical glass rendering in the browser with **Three.js** and **TSL** (compiles to **WebGPU / WGSL**, with automatic fallback to **WebGL 2 / GLSL**): exact dielectric Fresnel, Cauchy chromatic dispersion, Beer–Lambert volumetric absorption, frosted glass (毛玻璃), 6 diamond cuts, caustics, and instanced rendering of thousands of glass objects.
 
