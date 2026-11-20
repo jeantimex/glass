@@ -99,12 +99,14 @@ export function groundNode(cam: ScreenCamera, s: SceneInputs, mirror: N): N {
   return Fn(() => {
     const ndc = fragCoord.div(res).mul(2).sub(1).mul(vec2(1, -1)).toVar();
     const rd = normalize(camFwd.xyz.add(camRight.xyz.mul(ndc.x.mul(camFwd.w).mul(camRight.w))).add(camUp.mul(ndc.y.mul(camFwd.w)))).toVar();
-    const col = scene(camPos, rd, float(1)).toVar();
+    const col = scene(camPos, rd, float(1), float(0)).toVar();
     // The studio backdrop is lit a little unevenly: brighter up and to the left.
     col.mulAssign(ndc.y.mul(0.8).sub(ndc.x.mul(0.5)).mul(0.07).add(1));
+    const floorAlpha = s.floorColor ? clamp(s.floorColor.a, 0, 1) : float(1);
     const onFloor = groundOn.greaterThan(0.5).and(rd.y.lessThan(-1e-5)).toVar();
     const floorT = camPos.y.negate().div(min(rd.y, -1e-5)).toVar();
     // An endless grid on the floor: a line every metre, a heavier one every five metres.
+    // Controlled independently of floor color/alpha by gridColor (rgb + a).
     If(onFloor.and(floorP.z.greaterThan(0.5)), () => {
       const g = camPos.xz.add(rd.xz.mul(floorT)).toVar();
       // How much floor one pixel covers there (it stretches away from the camera).
@@ -114,12 +116,16 @@ export function groundNode(cam: ScreenCamera, s: SceneInputs, mirror: N): N {
       const fine = gridLine(min(near1.x, near1.y), 0.009, pixel);
       const heavy = gridLine(min(near5.x, near5.y), 0.02, pixel);
       const lines = min(fine.mul(0.38).add(heavy.mul(0.5)), 0.62).toVar();
-      // Dark lines on the white floor, pale ones on the dark one.
-      If(dark.greaterThan(0.5), () => {
-        col.addAssign(vec3(0.035).mul(lines));
-      }).Else(() => {
-        col.mulAssign(float(1).sub(lines));
-      });
+      if (s.gridColor) {
+        col.assign(mix(col, s.gridColor.rgb, clamp(lines.mul(s.gridColor.a), 0, 1)));
+      } else {
+        // Dark lines on the white floor, pale ones on the dark one.
+        If(dark.greaterThan(0.5), () => {
+          col.addAssign(vec3(0.035).mul(lines));
+        }).Else(() => {
+          col.mulAssign(float(1).sub(lines));
+        });
+      }
     });
     // A polished floor: the picture of the objects mirrored in it (drawn before this
     // pass), stronger at grazing angles and slightly blurred.
@@ -145,7 +151,7 @@ export function groundNode(cam: ScreenCamera, s: SceneInputs, mirror: N): N {
       });
       const grazing = float(1).sub(clamp(rd.y.negate(), 0, 1)).toVar();
       // (A black floor shows its reflections the more clearly: twice as strong in the dark studio.)
-      const k = min(floorP.x.mul(select(dark.greaterThan(0.5), 2, 1)).mul(grazing.mul(grazing).mul(0.65).add(0.35)), 1).mul(m.a);
+      const k = min(floorP.x.mul(select(dark.greaterThan(0.5), 2, 1)).mul(grazing.mul(grazing).mul(0.65).add(0.35)), 1).mul(m.a).mul(floorAlpha);
       If(m.a.greaterThan(1e-4), () => {
         col.assign(mix(col, m.rgb.div(m.a), k));
       });
@@ -158,13 +164,13 @@ export function groundNode(cam: ScreenCamera, s: SceneInputs, mirror: N): N {
     // Fog: the floor fades into a pale haze with distance, and the haze hangs along
     // the horizon.
     If(floorP.w.greaterThan(0), () => {
-      const haze = env(normalize(vec3(rd.x, 0.03, rd.z)), float(1)).mul(1.07).toVar();
+      const haze = env(normalize(vec3(rd.x, 0.03, rd.z)), float(1), float(0)).mul(1.07).toVar();
       If(onFloor, () => {
         col.assign(mix(col, haze, float(1).sub(exp(floorP.w.mul(-0.05).mul(floorT)))));
       }).Else(() => {
         col.assign(mix(col, haze, exp(max(rd.y, 0).mul(-5).div(floorP.w))));
       });
     });
-    return vec4(col, select(onFloor, floorT, 1000));
+    return vec4(col, select(onFloor.and(floorAlpha.greaterThan(0.001)), floorT, 1000));
   })();
 }

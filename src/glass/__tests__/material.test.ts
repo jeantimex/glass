@@ -22,6 +22,7 @@ describe('GlassMaterial standalone API', () => {
     expect(mat).toBeInstanceOf(THREE.MeshBasicNodeMaterial);
     expect(mat.shape).toBe('mesh');
     expect(mat.diamondCut).toBe('round');
+    expect(mat.cmyOrder).toBe('cym');
     expect(mat.ior).toBeCloseTo(1.52);
     expect(mat.dispersion).toBeCloseTo(0.5);
     expect(mat.roughness).toBe(0);
@@ -87,6 +88,7 @@ describe('GlassMaterial standalone API', () => {
     mat.ground = false;
     mat.filmic = false;
     mat.exposure = 1.25;
+    mat.cmyOrder = 'ycm';
     expect(mat.ior).toBeCloseTo(1.66);
     expect(mat.dispersion).toBeCloseTo(1.2);
     expect(mat.roughness).toBeCloseTo(0.5);
@@ -96,6 +98,7 @@ describe('GlassMaterial standalone API', () => {
     expect(mat.ground).toBe(false);
     expect(mat.filmic).toBe(false);
     expect(mat.exposure).toBeCloseTo(1.25);
+    expect(mat.cmyOrder).toBe('ycm');
     expect(mat.colorNode).toBe(originalNode);
   });
 

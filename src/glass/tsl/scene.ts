@@ -21,6 +21,10 @@ export interface SceneInputs {
   lightU: N;
   /** Floor: how reflective, how dark its shadows (negative: real caustics), grid on, fog. */
   floorP: N;
+  /** Floor surface colour (linear rgb) and opacity (a: 0 = transparent, 1 = solid). */
+  floorColor?: N;
+  /** Floor grid line colour (linear rgb) and opacity (a). */
+  gridColor?: N;
   /** Stage spotlight: x the radius of its beam at the floor (0: off), y how far away the lamp is. */
   spot: N;
   /** Toward the main lamp (which is also the spotlight), from the middle of the floor. */
@@ -53,12 +57,16 @@ export function sceneFunctions(s: SceneInputs, backdrop: boolean) {
    * lampVisible in glass.ts). In the shadow of others, it still sees the lamp in its
    * reflections at about a third (the ones in the way are glass).
    */
-  const env = Fn(([d, lampLit]: N[]) => {
+  const env = Fn(([d, lampLit, cone]: N[]) => {
     // As bright as the open ground, so the two meet without a visible horizon.
     // (Under a spotlight the backdrop is outside the pool, so the lamp does not reach it.)
     if (backdrop) return s.albedo.mul(s.skyE.add(s.sunE.mul(select(spotOn, 0, 1))));
     const lampShare = mix(0.35, 1, lampLit);
-    const r = (s.roughness ?? float(0)).toVar();
+    const rough = (s.roughness ?? float(0)).toVar();
+    // Analytic angular pre-filtering: combine surface roughness with the ray-cone footprint.
+    // Peak lamp gains scale down as lobes widen (conserving energy), while frosted ambient lift
+    // applies only to actual surface roughness so clear glass never turns milky.
+    const r = max(rough, clamp(cone, 0, 1)).toVar();
     const r2 = r.mul(r).toVar();
     const sharp = float(1).sub(r.mul(0.85)).toVar();
     const az = atan(d.z, d.x).toVar();
@@ -89,7 +97,7 @@ export function sceneFunctions(s: SceneInputs, backdrop: boolean) {
         const stripGain = float(4).div(r2.mul(5).add(1));
         k.addAssign(tall.mul(stripGain).mul(smoothstep(stripLo, stripHi, cos(az.sub(2.5)))));
         k.addAssign(tall.mul(stripGain).mul(smoothstep(stripLo, stripHi, cos(az.add(0.63)))));
-        k.addAssign(r.mul(0.12));
+        k.addAssign(rough.mul(0.12));
       }).Else(() => {
         const mainGlow = smoothstep(float(0.84).sub(r.mul(0.55)), float(0.95).add(r.mul(0.05)), dot(d, s.lamp));
         k.addAssign(lampShare.mul(6).div(r2.mul(4).add(1)).mul(mainGlow));
@@ -97,7 +105,7 @@ export function sceneFunctions(s: SceneInputs, backdrop: boolean) {
         const tall = smoothstep(0.02, 0.1, d.y).mul(float(1).sub(smoothstep(0.6, 0.75, d.y))).toVar();
         k.addAssign(tall.mul(float(5).div(r2.mul(6).add(1))).mul(smoothstep(float(0.985).sub(r.mul(0.6)), 0.996, cos(az.sub(0.5)))));
         k.addAssign(tall.mul(float(3.5).div(r2.mul(6).add(1))).mul(smoothstep(float(0.99).sub(r.mul(0.6)), 0.998, cos(az.add(1.9)))));
-        k.addAssign(r.mul(0.1));
+        k.addAssign(rough.mul(0.1));
       });
       out.assign(vec3(k));
     }).Else(() => {
@@ -116,11 +124,11 @@ export function sceneFunctions(s: SceneInputs, backdrop: boolean) {
       const smallGain = float(3).div(r2.mul(8).add(1));
       c.addAssign(smoothstep(smallLo, 0.995, dot(d, normalize(vec3(Math.cos(3), 0.6, Math.sin(3))))).mul(smallGain));
       c.addAssign(smoothstep(smallLo, 0.995, dot(d, normalize(vec3(Math.cos(5), 0.9, Math.sin(5))))).mul(smallGain));
-      c.addAssign(r.mul(0.08));
+      c.addAssign(rough.mul(0.08));
       out.assign(vec3(c));
     });
     return out;
-  }).setLayout({ name: 'icEnv', type: 'vec3', inputs: [{ name: 'd', type: 'vec3' }, { name: 'lampLit', type: 'float' }] });
+  }).setLayout({ name: 'icEnv', type: 'vec3', inputs: [{ name: 'd', type: 'vec3' }, { name: 'lampLit', type: 'float' }, { name: 'cone', type: 'float' }] });
 
   /** Where a ground point falls in the caustic map. */
   const lightUv = (g: N) => {
@@ -163,6 +171,9 @@ export function sceneFunctions(s: SceneInputs, backdrop: boolean) {
     return out;
   }).setLayout({ name: 'icSpotPool', type: 'float', inputs: [{ name: 'g', type: 'vec3' }] });
 
+  const floorAlbedo = s.floorColor ? s.floorColor.rgb : s.albedo;
+  const floorAlpha = s.floorColor ? clamp(s.floorColor.a, 0, 1) : float(1);
+
   /** The floor's colour at a ground point. */
   const groundColor = Fn(([g]: N[]) => {
     // The floor's shadows are blurred: the shadow of the main lamp a little, and a
@@ -170,7 +181,7 @@ export function sceneFunctions(s: SceneInputs, backdrop: boolean) {
     const direct = clamp(sunT(g), vec3(0), vec3(1)).toVar();
     const pool = spotPool(g).toVar();
     // Blurred only where the floor is seen directly, not through glass.
-    if (!backdrop) return s.albedo.mul(s.skyE.mul(direct.mul(0.45).add(0.55)).add(s.sunE.mul(direct).mul(pool)));
+    if (!backdrop) return floorAlbedo.mul(s.skyE.mul(direct.mul(0.45).add(0.55)).add(s.sunE.mul(direct).mul(pool)));
     const uv = lightUv(g).toVar();
     // x a little blurred (the shadow of the lamp), y far wider (the room's light kept off).
     const shade = vec2(s.shadeTex.sample(uv).level(0).g, s.shadeFarTex.sample(uv).level(0).g).toVar();
@@ -191,24 +202,23 @@ export function sceneFunctions(s: SceneInputs, backdrop: boolean) {
       lamp.assign(float(1).sub(darkness.mul(float(1).sub(lamp))));
     });
     const ambient = float(1).sub(darkness.mul(0.8).mul(float(1).sub(min(shade.y, 1))));
-    return s.albedo.mul(s.skyE.mul(ambient).add(s.sunE.mul(lamp).mul(pool)));
+    return floorAlbedo.mul(s.skyE.mul(ambient).add(s.sunE.mul(lamp).mul(pool)));
   }).setLayout({ name: 'icGroundColor', type: 'vec3', inputs: [{ name: 'g', type: 'vec3' }] });
 
   /** Ground and sky along a ray, ignoring glass. */
-  const scene = Fn(([ro, rd, lampLit]: N[]) => {
-    const out = vec3(0).toVar();
-    If(groundOn.greaterThan(0.5).and(rd.y.lessThan(-1e-5)), () => {
+  const scene = Fn(([ro, rd, lampLit, cone]: N[]) => {
+    const out = env(rd, lampLit, cone).toVar();
+    If(groundOn.greaterThan(0.5).and(rd.y.lessThan(-1e-5)).and(floorAlpha.greaterThan(0.001)), () => {
       const t = max(ro.y.negate().div(rd.y), 0).toVar();
-      const horizon = env(normalize(vec3(rd.x, 0.03, rd.z)), lampLit);
-      out.assign(mix(groundColor(ro.add(rd.mul(t))), horizon, smoothstep(150, 600, t)));
-    }).Else(() => {
-      out.assign(env(rd, lampLit));
+      const horizon = env(normalize(vec3(rd.x, 0.03, rd.z)), lampLit, cone);
+      const floorCol = mix(groundColor(ro.add(rd.mul(t))), horizon, smoothstep(150, 600, t));
+      out.assign(mix(out, floorCol, floorAlpha));
     });
     return out;
   }).setLayout({
     name: 'icScene',
     type: 'vec3',
-    inputs: [{ name: 'ro', type: 'vec3' }, { name: 'rd', type: 'vec3' }, { name: 'lampLit', type: 'float' }],
+    inputs: [{ name: 'ro', type: 'vec3' }, { name: 'rd', type: 'vec3' }, { name: 'lampLit', type: 'float' }, { name: 'cone', type: 'float' }],
   });
 
   return { dark, groundOn, env, sunT, spotPool, groundColor, scene };

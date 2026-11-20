@@ -7,7 +7,7 @@ import * as TSL from 'three/tsl';
 import { DIAMOND_CUTS, type DiamondCut } from './diamond';
 import { KIND } from './objects';
 import { tones } from './tsl/finish';
-import { cmyTint, fresnel, frostNoise3, iorOffset, shapeFunctions } from './tsl/glass';
+import { CMY_FACE_ORDERS, cmyTint, fresnel, frostNoise3, shapeFunctions, SPECTRAL_COUNT, spectralCauchy, spectralWeight, type CmyFaceOrder } from './tsl/glass';
 
 type N = any;
 const {
@@ -70,6 +70,8 @@ export interface GlassMaterialParameters {
   bevel?: number;
   /** CMY dichroic cube filter strength when `shape === 'box'` (0 = off; default 0). */
   cmy?: number;
+  /** CMY face color permutation for [X, Y, Z] faces when `cmy > 0` (default `'cym'`). */
+  cmyOrder?: CmyFaceOrder;
   /** Use dark studio environment instead of bright photo studio (default false). */
   dark?: boolean;
   /** Include a procedural ground plane in reflections/refractions (default true). */
@@ -170,6 +172,7 @@ function makeStudioEnv(
 export class GlassMaterial extends THREE.MeshBasicNodeMaterial {
   readonly shape: GlassShape;
   private _diamondCut: DiamondCut;
+  private _cmyOrder: CmyFaceOrder;
 
   private readonly uIor = uniform(1.52);
   private readonly uDispersion = uniform(0.5);
@@ -180,6 +183,7 @@ export class GlassMaterial extends THREE.MeshBasicNodeMaterial {
   private readonly uBounces = uniform(6);
   private readonly uBevel = uniform(0);
   private readonly uCmy = uniform(0);
+  private readonly uCmyOrder = uniform(new THREE.Vector3(0, 1, 2));
   private readonly uDark = uniform(0);
   private readonly uGround = uniform(1);
   private readonly uExposure = uniform(1);
@@ -197,6 +201,8 @@ export class GlassMaterial extends THREE.MeshBasicNodeMaterial {
 
     this.shape = params.shape ?? 'mesh';
     this._diamondCut = params.diamondCut ?? 'round';
+    this._cmyOrder = params.cmyOrder ?? 'cym';
+    this.uCmyOrder.value.set(...CMY_FACE_ORDERS[this._cmyOrder]);
 
     if (params.color !== undefined) this.color.set(params.color);
     this.uIor.value = params.ior ?? 1.52;
@@ -317,6 +323,14 @@ export class GlassMaterial extends THREE.MeshBasicNodeMaterial {
   }
   set cmy(v: number) {
     this.uCmy.value = v;
+  }
+
+  get cmyOrder(): CmyFaceOrder {
+    return this._cmyOrder;
+  }
+  set cmyOrder(v: CmyFaceOrder) {
+    this._cmyOrder = v;
+    this.uCmyOrder.value.set(...CMY_FACE_ORDERS[v]);
   }
 
   get dark(): boolean {
@@ -453,14 +467,14 @@ export class GlassMaterial extends THREE.MeshBasicNodeMaterial {
 
       const ior = max(uIor, 1.0001).toVar();
       const disp = uDispersion.div(12).toVar();
-      const layers = select(disp.greaterThan(0), int(3), int(1)).toVar();
+      const layers = select(disp.greaterThan(0), int(SPECTRAL_COUNT), int(1)).toVar();
       const baseTint = mix(vec3(1), uTint, uColorAlpha).toVar();
       const sigma = log(max(baseTint, vec3(1e-4))).negate().div(max(reach, 1e-4)).toVar();
       const col = vec3(0).toVar();
 
       Loop({ start: int(0), end: layers, type: 'int', condition: '<', name: 'lc' }, ({ lc }: { lc: N }) => {
-        const ch = select(layers.equal(3), lc, int(1)).toVar();
-        const iorIn = max(ior.add(iorOffset(disp, ch)), 1.0001).toVar();
+        const bandOffset = select(layers.equal(1), float(0), spectralCauchy(lc));
+        const iorIn = max(ior.add(disp.mul(bandOffset)), 1.0001).toVar();
         const f0 = fresnel(dot(d0, n0), iorIn).toVar();
         const reflDir = reflect(d0, n0);
         const layer = f0.mul(sampleScene(positionWorld.add(n0.mul(0.003)), reflDir)).toVar();
@@ -489,19 +503,8 @@ export class GlassMaterial extends THREE.MeshBasicNodeMaterial {
             layer.addAssign(absorb.mul(absorb).mul(bounceW).mul(lookEnv(pExit, rInt, bend)));
           });
         });
-        If(layers.equal(3), () => {
-          If(lc.equal(0), () => {
-            col.assign(vec3(layer.x, col.y, col.z));
-          })
-            .ElseIf(lc.equal(1), () => {
-              col.assign(vec3(col.x, layer.y, col.z));
-            })
-            .Else(() => {
-              col.assign(vec3(col.x, col.y, layer.z));
-            });
-        }).Else(() => {
-          col.assign(layer);
-        });
+        const weight = select(layers.equal(1), vec3(1), spectralWeight(lc));
+        col.addAssign(layer.mul(weight));
       });
 
       // Creamy frosted veil + crisp Fresnel rim when roughness > 0.
@@ -579,19 +582,19 @@ export class GlassMaterial extends THREE.MeshBasicNodeMaterial {
       const ior = max(uIor, 1.0001).toVar();
       const disp = uDispersion.div(12).toVar();
       const maxEvents = uBounces.toInt();
-      const layers = select(disp.greaterThan(0), int(3), int(1)).toVar();
+      const layers = select(disp.greaterThan(0), int(SPECTRAL_COUNT), int(1)).toVar();
       const baseTint = mix(vec3(1), uTint, uColorAlpha).toVar();
       const sigma = log(max(baseTint, vec3(1e-4))).negate().div(max(reach.mul(2), 1e-4)).toVar();
       const entryFace = vec3(1).toVar();
       if (cmyBox)
         If(uCmy.greaterThan(0), () => {
-          entryFace.assign(cmyTint(n0, uCmy));
+          entryFace.assign(cmyTint(n0, uCmy, this.uCmyOrder));
         });
 
       const col = vec3(0).toVar();
       Loop({ start: int(0), end: layers, type: 'int', condition: '<', name: 'lc' }, ({ lc }: { lc: N }) => {
-        const ch = select(layers.equal(3), lc, int(1)).toVar();
-        const iorIn = max(ior.add(iorOffset(disp, ch)), 1.0001).toVar();
+        const bandOffset = select(layers.equal(1), float(0), spectralCauchy(lc));
+        const iorIn = max(ior.add(disp.mul(bandOffset)), 1.0001).toVar();
         const f0 = fresnel(dot(d0, n0), iorIn).toVar();
         const layer = f0.mul(sampleScene(positionWorld.add(toWorldDir(n0).mul(0.003)), toWorldDir(reflect(d0, n0)))).toVar();
         const thr = float(1).sub(f0).toVar();
@@ -607,7 +610,7 @@ export class GlassMaterial extends THREE.MeshBasicNodeMaterial {
             const face = vec3(1).toVar();
             if (cmyBox)
               If(uCmy.greaterThan(0), () => {
-                face.assign(cmyTint(nrm, uCmy));
+                face.assign(cmyTint(nrm, uCmy, this.uCmyOrder));
               });
             const rf = refract(dir, nrm.negate(), iorIn).toVar();
             const f = fresnel(dot(dir, nrm), float(1).div(iorIn)).toVar();
@@ -634,19 +637,8 @@ export class GlassMaterial extends THREE.MeshBasicNodeMaterial {
             layer.addAssign(filtered.mul(thr.mul(lookEnv(toWorldPos(pos), wDir, bend))));
           });
         });
-        If(layers.equal(3), () => {
-          If(lc.equal(0), () => {
-            col.assign(vec3(layer.x, col.y, col.z));
-          })
-            .ElseIf(lc.equal(1), () => {
-              col.assign(vec3(col.x, layer.y, col.z));
-            })
-            .Else(() => {
-              col.assign(vec3(col.x, col.y, layer.z));
-            });
-        }).Else(() => {
-          col.assign(layer);
-        });
+        const weight = select(layers.equal(1), vec3(1), spectralWeight(lc));
+        col.addAssign(layer.mul(weight));
       });
 
       If(uRoughness.greaterThan(0.001), () => {

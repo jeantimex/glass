@@ -3,7 +3,7 @@ import * as THREE from 'three/webgpu';
 import { float, texture, texture3D, uniform, vec3, vec4 } from 'three/tsl';
 import { DIAMOND_CUTS, type DiamondCut } from '../diamond';
 import { KIND } from '../objects';
-import { causticNode, glassNode, photonNode } from '../tsl/glass';
+import { causticNode, glassNode, photonNode, SPECTRAL_BANDS, SPECTRAL_COUNT } from '../tsl/glass';
 
 /** Reference CPU implementation of our exact Cook-Torrance dielectric Fresnel formula (glass.ts). */
 function dielectricFresnel(cosI: number, eta: number): number {
@@ -54,6 +54,32 @@ describe('optical physics invariants', () => {
     expect(redWeight).toBeCloseTo(-0.301, 3);
     expect(blueWeight).toBeCloseTo(0.699, 3);
     expect(blueWeight - redWeight).toBeCloseTo(1, 5);
+  });
+
+  it('has energy-conserving, non-negative 6-band CIE 1931 spectral weights matching Cauchy law', () => {
+    expect(SPECTRAL_BANDS.length).toBe(SPECTRAL_COUNT);
+    expect(SPECTRAL_COUNT).toBe(6);
+    const invC2 = 1 / 656.3 ** 2;
+    const invD2 = 1 / 587.6 ** 2;
+    const invF2 = 1 / 486.1 ** 2;
+    let sumR = 0;
+    let sumG = 0;
+    let sumB = 0;
+    for (let i = 0; i < SPECTRAL_BANDS.length; i++) {
+      const band = SPECTRAL_BANDS[i];
+      const expectedCauchy = (1 / band.wavelength ** 2 - invD2) / (invF2 - invC2);
+      expect(band.cauchy).toBeCloseTo(expectedCauchy, 3);
+      if (i > 0) expect(band.cauchy).toBeLessThan(SPECTRAL_BANDS[i - 1].cauchy);
+      expect(band.rgb[0]).toBeGreaterThanOrEqual(0);
+      expect(band.rgb[1]).toBeGreaterThanOrEqual(0);
+      expect(band.rgb[2]).toBeGreaterThanOrEqual(0);
+      sumR += band.rgb[0];
+      sumG += band.rgb[1];
+      sumB += band.rgb[2];
+    }
+    expect(sumR).toBeCloseTo(1, 4);
+    expect(sumG).toBeCloseTo(1, 4);
+    expect(sumB).toBeCloseTo(1, 4);
   });
 
   it('satisfies Beer-Lambert volumetric absorption invariants', () => {

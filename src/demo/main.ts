@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import GUI from 'three/addons/libs/lil-gui.module.min.js';
-import { GlassMaterial, KIND, createGlassObjects, createInstancedGlass, type DiamondCut } from '../glass';
+import { GlassMaterial, KIND, createGlassObjects, createInstancedGlass, type CmyFaceOrder, type DiamondCut } from '../glass';
 import { CMY_STRENGTH, layoutGrid, restingPose, type GridLayout } from './grid';
 
 /** The volumes of the shapes made from meshes: 128^3 each, Suzanne's then the dragon's. */
@@ -25,6 +25,9 @@ const settings = {
   exposure: 1,
 
   // The floor.
+  /** Floor surface colour and opacity (0: transparent, 1: solid). */
+  floorColor: { r: 0xee / 255, g: 0xee / 255, b: 0xee / 255 } as RGB,
+  floorAlpha: 1,
   /** How reflective the floor is. */
   floorReflection: 0.4,
   /** Studio shadows: blur of their edges (m) and darkness (0 to 1). */
@@ -32,8 +35,10 @@ const settings = {
   shadowDarkness: 0.85,
   /** Objects cast the lamp's shadow on each other, not only on the floor. */
   objectShadows: true,
-  /** Grid lines on the floor, and fog (0: none). */
+  /** Grid lines on the floor (with color & alpha), and fog (0: none). */
   floorGrid: true,
+  floorGridColor: { r: 0x33 / 255, g: 0x33 / 255, b: 0x33 / 255 } as RGB,
+  floorGridAlpha: 1,
   fog: 0.15,
 
   /** Real caustics: the lamp's light traced through the glass onto the floor. */
@@ -64,6 +69,8 @@ const settings = {
   bevel: 0,
   /** Diamond cut style (Round Brilliant, Princess, Emerald, Asscher, Cushion, Radiant). */
   diamondCut: 'round' as DiamondCut,
+  /** CMY cube face color permutation (X, Y, Z -> Cyan, Yellow, Magenta). */
+  cmyOrder: 'cym' as CmyFaceOrder,
   /** The colour of the glass, and how strongly it applies (0: clear, whatever the colour). */
   glassColor: { r: 1, g: 1, b: 1 } as RGB,
   glassAlpha: 1,
@@ -330,7 +337,7 @@ async function main() {
    * settings: the shape's measurements (named per shape), how far it is turned,
    * its IOR and its dispersion.
    */
-  type Single = { measures: number[]; turn: number; ior: number; dispersion: number; roughness: number; frostScale: number; bevel: number; colour: number; glassColor: RGB; glassAlpha: number };
+  type Single = { measures: number[]; turn: number; ior: number; dispersion: number; roughness: number; frostScale: number; bevel: number; colour: number; cmyOrder: CmyFaceOrder; glassColor: RGB; glassAlpha: number };
   const SINGLE_SHAPES: Record<number, { labels: string[]; measures: number[]; turn: number }> = {
     [KIND.box]: { labels: ['Half width', 'Half height', 'Half depth'], measures: [0.6, 0.6, 0.6], turn: -15 },
     [KIND.sphere]: { labels: ['Radius'], measures: [0.6], turn: 0 },
@@ -363,6 +370,7 @@ async function main() {
       // A CMY cube gets fine bevels: its edges catch the light, as cut glass does.
       bevel: demo.cmy ? 0.008 : 0,
       colour: CMY_STRENGTH,
+      cmyOrder: 'cym',
       glassColor: { r: 1, g: 1, b: 1 },
       glassAlpha: 1,
     });
@@ -438,6 +446,8 @@ async function main() {
     if (!current().cmy) return 0;
     return isSingle() ? Math.max(singleFor(view.shape).colour, 0.001) : CMY_STRENGTH;
   };
+  /** Which CMY face colour sits on X, Y (top), Z. */
+  const cmyFaceOrder = (): CmyFaceOrder => (isSingle() ? singleFor(view.shape).cmyOrder : settings.cmyOrder);
   /** Set the scene up: a shape on its own resting in place, or a grid of them. */
   const placeObjects = (keepGlass = false) => {
     const shape = current();
@@ -600,13 +610,22 @@ async function main() {
     after?.();
   };
   const scene = gui.addFolder('Scene').close(); // folded until opened
+  scene.addColor(settings, 'floorColor').name('Floor color');
+  scene.add(settings, 'floorAlpha', 0, 1, 0.01).name('Floor alpha');
   scene.add(settings, 'floorReflection', 0, 1, 0.01).name('Floor reflection');
   scene.add(settings, 'shadowSoftness', 0.01, 0.6, 0.01).name('Shadow softness');
   scene.add(settings, 'shadowDarkness', 0, 1, 0.01).name('Shadow darkness');
   scene.add(settings, 'objectShadows').name('Object shadows');
-  scene.add(settings, 'floorGrid').name('Floor grid');
+  const gridCtrl = scene.add(settings, 'floorGrid').name('Floor grid');
+  const gridOptions = [
+    scene.addColor(settings, 'floorGridColor').name('Grid color'),
+    scene.add(settings, 'floorGridAlpha', 0, 1, 0.01).name('Grid alpha'),
+  ];
+  const showGridOptions = () => gridOptions.forEach((c) => c.show(settings.floorGrid));
+  gridCtrl.onChange(showGridOptions);
+  showGridOptions();
   scene.add(settings, 'fog', 0, 2, 0.01).name('Fog');
-  addReset(scene);
+  addReset(scene, showGridOptions);
   /**
    * Two folders, rebuilt for each shape and count:
    * - Glass settings, the same for every shape: wireframe, colour, IOR, dispersion
@@ -694,9 +713,9 @@ async function main() {
         });
         Object.assign(settings.wireColor, DEFAULTS.wireColor);
         if (single) {
-          const { measures, bevel, colour } = single;
+          const { measures, bevel, colour, cmyOrder } = single;
           delete singles[name];
-          Object.assign(singleFor(name), { measures, bevel, colour });
+          Object.assign(singleFor(name), { measures, bevel, colour, cmyOrder });
           placeObjects();
         } else {
           settings.ior = demo.ior ?? 1.52;
@@ -726,8 +745,33 @@ async function main() {
       Cushion: 'cushion',
       Radiant: 'radiant',
     };
+    const cmyOrderList: CmyFaceOrder[] = ['cym', 'myc', 'ycm', 'mcy', 'cmy', 'ymc'];
+    const cmyOrderOptions: Record<string, CmyFaceOrder> = {
+      'Yellow top (C / Y / M)': 'cym',
+      'Yellow top (M / Y / C)': 'myc',
+      'Cyan top (Y / C / M)': 'ycm',
+      'Cyan top (M / C / Y)': 'mcy',
+      'Magenta top (C / M / Y)': 'cmy',
+      'Magenta top (Y / M / C)': 'ymc',
+    };
+    const addCmyFaceControls = (target: { cmyOrder: CmyFaceOrder }) => {
+      const orderCtrl = folder.add(target, 'cmyOrder', cmyOrderOptions).name('Face colors');
+      folder
+        .add(
+          {
+            rotate: () => {
+              const next = cmyOrderList[(cmyOrderList.indexOf(target.cmyOrder) + 1) % cmyOrderList.length];
+              target.cmyOrder = next;
+              orderCtrl.updateDisplay();
+            },
+          },
+          'rotate',
+        )
+        .name('Rotate faces');
+    };
     if (!single) {
       if (hasBoxes) folder.add(settings, 'bevel', 0, 0.05, 0.001).name('Box bevel');
+      if (demo.cmy) addCmyFaceControls(settings);
       if (hasDiamonds) folder.add(settings, 'diamondCut', diamondCutOptions).name('Diamond cut').onChange(() => placeObjects(true));
       addReset(folder, () => placeObjects(true));
       return;
@@ -739,7 +783,10 @@ async function main() {
       folder.add(settings, 'diamondCut', diamondCutOptions).name('Cut').onChange(() => placeObjects(true));
     }
     if (singleKind(name) === KIND.box) folder.add(single, 'bevel', 0, 0.15, 0.001).name('Bevel');
-    if (demo.cmy) folder.add(single, 'colour', 0, 1, 0.01).name('Colour strength');
+    if (demo.cmy) {
+      folder.add(single, 'colour', 0, 1, 0.01).name('Colour strength');
+      addCmyFaceControls(single);
+    }
     // Reset: the shape's measurements as it starts (its glass is left as it is).
     const reset = () => {
       const { ior, dispersion, roughness, frostScale, glassColor, glassAlpha, turn } = single;
@@ -869,6 +916,7 @@ async function main() {
     glassMaterial.frostScale = settings.frostScale;
     glassMaterial.diamondCut = settings.diamondCut;
     glassMaterial.cmy = cmyStrength();
+    glassMaterial.cmyOrder = cmyFaceOrder();
     glassMaterial.bevel = boxBevel();
     glassMaterial.color.setRGB(gr, gg, gb);
     glassMaterial.colorAlpha = ga;
@@ -897,7 +945,19 @@ async function main() {
         shadowSoftness: settings.shadowSoftness,
         shadowDarkness: settings.shadowDarkness,
         objectShadows: settings.objectShadows,
+        floorColor: [
+          srgbToLinear(settings.floorColor.r) * (settings.dark ? 0.2 : 1),
+          srgbToLinear(settings.floorColor.g) * (settings.dark ? 0.2 : 1),
+          srgbToLinear(settings.floorColor.b) * (settings.dark ? 0.2 : 1),
+          settings.floorAlpha,
+        ],
         floorGrid: settings.floorGrid,
+        floorGridColor: [
+          srgbToLinear(settings.floorGridColor.r),
+          srgbToLinear(settings.floorGridColor.g),
+          srgbToLinear(settings.floorGridColor.b),
+          settings.floorGridAlpha,
+        ],
         fog: settings.fog,
         // In the dark studio the floor is glossy black: it shows the objects mirrored in
         // it, and the stones, looking down into it, see black between their flashes.

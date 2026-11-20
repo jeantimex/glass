@@ -19,7 +19,7 @@ import { sceneFunctions, type SceneInputs } from './scene';
 
 type N = any;
 const {
-  Break, Fn, If, Loop, abs, array, bool, clamp, cross, dFdx, dFdy, dot, exp, float, floor, fract, int, ivec2, ivec3, length, log, max, min, mix, normalize,
+  Break, Fn, If, Loop, abs, array, bool, clamp, cross, dFdx, dFdy, dot, exp, float, floor, fract, int, ivec2, length, log, max, min, mix, normalize,
   reflect, refract, select, sign, sin, smoothstep, sqrt, vec2, vec3, vec4,
 } = TSL as N;
 
@@ -35,6 +35,8 @@ export interface GlassInputs {
   tintAll: N;
   /** Above 0: boxes are CMY cubes, with filters this strong. */
   cmyAll: N;
+  /** Optional CMY face color permutation (vec3 of 0=Cyan, 1=Yellow, 2=Magenta for X, Y, Z). */
+  cmyOrder?: N;
   /** How much is cut off the edges of boxes (m). */
   bevel: N;
   /** 1 when light enters a baked mesh through its volume's surface (see entry). */
@@ -84,20 +86,87 @@ export function iorOffset(spread: N, k: number | N): N {
   return select(k.equal(0), spread.mul(-0.301), select(k.equal(2), spread.mul(0.699), 0));
 }
 
+export interface SpectralBand {
+  /** Effective wavelength (nm) of this equal-energy CIE 1931 band. */
+  wavelength: number;
+  /** Cauchy IOR offset relative to Fraunhofer d (587.6 nm), normalized by (n_F - n_C). */
+  cauchy: number;
+  /** Normalized linear-sRGB spectral weight (sums to [1, 1, 1] across all bands). */
+  rgb: readonly [number, number, number];
+}
+
+/**
+ * Six equal-energy stratified spectral bands across the visible spectrum (380–720 nm),
+ * derived from the CIE 1931 2° standard observer color-matching functions (D65 linear sRGB)
+ * and Cauchy's dispersion law relative to Fraunhofer d (587.6 nm), C (656.3 nm), F (486.1 nm).
+ *
+ * Compared to 3 non-overlapping RGB delta spikes, integrating 6 overlapping spectral bands
+ * produces true continuous rainbows on smooth/prismatic surfaces and lets high-curvature
+ * geometry naturally average overlapping wavelengths instead of breaking into RGB confetti.
+ */
+export const SPECTRAL_BANDS: readonly SpectralBand[] = [
+  { wavelength: 432.3, cauchy: 1.2845, rgb: [0.0388, 0.0, 0.4409] },   // Violet (380–447 nm)
+  { wavelength: 459.9, cauchy: 0.9586, rgb: [0.0, 0.0, 0.4313] },      // Blue (447–475 nm)
+  { wavelength: 507.6, cauchy: 0.5155, rgb: [0.0, 0.4643, 0.1278] },   // Cyan-Green (475–538 nm)
+  { wavelength: 556.5, cauchy: 0.1739, rgb: [0.0438, 0.4024, 0.0] },   // Yellow-Green (538–573 nm)
+  { wavelength: 588.1, cauchy: -0.0025, rgb: [0.3587, 0.1333, 0.0] },  // Amber-Yellow (573–603.5 nm)
+  { wavelength: 626.5, cauchy: -0.1826, rgb: [0.5587, 0.0, 0.0] },     // Red (603.5–720 nm)
+] as const;
+
+export const SPECTRAL_COUNT = SPECTRAL_BANDS.length;
+
+/** Cauchy IOR offset multiplier for spectral band index `k` (0..5). */
+export function spectralCauchy(k: N): N {
+  let out: N = float(SPECTRAL_BANDS[SPECTRAL_COUNT - 1].cauchy);
+  for (let i = SPECTRAL_COUNT - 2; i >= 0; i--) {
+    out = select(k.equal(i), float(SPECTRAL_BANDS[i].cauchy), out);
+  }
+  return out;
+}
+
+/** Normalized linear-sRGB spectral sensitivity weight for band index `k` (0..5). */
+export function spectralWeight(k: N): N {
+  const last = SPECTRAL_BANDS[SPECTRAL_COUNT - 1].rgb;
+  let out: N = vec3(last[0], last[1], last[2]);
+  for (let i = SPECTRAL_COUNT - 2; i >= 0; i--) {
+    const c = SPECTRAL_BANDS[i].rgb;
+    out = select(k.equal(i), vec3(c[0], c[1], c[2]), out);
+  }
+  return out;
+}
+
+export type CmyFaceOrder = 'cym' | 'myc' | 'ycm' | 'mcy' | 'cmy' | 'ymc';
+
+/** Axis color assignments (0 = Cyan, 1 = Yellow, 2 = Magenta) for [X, Y, Z] faces. */
+export const CMY_FACE_ORDERS: Record<CmyFaceOrder, readonly [number, number, number]> = {
+  cym: [0, 1, 2],
+  myc: [2, 1, 0],
+  ycm: [1, 0, 2],
+  mcy: [2, 0, 1],
+  cmy: [0, 2, 1],
+  ymc: [1, 2, 0],
+};
+
+const cmyColor = (id: N) =>
+  select(id.lessThan(0.5), vec3(0.1, 0.92, 1), select(id.lessThan(1.5), vec3(1, 0.9, 0.2), vec3(1, 0.14, 0.92)));
+
 /**
  * CMY cube: each pair of opposite faces is a filter that holds back one primary
  * (cyan, yellow, magenta). `n` is the face normal in the cube's own space;
- * `strength` runs from clear glass (0) to the full filter (1). The filters pass
- * their own colours almost untouched, which keeps the cube luminous, and each lets
- * a little of the blocked one through, so three in a row stay a deep colour
- * instead of going grey.
+ * `strength` runs from clear glass (0) to the full filter (1). `order` maps
+ * (X, Y, Z) faces to (0=Cyan, 1=Yellow, 2=Magenta). The filters pass their own
+ * colours almost untouched, which keeps the cube luminous, and each lets a little
+ * of the blocked one through, so three in a row stay a deep colour instead of going grey.
  */
-export function cmyTint(n: N, strength: N): N {
+export function cmyTint(n: N, strength: N, order?: N): N {
   const a = abs(n).toVar();
+  const xCol = order ? cmyColor(order.x) : vec3(0.1, 0.92, 1);
+  const yCol = order ? cmyColor(order.y) : vec3(1, 0.9, 0.2);
+  const zCol = order ? cmyColor(order.z) : vec3(1, 0.14, 0.92);
   const passed = select(
     a.x.greaterThanEqual(a.y).and(a.x.greaterThanEqual(a.z)),
-    vec3(0.1, 0.92, 1),
-    select(a.y.greaterThanEqual(a.z), vec3(1, 0.9, 0.2), vec3(1, 0.14, 0.92)),
+    xCol,
+    select(a.y.greaterThanEqual(a.z), yCol, zCol),
   );
   return mix(vec3(1), passed, strength);
 }
@@ -221,32 +290,49 @@ export function shapeFunctions(shape: number, g: Pick<GlassInputs, 'bevel'> & Pa
   // Signed distance to a baked mesh: a 128^3 grid covering a cube of half-width 1.1
   // around the mesh, which is scaled to half-width 1. The volumes of the meshes lie
   // one after another along z in the same texture; this mesh's is `layer`.
+  // Uses Sigg & Hadwiger's 8-tap hardware-trilinear tricubic B-spline filter so the
+  // reconstructed SDF is C^2 smooth (C^1 smooth normals, eliminating voxel-grid creases).
   const layer = shape === KIND.dragon ? 1 : 0;
   const volume = Fn(([p, scale]: N[]) => {
     const q = p.div(scale).toVar();
     const inner = 1.1 * (1 - 1 / 128);
     const c = clamp(q, vec3(-inner), vec3(inner)).toVar();
     const gp = c.div(2.2).add(0.5).mul(128).sub(0.5).toVar();
-    const cell = clamp(ivec3(floor(gp)), ivec3(0), ivec3(126)).toVar();
-    // (How far between cells, within this mesh's own volume: worked out before moving
-    // to where that volume lies in the texture, or every mesh after the first would
-    // not be blended along z at all, and look built of flat slices.)
-    const f = clamp(gp.sub(vec3(cell)), vec3(0), vec3(1)).toVar();
-    const i0 = cell.add(ivec3(0, 0, 128 * layer)).toVar();
-    const at = (x: number, y: number, z: number) => sdfTex.load(i0.add(ivec3(x, y, z))).r;
+    const i = floor(gp).toVar();
+    const f = gp.sub(i).toVar();
+    const f2 = f.mul(f).toVar();
+    const f3 = f2.mul(f).toVar();
+    const omf = vec3(1).sub(f).toVar();
+    const w0 = omf.mul(omf).mul(omf).div(6).toVar();
+    const w1 = f3.mul(3).sub(f2.mul(6)).add(4).div(6).toVar();
+    const w2 = f3.mul(-3).add(f2.mul(3)).add(f.mul(3)).add(1).div(6).toVar();
+    const w3 = f3.div(6).toVar();
+    const g0 = w0.add(w1).toVar();
+    const g1 = w2.add(w3).toVar();
+    // Clamp in-layer texel coordinates to [0.5, 127.5] so adjacent mesh layers never bleed along Z.
+    const t0 = clamp(i.add(w1.div(g0)).sub(0.5), vec3(0.5), vec3(127.5)).toVar();
+    const t1 = clamp(i.add(w3.div(g1)).add(1.5), vec3(0.5), vec3(127.5)).toVar();
+    const invN = float(1 / 128);
+    const invZ = float(1 / 256);
+    const zBase = float(128 * layer);
+    const u0 = t0.x.mul(invN).toVar();
+    const u1 = t1.x.mul(invN).toVar();
+    const v0 = t0.y.mul(invN).toVar();
+    const v1 = t1.y.mul(invN).toVar();
+    const z0 = t0.z.add(zBase).mul(invZ).toVar();
+    const z1 = t1.z.add(zBase).mul(invZ).toVar();
+    const at = (u: N, v: N, z: N) => sdfTex.sample(vec3(u, v, z)).level(0).r;
     const d = mix(
-      mix(mix(at(0, 0, 0), at(1, 0, 0), f.x), mix(at(0, 1, 0), at(1, 1, 0), f.x), f.y),
-      mix(mix(at(0, 0, 1), at(1, 0, 1), f.x), mix(at(0, 1, 1), at(1, 1, 1), f.x), f.y),
-      f.z,
+      mix(mix(at(u0, v0, z0), at(u1, v0, z0), g1.x), mix(at(u0, v1, z0), at(u1, v1, z0), g1.x), g1.y),
+      mix(mix(at(u0, v0, z1), at(u1, v0, z1), g1.x), mix(at(u0, v1, z1), at(u1, v1, z1), g1.x), g1.y),
+      g1.z,
     );
     return d.add(length(q.sub(c))).mul(scale);
   }).setLayout({ name: 'icVolume', type: 'float', inputs: [{ name: 'p', type: 'vec3' }, { name: 'scale', type: 'float' }] });
 
-  // The outward direction of a baked mesh's surface at p (from its volume), sampled
-  // almost two cells apart: closer, the slope of the blended grid jumps at every
-  // cell boundary, and the normals with it, which shows as stripes and ripples.
+  // The outward direction of a baked mesh's surface at p (from its C^2 tricubic volume).
   const volumeNormal = Fn(([p, scale]: N[]) => {
-    const e = scale.mul(0.03).toVar();
+    const e = scale.mul(0.012).toVar();
     const xyy = vec3(e, e.negate(), e.negate());
     const yyx = vec3(e.negate(), e.negate(), e);
     const yxy = vec3(e.negate(), e, e.negate());
@@ -498,7 +584,7 @@ export function shapeFunctions(shape: number, g: Pick<GlassInputs, 'bevel'> & Pa
       });
       // ... and the surface pinned down between the last point inside and the first
       // outside, by halving the gap.
-      Loop({ start: int(0), end: int(3), type: 'int', condition: '<', name: 'm2' }, () => {
+      Loop({ start: int(0), end: int(4), type: 'int', condition: '<', name: 'm2' }, () => {
         const mid = tIn.add(t).mul(0.5).toVar();
         If(volume(pos.add(dir.mul(mid)), s).lessThan(0), () => {
           tIn.assign(mid);
@@ -597,8 +683,8 @@ export function glassNode(shape: number, mirrored: boolean, worldPos: N, nrmW: N
   // mirror image sees only the studio: the picture behind is the camera's, not its.)
   const screenUv = (ndc: N) => vec2(ndc.x, ndc.y.negate()).mul(0.5).add(0.5);
   const lookThrough = mirrored
-    ? (ro: N, rd: N, _reach: N, lampLit: N) => scene(ro, rd, lampLit)
-    : Fn(([ro, rd, reach, lampLit]: N[]) => {
+    ? (ro: N, rd: N, _reach: N, lampLit: N, cone: N) => scene(ro, rd, lampLit, cone)
+    : Fn(([ro, rd, reach, lampLit, cone]: N[]) => {
         const out = vec3(0).toVar();
         const found = bool(false).toVar();
         const toFloor = groundOn.greaterThan(0.5).and(rd.y.lessThan(-1e-5));
@@ -655,13 +741,19 @@ export function glassNode(shape: number, mirrored: boolean, worldPos: N, nrmW: N
           });
         });
         If(found.not(), () => {
-          out.assign(scene(ro, rd, lampLit));
+          out.assign(scene(ro, rd, lampLit, cone));
         });
         return out;
       }).setLayout({
         name: 'icLookThrough',
         type: 'vec3',
-        inputs: [{ name: 'ro', type: 'vec3' }, { name: 'rd', type: 'vec3' }, { name: 'reach', type: 'float' }, { name: 'lampLit', type: 'float' }],
+        inputs: [
+          { name: 'ro', type: 'vec3' },
+          { name: 'rd', type: 'vec3' },
+          { name: 'reach', type: 'float' },
+          { name: 'lampLit', type: 'float' },
+          { name: 'cone', type: 'float' },
+        ],
       });
 
   return Fn(() => {
@@ -682,6 +774,20 @@ export function glassNode(shape: number, mirrored: boolean, worldPos: N, nrmW: N
     If(dot(d0, n0).greaterThan(0), () => {
       n0.assign(n0.negate());
     });
+    // Physical ray-cone angular footprint at entry (in uniform control flow for WGSL).
+    // Polyhedra have flat faces (zero curvature); curved shapes measure 1-pixel normal spread.
+    const isCurved =
+      shape === KIND.sphere ||
+      shape === KIND.cylinder ||
+      shape === KIND.capsule ||
+      shape === KIND.cone ||
+      shape === KIND.torus ||
+      isMesh(shape) ||
+      shape === KIND.torusknot;
+    const dnX = dFdx(n0);
+    const dnY = dFdy(n0);
+    const entryCone = isCurved ? clamp(sqrt(max(dot(dnX, dnX), dot(dnY, dnY))), 0, 0.85).toVar() : float(0).toVar();
+    const reflCone = isCurved ? clamp(entryCone.mul(0.6), 0, 0.6).toVar() : float(0).toVar();
     // Organic 3-octave frosted surface grain (ported from glass-effect-webgpu's frost_noise).
     const frostGrain = float(0.5).toVar();
     If(roughness.greaterThan(0.001), () => {
@@ -707,7 +813,7 @@ export function glassNode(shape: number, mirrored: boolean, worldPos: N, nrmW: N
     const disp = glassP.y.mul(vary.y).div(12).toVar();
     // The baked mesh is the one shape that has to be marched, so it gets fewer bounces.
     const maxEvents = isMesh(shape) || shape === KIND.torusknot ? min(glassP.z.toInt(), int(4)) : glassP.z.toInt();
-    const layers = select(disp.greaterThan(0), int(3), int(1)).toVar();
+    const layers = select(disp.greaterThan(0), int(SPECTRAL_COUNT), int(1)).toVar();
     const col = vec3(0).toVar();
     // Volumetric Beer-Lambert absorption: `baseTint` is the transmittance across one
     // characteristic object diameter (2 * reach), so sigma = -ln(baseTint) / (2 * reach).
@@ -718,18 +824,19 @@ export function glassNode(shape: number, mirrored: boolean, worldPos: N, nrmW: N
     const entryFace = vec3(1).toVar();
     if (cmyBox)
       If(cmy.greaterThan(0), () => {
-        entryFace.assign(cmyTint(n0, cmy));
+        entryFace.assign(cmyTint(n0, cmy, g.cmyOrder));
       });
 
     Loop({ start: int(0), end: layers, type: 'int', condition: '<', name: 'lc' }, ({ lc }: { lc: N }) => {
-      // One colour layer: red, green or blue, each with its own IOR.
-      const ch = select(layers.equal(3), lc, int(1)).toVar();
-      const iorIn = max(ior.add(iorOffset(disp, ch)), 1.0001).toVar();
+      // One CIE 1931 spectral band with its own Cauchy IOR (or monochrome when disp == 0).
+      const bandOffset = select(layers.equal(1), float(0), spectralCauchy(lc));
+      const iorIn = max(ior.add(disp.mul(bandOffset)), 1.0001).toVar();
       const f0 = fresnel(dot(d0, n0), iorIn).toVar();
-      const layer = f0.mul(scene(worldPos.add(toWorld(n0, quat).mul(0.003)), toWorld(reflect(d0, n0), quat), lampLit)).toVar();
+      const layer = f0.mul(scene(worldPos.add(toWorld(n0, quat).mul(0.003)), toWorld(reflect(d0, n0), quat), lampLit, reflCone)).toVar();
       const thr = float(1).sub(f0).toVar(); // light still inside, weighted by Fresnel transmission
       const dir = refract(d0, n0, float(1).div(iorIn)).toVar();
       const pos = vec3(p0).toVar();
+      const cone = entryCone.mul(0.45).toVar();
       // A CMY cube's faces are colour filters: light is filtered by the face it enters
       // through, by each face it bounces off inside, and by the face it leaves
       // through. Volumetric Beer-Lambert absorption is accumulated per segment below.
@@ -740,11 +847,16 @@ export function glassNode(shape: number, mirrored: boolean, worldPos: N, nrmW: N
           const hit = exit(pos, dir, size);
           pos.assign(hit.pos);
           const nrm = hit.nrm.toVar();
+          if (isMesh(shape)) {
+            cone.assign(min(cone.mul(1.75).add(hit.t.div(max(reach, 0.05)).mul(0.06)).add(0.03), 0.85));
+          } else if (isCurved) {
+            cone.assign(min(cone.mul(1.5).add(0.01), 0.85));
+          }
           filtered.mulAssign(exp(sigma.mul(hit.t.negate())));
           const face = vec3(1).toVar();
           if (cmyBox)
             If(cmy.greaterThan(0), () => {
-              face.assign(cmyTint(nrm, cmy));
+              face.assign(cmyTint(nrm, cmy, g.cmyOrder));
             });
           // Each wavelength channel exits with its own IOR (conservation of wavelength).
           const rf = refract(dir, nrm.negate(), iorIn).toVar();
@@ -754,7 +866,7 @@ export function glassNode(shape: number, mirrored: boolean, worldPos: N, nrmW: N
           });
           const outW = thr.mul(float(1).sub(f)).toVar();
           If(outW.greaterThan(0.004), () => {
-            const seen = lookThrough(center.add(toWorld(pos.add(nrm.mul(0.003)), quat)), toWorld(rf, quat), reach, lampLit);
+            const seen = lookThrough(center.add(toWorld(pos.add(nrm.mul(0.003)), quat)), toWorld(rf, quat), reach, lampLit, cone);
             layer.addAssign(filtered.mul(face).mul(outW.mul(seen)));
           });
           thr.mulAssign(f);
@@ -767,22 +879,11 @@ export function glassNode(shape: number, mirrored: boolean, worldPos: N, nrmW: N
         // Light still bouncing around inside when the bounces run out (common in cones
         // and octahedra) is let out, rather than left as a black patch.
         If(thr.greaterThanEqual(0.004), () => {
-          layer.addAssign(filtered.mul(thr.mul(lookThrough(center.add(toWorld(pos, quat)), toWorld(dir, quat), reach, lampLit))));
+          layer.addAssign(filtered.mul(thr.mul(lookThrough(center.add(toWorld(pos, quat)), toWorld(dir, quat), reach, lampLit, cone))));
         });
       });
-      If(layers.equal(3), () => {
-        If(lc.equal(0), () => {
-          col.assign(vec3(layer.x, col.y, col.z));
-        })
-          .ElseIf(lc.equal(1), () => {
-            col.assign(vec3(col.x, layer.y, col.z));
-          })
-          .Else(() => {
-            col.assign(vec3(col.x, col.y, layer.z));
-          });
-      }).Else(() => {
-        col.assign(layer);
-      });
+      const weight = select(layers.equal(1), vec3(1), spectralWeight(lc));
+      col.addAssign(layer.mul(weight));
     });
     // Creamy frosted veil + crisp Fresnel rim (inspired by glass-effect-webgpu's frosted look):
     // lifts dark interiors into a soft, lit translucent milkiness modulated by organic frost grain,
@@ -845,7 +946,7 @@ export function photonNode(shape: number, worldPos: N, nrmW: N, g: GlassInputs, 
     const tint = mix(vec3(1), tintAll.rgb.mul(tintOwn), tintAll.a).toVar();
     if (shape === KIND.box)
       If(cmy.greaterThan(0), () => {
-        tint.mulAssign(cmyTint(n0, cmy));
+        tint.mulAssign(cmyTint(n0, cmy, g.cmyOrder));
       });
     const dir = refract(d0, n0, float(1).div(ior)).toVar();
     const leaving = vec3(0).toVar();
@@ -857,7 +958,7 @@ export function photonNode(shape: number, worldPos: N, nrmW: N, g: GlassInputs, 
         const nrm = hit.nrm.toVar();
         if (shape === KIND.box)
           If(cmy.greaterThan(0), () => {
-            tint.mulAssign(cmyTint(nrm, cmy));
+            tint.mulAssign(cmyTint(nrm, cmy, g.cmyOrder));
           });
         const through = refract(dir, nrm.negate(), ior).toVar();
         If(dot(through, through).greaterThan(1e-6), () => {
@@ -918,7 +1019,7 @@ export function causticNode(normalW: N, worldPos: N, g: GlassInputs): N {
     If(cmy.greaterThan(0), () => {
         const u = quat.xyz.negate();
         const local = n.add(cross(u, cross(u, n).add(n.mul(quat.w))).mul(2));
-        c.mulAssign(cmyTint(local, cmy));
+        c.mulAssign(cmyTint(local, cmy, g.cmyOrder));
     });
     return vec4(c, 1);
   })();

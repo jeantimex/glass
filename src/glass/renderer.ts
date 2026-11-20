@@ -19,7 +19,7 @@ import { attribute, cross, normalLocal, positionGeometry, positionWorld, screenC
 import { KIND, MAX_OBJECTS, type GlassObjects } from './objects';
 import { blurNode, contactShadeNode, lensNode } from './tsl/finish';
 import { groundNode } from './tsl/ground';
-import { causticNode, glassNode, photonNode as photonRayNode } from './tsl/glass';
+import { CMY_FACE_ORDERS, causticNode, glassNode, photonNode as photonRayNode, type CmyFaceOrder } from './tsl/glass';
 
 const KIND_COUNT = 13;
 
@@ -54,8 +54,11 @@ export interface InstancedLighting {
   shadowDarkness: number;
   /** Objects cast the lamp's shadow on each other (see lampVisible in tsl/glass.ts). */
   objectShadows: boolean;
-  /** A grid of lines drawn on the floor, and how thick the fog over it is (0: none). */
+  /** Floor surface linear rgba color (defaults to groundColor with alpha 1). */
+  floorColor?: [number, number, number, number];
+  /** A grid of lines drawn on the floor, its linear rgba color, and how thick the fog over it is (0: none). */
   floorGrid: boolean;
+  floorGridColor?: [number, number, number, number];
   fog: number;
   groundColor: [number, number, number];
   exposure: number;
@@ -269,11 +272,14 @@ export function createInstancedGlass(
   const uBlurReach = uniform(6);
   const uTint = uniform(new THREE.Vector4(1, 1, 1, 1)); // the colour of all the glass (linear rgb), and how strongly it applies
   const uCmy = uniform(0); // above 0: boxes are CMY cubes, with filters this strong
+  const uCmyOrder = uniform(new THREE.Vector3(0, 1, 2)); // CMY face color permutation (X, Y, Z -> 0=C, 1=Y, 2=M)
   const uBevel = uniform(0); // how much is cut off the edges of boxes (m)
   const uRoughness = uniform(0); // frosted glass roughness (0: clear, 1: frosted)
   const uFrostScale = uniform(4); // frosted glass grain density (higher = smaller particles)
   const uSpot = uniform(new THREE.Vector4()); // stage spotlight: beam radius at the floor (0: off), distance of the lamp
   const uFloor = uniform(new THREE.Vector4()); // x: how reflective the floor is; y: how dark its shadows are
+  const uFloorColor = uniform(new THREE.Vector4(0.85, 0.85, 0.85, 1)); // floor linear rgb + alpha
+  const uGridColor = uniform(new THREE.Vector4(0.033, 0.033, 0.033, 1)); // floor grid linear rgb + alpha
   const uBlurDir = uniform(new THREE.Vector2());
   const uMirrorCam = uniform(new THREE.Vector3()); // the camera, mirrored in the floor
 
@@ -302,6 +308,7 @@ export function createInstancedGlass(
     tintOwn: instTint,
     tintAll: uTint,
     cmyAll: uCmy,
+    cmyOrder: uCmyOrder,
     bevel: uBevel,
     meshEntry: uMeshEntry,
     glassP: uGlass,
@@ -369,6 +376,8 @@ export function createInstancedGlass(
     lightR: uLightR,
     lightU: uLightU,
     floorP: uFloor,
+    floorColor: uFloorColor,
+    gridColor: uGridColor,
     spot: uSpot,
     lamp: uSunDir,
     lightTex: lightNode,
@@ -779,7 +788,7 @@ export function createInstancedGlass(
   function render(
     glass:
       | GlassMaterial
-      | { ior: number; dispersion: number; roughness?: number; frostScale?: number; diamondCut?: DiamondCut; cmy?: number; bevel?: number; color?: [number, number, number, number]; wireframe?: boolean; wireColor?: [number, number, number, number] },
+      | { ior: number; dispersion: number; roughness?: number; frostScale?: number; diamondCut?: DiamondCut; cmy?: number; cmyOrder?: CmyFaceOrder; bevel?: number; color?: [number, number, number, number]; wireframe?: boolean; wireColor?: [number, number, number, number] },
     light: InstancedLighting,
     moved: boolean,
     wireColorOverride?: [number, number, number, number],
@@ -791,6 +800,7 @@ export function createInstancedGlass(
     const frostScale = glass.frostScale ?? 4;
     const diamondCut = glass.diamondCut ?? 'round';
     const cmy = glass.cmy ?? 0;
+    const cmyOrder: CmyFaceOrder = glass.cmyOrder ?? 'cym';
     const bevel = glass.bevel ?? 0;
     const color: [number, number, number, number] = isMat
       ? [glass.color.r, glass.color.g, glass.color.b, glass.colorAlpha]
@@ -814,6 +824,11 @@ export function createInstancedGlass(
     uFrostScale.value = frostScale;
     if (uCmy.value !== cmy) lightDirty = true; // its shadow is coloured too
     uCmy.value = cmy;
+    const [ox, oy, oz] = CMY_FACE_ORDERS[cmyOrder];
+    if (uCmyOrder.value.x !== ox || uCmyOrder.value.y !== oy || uCmyOrder.value.z !== oz) {
+      uCmyOrder.value.set(ox, oy, oz);
+      lightDirty = true;
+    }
     // Camera.
     camera.updateMatrixWorld();
     const e = camera.matrixWorld.elements;
@@ -832,7 +847,7 @@ export function createInstancedGlass(
     uSunE.value.fromArray(light.sunE);
     uAlbedo.value.fromArray(light.groundColor);
     sunDir.fromArray(light.sunDir);
-    const sunKey = light.sunDir.join() + light.shadowSoftness + light.causticSoftness + '/' + light.causticStrength + ior + cmy + bevel + color.join() + String(light.realCaustics) + String(light.objectShadows);
+    const sunKey = light.sunDir.join() + light.shadowSoftness + light.causticSoftness + '/' + light.causticStrength + ior + cmy + cmyOrder + bevel + color.join() + String(light.realCaustics) + String(light.objectShadows);
     if (sunKey !== lastSun) {
       lastSun = sunKey;
       lightDirty = true;
@@ -925,6 +940,9 @@ export function createInstancedGlass(
     uFloor.value.y = light.realCaustics ? -light.shadowDarkness : light.shadowDarkness; // (negative: see icGroundColor)
     uFloor.value.z = light.floorGrid ? 1 : 0;
     uFloor.value.w = light.fog;
+    if (light.floorColor) uFloorColor.value.fromArray(light.floorColor);
+    else uFloorColor.value.set(light.groundColor[0], light.groundColor[1], light.groundColor[2], 1);
+    uGridColor.value.fromArray(light.floorGridColor ?? [0.033, 0.033, 0.033, 1]);
     if (uFloor.value.x > 0) {
       uMirrorCam.value.set(e[12], -e[13], e[14]);
       const previousClear = renderer.getClearColor(new THREE.Color());
