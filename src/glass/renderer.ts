@@ -13,7 +13,7 @@
 // The layers carry each pixel's distance from the camera in their alpha, which is
 // what the finishing passes work from.
 import * as THREE from 'three/webgpu';
-import { diamondGeometry } from './diamond';
+import { DIAMOND_CUTS, diamondGeometry, type DiamondCut } from './diamond';
 import { attribute, cross, normalLocal, positionGeometry, positionWorld, screenCoordinate, texture, texture3D, uniform, vec2, vec3, float, uv, vec4, varying, instanceIndex } from 'three/tsl';
 import { KIND, MAX_OBJECTS, type GlassObjects } from './objects';
 import { blurNode, contactShadeNode, lensNode } from './tsl/finish';
@@ -407,7 +407,7 @@ export function createInstancedGlass(
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const makePhotonMaterial = (kind: number, position: any, normal: any) => {
+  const makePhotonMaterial = (kind: number, position: any, normal: any, diamondPlanes?: number[]) => {
     // Its output is data (which way each ray is thrown, negative as often as not, and
     // alpha too), so it goes out as the whole fragment, untouched: as the colour of
     // a basic material, three.js would clamp the negative half away.
@@ -415,7 +415,7 @@ export function createInstancedGlass(
     material.transparent = true;
     material.blending = THREE.NoBlending;
     material.positionNode = position;
-    material.fragmentNode = photonRayNode(kind, positionWorld, normal, glassInputs, uSunDir, uLightR, uLightU, PHOTON_MAP_SIZE);
+    material.fragmentNode = photonRayNode(kind, positionWorld, normal, glassInputs, uSunDir, uLightR, uLightU, PHOTON_MAP_SIZE, diamondPlanes);
     return material;
   };
 
@@ -454,7 +454,7 @@ export function createInstancedGlass(
   const landScene = new THREE.Scene();
   landScene.add(landMesh);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const makeGlassMaterial = (kind: number, position: any, normal: any, mirrored = false) => {
+  const makeGlassMaterial = (kind: number, position: any, normal: any, mirrored = false, diamondPlanes?: number[]) => {
     const material = new THREE.MeshBasicNodeMaterial();
     // Its alpha is data (distance, or how much a reflection has faded), so it has to
     // be written as it is: an opaque material would write 1.
@@ -476,7 +476,7 @@ export function createInstancedGlass(
       behindBlurTex: frostNode,
       lampDepthTex: lampDepthNode,
       lampDepthSize: LAMP_DEPTH_SIZE,
-    });
+    }, diamondPlanes);
     return material;
   };
 
@@ -595,6 +595,17 @@ export function createInstancedGlass(
   };
   const fineFar: Batch[] = [];
   const fineNear: Batch[] = [];
+  type DiamondCutEntry = {
+    geometry: THREE.BufferGeometry;
+    glass: THREE.MeshBasicNodeMaterial;
+    mirrored: THREE.MeshBasicNodeMaterial;
+    photon: THREE.NodeMaterial;
+  };
+  const diamondCutCache: Partial<Record<DiamondCut, DiamondCutEntry>> = {};
+  const diamondGlassMeshes: THREE.Mesh[] = [];
+  const diamondMirrorMeshes: THREE.Mesh[] = [];
+  const diamondPhotonMeshes: THREE.Mesh[] = [];
+  let currentDiamondCut: DiamondCut = 'round';
   for (let kind = 0; kind < KIND_COUNT; kind++) {
     const position = kind === KIND.capsule ? capsulePosition : kind === KIND.torus ? torusPosition : scaledPosition;
     const normal = kind === KIND.capsule || kind === KIND.torus ? plainNormal : scaledNormal;
@@ -604,6 +615,7 @@ export function createInstancedGlass(
     const mirrored = makeGlassMaterial(kind, position, normal, true);
     const photon = makePhotonMaterial(kind, position, normal);
     const wire = makeWireMaterial(position);
+    if (kind === KIND.diamond) diamondCutCache.round = { geometry: bases[kind], glass, mirrored, photon };
     for (const [batches, scene, fine] of [[far, farScene, false], [near, nearScene, false], [fineFar, farScene, true], [fineNear, nearScene, true]] as const) {
       const batch = fine ? new Batch(fineBases[kind], FINE_UP_TO) : new Batch(bases[kind]);
       batches.push(batch);
@@ -613,6 +625,11 @@ export function createInstancedGlass(
         m.visible = false;
         target.add(m);
         drawn.push({ mesh: m, batch, role: material === glass || material === mirrored ? 'glass' : material === wire ? 'wire' : 'other' });
+        if (kind === KIND.diamond) {
+          if (material === glass) diamondGlassMeshes.push(m);
+          else if (material === mirrored) diamondMirrorMeshes.push(m);
+          else if (material === photon) diamondPhotonMeshes.push(m);
+        }
       }
     }
   }
@@ -621,6 +638,33 @@ export function createInstancedGlass(
   const triangleCount = (g: THREE.BufferGeometry) => (g.index ? g.index.count : g.getAttribute('position').count) / 3;
   const trianglesOf = bases.map(triangleCount);
   const fineTrianglesOf = fineBases.map(triangleCount);
+  const setDiamondCut = (cut: DiamondCut) => {
+    if (cut === currentDiamondCut) return;
+    let entry = diamondCutCache[cut];
+    if (!entry) {
+      const planes = DIAMOND_CUTS[cut].planes;
+      entry = {
+        geometry: diamondGeometry(cut),
+        glass: makeGlassMaterial(KIND.diamond, scaledPosition, scaledNormal, false, planes),
+        mirrored: makeGlassMaterial(KIND.diamond, scaledPosition, scaledNormal, true, planes),
+        photon: makePhotonMaterial(KIND.diamond, scaledPosition, scaledNormal, planes),
+      };
+      diamondCutCache[cut] = entry;
+    }
+    for (const batch of [far[KIND.diamond], near[KIND.diamond], fineFar[KIND.diamond], fineNear[KIND.diamond]]) {
+      batch.geometry.index = entry.geometry.index;
+      batch.geometry.setAttribute('position', entry.geometry.getAttribute('position'));
+      batch.geometry.setAttribute('normal', entry.geometry.getAttribute('normal'));
+    }
+    const tris = triangleCount(entry.geometry);
+    trianglesOf[KIND.diamond] = tris;
+    fineTrianglesOf[KIND.diamond] = tris;
+    for (const m of diamondGlassMeshes) m.material = entry.glass;
+    for (const m of diamondMirrorMeshes) m.material = entry.mirrored;
+    for (const m of diamondPhotonMeshes) m.material = entry.photon;
+    currentDiamondCut = cut;
+    lightDirty = true;
+  };
   let lastTriangles = 0;
 
   // -------------------------------------------------------------- state ---
@@ -713,7 +757,8 @@ export function createInstancedGlass(
   }
 
   /** `moved`: some object changed since the last frame (redraws the caustic map). */
-  function render(glass: { ior: number; dispersion: number; roughness?: number; frostScale?: number; cmy?: number; bevel?: number; color?: [number, number, number, number]; wireframe?: boolean; wireColor?: [number, number, number, number] }, light: InstancedLighting, moved: boolean) {
+  function render(glass: { ior: number; dispersion: number; roughness?: number; frostScale?: number; diamondCut?: DiamondCut; cmy?: number; bevel?: number; color?: [number, number, number, number]; wireframe?: boolean; wireColor?: [number, number, number, number] }, light: InstancedLighting, moved: boolean) {
+    setDiamondCut(glass.diamondCut ?? 'round');
     marks = timed ? [] : null;
     // Wireframe only: the edges in place of the glass, and nothing mirrored in the floor.
     const wantWire = glass.wireframe ?? false;

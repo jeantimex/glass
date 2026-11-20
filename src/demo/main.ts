@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import GUI from 'three/addons/libs/lil-gui.module.min.js';
-import { KIND, createGlassObjects, createInstancedGlass } from '../glass';
+import { KIND, createGlassObjects, createInstancedGlass, type DiamondCut } from '../glass';
 import { CMY_STRENGTH, layoutGrid, restingPose, type GridLayout } from './grid';
 
 /** The volumes of the shapes made from meshes: 128^3 each, Suzanne's then the dragon's. */
@@ -62,6 +62,8 @@ const settings = {
   frostScale: 4,
   /** How much is cut off the edges of boxes (m). */
   bevel: 0,
+  /** Diamond cut style (Round Brilliant, Princess, Emerald, Asscher, Cushion, Radiant). */
+  diamondCut: 'round' as DiamondCut,
   /** The colour of the glass, and how strongly it applies (0: clear, whatever the colour). */
   glassColor: { r: 1, g: 1, b: 1 } as RGB,
   glassAlpha: 1,
@@ -373,7 +375,7 @@ async function main() {
     else if (kind === KIND.cylinder || kind === KIND.cone || kind === KIND.hexprism || kind === KIND.capsule) size = [a, b, a];
     else if (kind === KIND.torus) size = [a, b, b];
     else if (kind === KIND.prism) size = [a, a, b];
-    const { height, quat } = restingPose(kind, size, THREE.MathUtils.degToRad(single.turn));
+    const { height, quat } = restingPose(kind, size, THREE.MathUtils.degToRad(single.turn), settings.diamondCut);
     glassObjects.count = 1;
     glassObjects.kind[0] = kind;
     glassObjects.size.set(size, 0);
@@ -445,7 +447,7 @@ async function main() {
         settings.ior = shape.ior ?? 1.52;
         settings.dispersion = shape.dispersion ?? 1;
       }
-      const bounds = layoutGrid(glassObjects, view.count, shape.kinds, shape.cubic ?? false, view.layout);
+      const bounds = layoutGrid(glassObjects, view.count, shape.kinds, shape.cubic ?? false, view.layout, settings.diamondCut);
       gridReach = bounds.reach;
       gridCenterY = bounds.centerY;
     }
@@ -702,17 +704,30 @@ async function main() {
 
     // ---- The shape's own settings.
     const hasBoxes = !demo.kinds || demo.kinds.includes(KIND.box);
-    if (!single && !hasBoxes) return;
+    const hasDiamonds = !demo.kinds || demo.kinds.includes(KIND.diamond);
+    if (!single && !hasBoxes && !hasDiamonds) return;
     const folder = gui.addFolder(single ? `${name} shape` : `${name} grid shape`);
     shapeFolder = folder;
+    const diamondCutOptions: Record<string, DiamondCut> = {
+      'Round Brilliant': 'round',
+      Princess: 'princess',
+      Emerald: 'emerald',
+      Asscher: 'asscher',
+      Cushion: 'cushion',
+      Radiant: 'radiant',
+    };
     if (!single) {
-      folder.add(settings, 'bevel', 0, 0.05, 0.001).name('Box bevel');
-      addReset(folder);
+      if (hasBoxes) folder.add(settings, 'bevel', 0, 0.05, 0.001).name('Box bevel');
+      if (hasDiamonds) folder.add(settings, 'diamondCut', diamondCutOptions).name('Diamond cut').onChange(() => placeObjects(true));
+      addReset(folder, () => placeObjects(true));
       return;
     }
     SINGLE_SHAPES[singleKind(name)].labels.forEach((label, i) =>
       folder.add(single.measures as unknown as Record<string, number>, String(i), 0.1, 1.5, 0.01).name(label).onChange(place),
     );
+    if (singleKind(name) === KIND.diamond) {
+      folder.add(settings, 'diamondCut', diamondCutOptions).name('Cut').onChange(() => placeObjects(true));
+    }
     if (singleKind(name) === KIND.box) folder.add(single, 'bevel', 0, 0.15, 0.001).name('Bevel');
     if (demo.cmy) folder.add(single, 'colour', 0, 1, 0.01).name('Colour strength');
     // Reset: the shape's measurements as it starts (its glass is left as it is).
@@ -720,7 +735,8 @@ async function main() {
       const { ior, dispersion, roughness, frostScale, glassColor, glassAlpha, turn } = single;
       delete singles[name];
       Object.assign(singleFor(name), { ior, dispersion, roughness, frostScale, glassColor, glassAlpha, turn });
-      placeObjects();
+      if (singleKind(name) === KIND.diamond) settings.diamondCut = DEFAULTS.diamondCut;
+      placeObjects(true);
       rebuildShapeFolder();
     };
     folder.add({ reset }, 'reset').name('Reset');
@@ -837,7 +853,7 @@ async function main() {
     const lampUp = THREE.MathUtils.degToRad(settings.lampHeight);
     const lampRound = THREE.MathUtils.degToRad(settings.lampTurn);
     instanced.render(
-      { ior: settings.ior, dispersion: settings.dispersion, roughness: settings.roughness, frostScale: settings.frostScale, cmy: cmyStrength(), bevel: boxBevel(), color: glassColour(), wireframe: settings.wireframe,
+      { ior: settings.ior, dispersion: settings.dispersion, roughness: settings.roughness, frostScale: settings.frostScale, diamondCut: settings.diamondCut, cmy: cmyStrength(), bevel: boxBevel(), color: glassColour(), wireframe: settings.wireframe,
         wireColor: [srgbToLinear(settings.wireColor.r), srgbToLinear(settings.wireColor.g), srgbToLinear(settings.wireColor.b), settings.wireAlpha] },
       {
         ground: settings.ground,

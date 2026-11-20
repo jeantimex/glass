@@ -14,7 +14,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- TSL node types are too loose to spell out */
 import * as TSL from 'three/tsl';
 import { KIND } from '../objects';
-import { DIAMOND_PLANES, DIAMOND_PLANE_COUNT } from '../diamond';
+import { DIAMOND_PLANES } from '../diamond';
 import { sceneFunctions, type SceneInputs } from './scene';
 
 type N = any;
@@ -194,15 +194,16 @@ function planesOf(shape: number, size: N, bevel: N): N[] | null {
 }
 
 /** The shape functions for one shape: snapping a surface point onto it, and finding where a ray inside leaves. */
-function shapeFunctions(shape: number, g: GlassInputs) {
+function shapeFunctions(shape: number, g: GlassInputs, diamondPlanes: number[] = DIAMOND_PLANES) {
   const { bevel, sdfTex } = g;
+  const diamondPlaneCount = diamondPlanes.length / 4;
   // The diamond's facets at size 1 (diamond.ts), read by index: a constant array
   // in the shader (declared by `declare`, at the top of the program). (Read from a
   // uniform buffer instead, the diamond's glass took three times as long.)
   let diamond: N = null;
   const declare = () => {
     if (shape !== KIND.diamond) return;
-    const rows = Array.from({ length: DIAMOND_PLANE_COUNT }, (_, k) => vec4(...DIAMOND_PLANES.slice(k * 4, k * 4 + 4)));
+    const rows = Array.from({ length: diamondPlaneCount }, (_, k) => vec4(...diamondPlanes.slice(k * 4, k * 4 + 4)));
     diamond = array(rows).toConst('icDiamond');
   };
 
@@ -211,7 +212,7 @@ function shapeFunctions(shape: number, g: GlassInputs) {
     const planes = planesOf(shape, size, bevel);
     if (planes) for (const plane of planes) body(plane);
     else
-      Loop({ start: int(0), end: int(DIAMOND_PLANE_COUNT), type: 'int', condition: '<', name: 'kp' }, ({ kp }: { kp: N }) => {
+      Loop({ start: int(0), end: int(diamondPlaneCount), type: 'int', condition: '<', name: 'kp' }, ({ kp }: { kp: N }) => {
         const facet = diamond.element(kp).toVar();
         body(vec4(facet.xyz, facet.w.mul(size.x)));
       });
@@ -551,11 +552,11 @@ export interface GlassViewInputs {
  * @param worldPos the surface point (upside down for the mirror image), and its normal
  * @param mirrored the mirror image in the floor, shaded as the object itself
  */
-export function glassNode(shape: number, mirrored: boolean, worldPos: N, nrmW: N, g: GlassInputs, s: SceneInputs, v: GlassViewInputs): N {
+export function glassNode(shape: number, mirrored: boolean, worldPos: N, nrmW: N, g: GlassInputs, s: SceneInputs, v: GlassViewInputs, diamondPlanes?: number[]): N {
   const { center, quat, size, vary, tintOwn, tintAll, cmyAll, glassP, roughness, frostScale } = g;
   const { camPos, viewProj, behindTex, behindBlurTex } = v;
   const { groundOn, scene } = sceneFunctions({ ...s, roughness }, false);
-  const { declare, entry, exit } = shapeFunctions(shape, g);
+  const { declare, entry, exit } = shapeFunctions(shape, g, diamondPlanes);
 
   // How much of the lamp reaches point p of an object (1: all of it, 0: none), from
   // the lamp's depth map: in shadow where another object reaches farther toward the
@@ -818,9 +819,9 @@ export function glassNode(shape: number, mirrored: boolean, worldPos: N, nrmW: N
  * them up, which is bright wherever the glass gathers them together.
  * @param raysAcross how many rays there are each way (the width of this picture)
  */
-export function photonNode(shape: number, worldPos: N, nrmW: N, g: GlassInputs, sunDir: N, lightR: N, lightU: N, raysAcross: number): N {
+export function photonNode(shape: number, worldPos: N, nrmW: N, g: GlassInputs, sunDir: N, lightR: N, lightU: N, raysAcross: number, diamondPlanes?: number[]): N {
   const { center, quat, size, vary, tintOwn, tintAll, cmyAll, glassP } = g;
-  const { declare, entry, exit } = shapeFunctions(shape, g);
+  const { declare, entry, exit } = shapeFunctions(shape, g, diamondPlanes);
   return Fn((builder: N) => {
     declare();
     const cmy = max(cmyAll, vary.z).toVar();

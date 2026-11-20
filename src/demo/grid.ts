@@ -2,7 +2,7 @@
 // proportions, each resting on the floor in its own place in a spaced grid.
 // Nothing moves (there is no physics): every frame draws the same scene.
 import * as THREE from 'three/webgpu';
-import { DIAMOND_LEAN, DIAMOND_REST, KIND, MAX_OBJECTS, type GlassObjects } from '../glass';
+import { DIAMOND_CUTS, KIND, MAX_OBJECTS, type DiamondCut, type GlassObjects } from '../glass';
 
 /** How strong a CMY cube's colour filters are, unless set otherwise. */
 export const CMY_STRENGTH = 0.85;
@@ -43,7 +43,7 @@ const PICK_FOR_KIND: Record<number, number> = {
  * upright: how high its centre is, and its rotation. Most stand on their base; an
  * octahedron lies on a face and a diamond on a pavilion facet, its table turned up.
  */
-export function restingPose(kind: number, size: ArrayLike<number>, turn: number): { height: number; quat: THREE.Quaternion } {
+export function restingPose(kind: number, size: ArrayLike<number>, turn: number, diamondCut: DiamondCut = 'round'): { height: number; quat: THREE.Quaternion } {
   const [a, b] = [size[0], size[1]];
   let height = a;
   let lean: THREE.Quaternion | null = null;
@@ -56,8 +56,9 @@ export function restingPose(kind: number, size: ArrayLike<number>, turn: number)
   else if (kind === KIND.suzanne) height = a * 0.72; // her chin is 0.72 below her centre at size 1
   else if (kind === KIND.dragon) height = a * 0.7053; // its feet are 0.7053 below its centre at size 1
   else if (kind === KIND.diamond) {
-    height = DIAMOND_REST * a;
-    lean = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -DIAMOND_LEAN);
+    const spec = DIAMOND_CUTS[diamondCut];
+    height = spec.rest * a;
+    lean = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -spec.lean);
   }
   const quat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), turn);
   if (lean) quat.multiply(lean);
@@ -73,7 +74,7 @@ export function restingPose(kind: number, size: ArrayLike<number>, turn: number)
  */
 export type GridLayout = 'flat' | 'grid';
 
-export function layoutGrid(objects: GlassObjects, count: number, only: number[] | null = null, cubic = false, layout: GridLayout = 'flat'): { reach: number; centerY: number } {
+export function layoutGrid(objects: GlassObjects, count: number, only: number[] | null = null, cubic = false, layout: GridLayout = 'flat', diamondCut: DiamondCut = 'round'): { reach: number; centerY: number } {
   count = Math.min(Math.max(1, Math.round(count)), MAX_OBJECTS);
   let seed = (count * 2654435761) >>> 0;
   const rnd = () => {
@@ -152,7 +153,7 @@ export function layoutGrid(objects: GlassObjects, count: number, only: number[] 
     size = [size[0] * scale, size[1] * scale, size[2] * scale];
 
     // Resting on the floor, turned any way round, in the middle of its cell.
-    const { height, quat } = restingPose(kind, size, rnd() * 2 * Math.PI);
+    const { height, quat } = restingPose(kind, size, rnd() * 2 * Math.PI, diamondCut);
     const ix = i % perSide;
     const iz = layout === 'grid' ? Math.floor(i / perSide) % perSide : Math.floor(i / perSide);
     const iy = layout === 'grid' ? Math.floor(i / perLayer) : 0;
