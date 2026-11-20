@@ -19,8 +19,8 @@ import { sceneFunctions, type SceneInputs } from './scene';
 
 type N = any;
 const {
-  Break, Fn, If, Loop, abs, array, bool, clamp, cross, dFdx, dFdy, dot, exp, float, floor, int, ivec2, ivec3, length, log, max, min, mix, normalize,
-  reflect, refract, select, sign, smoothstep, sqrt, vec2, vec3, vec4,
+  Break, Fn, If, Loop, abs, array, bool, clamp, cross, dFdx, dFdy, dot, exp, float, floor, fract, int, ivec2, ivec3, length, log, max, min, mix, normalize,
+  reflect, refract, select, sign, sin, smoothstep, sqrt, vec2, vec3, vec4,
 } = TSL as N;
 
 /** What the glass passes read: the object being drawn, and the settings. */
@@ -43,6 +43,10 @@ export interface GlassInputs {
   glassP: N;
   /** The baked meshes' distance volumes, one after the other along z. */
   sdfTex: N;
+  /** Frosted glass roughness (0: crystal clear, 1: fully frosted). */
+  roughness: N;
+  /** Frosted glass grain density (higher = smaller micro-particles). */
+  frostScale: N;
 }
 
 // ------------------------------------------------------------- helpers ---
@@ -97,6 +101,37 @@ function cmyTint(n: N, strength: N): N {
   );
   return mix(vec3(1), passed, strength);
 }
+
+/** 3D value noise for organic frosted-glass micro-texture (ported from glass-effect-webgpu's 3-octave frost_noise). */
+const hash13 = (p: N) => fract(sin(dot(p, vec3(127.1, 311.7, 74.7))).mul(43758.5453123));
+const valueNoise3 = Fn(([p]: N[]) => {
+  const i = floor(p).toVar();
+  const f = fract(p).toVar();
+  const u = f.mul(f).mul(vec3(3).sub(f.mul(2))).toVar();
+  const n000 = hash13(i);
+  const n100 = hash13(i.add(vec3(1, 0, 0)));
+  const n010 = hash13(i.add(vec3(0, 1, 0)));
+  const n110 = hash13(i.add(vec3(1, 1, 0)));
+  const n001 = hash13(i.add(vec3(0, 0, 1)));
+  const n101 = hash13(i.add(vec3(1, 0, 1)));
+  const n011 = hash13(i.add(vec3(0, 1, 1)));
+  const n111 = hash13(i.add(vec3(1, 1, 1)));
+  const nx00 = mix(n000, n100, u.x);
+  const nx10 = mix(n010, n110, u.x);
+  const nx01 = mix(n001, n101, u.x);
+  const nx11 = mix(n011, n111, u.x);
+  return mix(mix(nx00, nx10, u.y), mix(nx01, nx11, u.y), u.z);
+}).setLayout({ name: 'icValueNoise3', type: 'float', inputs: [{ name: 'p', type: 'vec3' }] });
+
+/** 3-octave organic frost grain: fine (0.52) + medium (0.33) + broad (0.15). */
+const frostNoise3 = (p: N) =>
+  clamp(
+    valueNoise3(p.mul(36)).mul(0.52)
+      .add(valueNoise3(p.mul(14).add(vec3(19.7, 4.3, 11.2))).mul(0.33))
+      .add(valueNoise3(p.mul(5.5).add(vec3(3.1, 28.4, 7.6))).mul(0.15)),
+    0,
+    1,
+  );
 
 // -------------------------------------------------------------- shapes ---
 //   0 box         half-extents size.xyz
@@ -503,6 +538,8 @@ export interface GlassViewInputs {
   viewProj: N;
   /** The picture of what is behind this object (ground plus the glass drawn before it), with distance in alpha. */
   behindTex: N;
+  /** Blurred copy of behindTex for frosted glass transmission. */
+  behindBlurTex: N;
   /** The lamp's depth map (red: how far toward the lamp, plus 100), and its size in texels. */
   lampDepthTex: N;
   lampDepthSize: number;
@@ -515,9 +552,9 @@ export interface GlassViewInputs {
  * @param mirrored the mirror image in the floor, shaded as the object itself
  */
 export function glassNode(shape: number, mirrored: boolean, worldPos: N, nrmW: N, g: GlassInputs, s: SceneInputs, v: GlassViewInputs): N {
-  const { center, quat, size, vary, tintOwn, tintAll, cmyAll, glassP } = g;
-  const { camPos, viewProj, behindTex } = v;
-  const { groundOn, scene } = sceneFunctions(s, false);
+  const { center, quat, size, vary, tintOwn, tintAll, cmyAll, glassP, roughness, frostScale } = g;
+  const { camPos, viewProj, behindTex, behindBlurTex } = v;
+  const { groundOn, scene } = sceneFunctions({ ...s, roughness }, false);
   const { declare, entry, exit } = shapeFunctions(shape, g);
 
   // How much of the lamp reaches point p of an object (1: all of it, 0: none), from
@@ -577,11 +614,16 @@ export function glassNode(shape: number, mirrored: boolean, worldPos: N, nrmW: N
             If(abs(ndc.x).greaterThan(0.98).or(abs(ndc.y).greaterThan(0.98)), () => {
               Break();
             });
-            const there = behindTex.sample(screenUv(ndc)).level(0).toVar();
+            const suv = screenUv(ndc).toVar();
+            const there = behindTex.sample(suv).level(0).toVar();
             // Behind what is drawn there, but not by more than an object's depth: a hit.
             const behind = length(p.sub(camPos)).sub(there.a).toVar();
             If(behind.greaterThan(0).and(behind.lessThan(reach.mul(1.5))), () => {
               out.assign(there.rgb);
+              If(roughness.greaterThan(0.001), () => {
+                const blurMix = clamp(sqrt(roughness).mul(float(0.65).add(smoothstep(0, reach.mul(2), t).mul(0.35))), 0, 1);
+                out.assign(mix(there.rgb, behindBlurTex.sample(suv).level(0).rgb, blurMix));
+              });
               found.assign(true);
               Break();
             });
@@ -594,7 +636,13 @@ export function glassNode(shape: number, mirrored: boolean, worldPos: N, nrmW: N
           If(clip.w.greaterThan(0.01), () => {
             const ndc = clip.xy.div(clip.w).toVar();
             If(abs(ndc.x).lessThan(0.98).and(abs(ndc.y).lessThan(0.98)), () => {
-              out.assign(behindTex.sample(screenUv(ndc)).level(0).rgb);
+              const suv = screenUv(ndc).toVar();
+              const sharp = behindTex.sample(suv).level(0).rgb;
+              out.assign(sharp);
+              If(roughness.greaterThan(0.001), () => {
+                const blurMix = clamp(sqrt(roughness).mul(float(0.65).add(smoothstep(0, reach.mul(2), tg).mul(0.35))), 0, 1);
+                out.assign(mix(sharp, behindBlurTex.sample(suv).level(0).rgb, blurMix));
+              });
               found.assign(true);
             });
           });
@@ -626,6 +674,22 @@ export function glassNode(shape: number, mirrored: boolean, worldPos: N, nrmW: N
     const { pos: p0, nrm: n0 } = entry(toLocal(worldPos.sub(center), quat), size, toLocal(normalize(nrmW), quat));
     If(dot(d0, n0).greaterThan(0), () => {
       n0.assign(n0.negate());
+    });
+    // Organic 3-octave frosted surface grain (ported from glass-effect-webgpu's frost_noise).
+    const frostGrain = float(0.5).toVar();
+    If(roughness.greaterThan(0.001), () => {
+      const fs = max(frostScale, 0.25).toVar();
+      const fp = p0.div(max(reach, 0.05)).mul(fs).toVar();
+      const fn0 = frostNoise3(fp).toVar();
+      frostGrain.assign(fn0);
+      const eps = float(0.008).toVar();
+      const gx = frostNoise3(fp.add(vec3(eps, 0, 0))).sub(fn0);
+      const gy = frostNoise3(fp.add(vec3(0, eps, 0))).sub(fn0);
+      const gz = frostNoise3(fp.add(vec3(0, 0, eps))).sub(fn0);
+      const perturbed = normalize(n0.add(vec3(gx, gy, gz).mul(roughness.mul(0.45)))).toVar();
+      If(dot(d0, perturbed).lessThan(-0.02), () => {
+        n0.assign(perturbed);
+      });
     });
 
     // Each object can differ slightly from the settings: vary.x is added to the IOR,
@@ -712,6 +776,20 @@ export function glassNode(shape: number, mirrored: boolean, worldPos: N, nrmW: N
       }).Else(() => {
         col.assign(layer);
       });
+    });
+    // Creamy frosted veil + crisp Fresnel rim (inspired by glass-effect-webgpu's frosted look):
+    // lifts dark interiors into a soft, lit translucent milkiness modulated by organic frost grain,
+    // while keeping a clean specular rim highlight around grazing edges.
+    If(roughness.greaterThan(0.001), () => {
+      const veilOpacity = roughness.mul(0.42).mul(frostGrain.mul(0.24).add(0.88)).toVar();
+      const studioLight = s.skyE.add(s.sunE.mul(mix(0.25, 0.45, lampLit))).toVar();
+      const frostTint = baseTint.mul(studioLight).toVar();
+      const lifted = col.mul(1.03).add(frostTint.mul(0.22));
+      const frosted = mix(mix(col, lifted, veilOpacity), frostTint, veilOpacity.mul(0.55));
+      const ndotv = clamp(dot(d0, n0).negate(), 0, 1);
+      const rim = float(1).sub(ndotv).toVar();
+      const rimGlow = rim.mul(rim).mul(rim).mul(roughness.mul(0.35)).mul(studioLight);
+      col.assign(frosted.add(rimGlow));
     });
     if (mirrored) {
       const fade = exp(max(worldPos.y, 0).mul(-3.2)).toVar();

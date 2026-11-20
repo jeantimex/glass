@@ -225,6 +225,8 @@ export function createInstancedGlass(
   // The glow of the brightest glints, at a quarter of the size.
   const glowScratch = makeTarget(false);
   const glowLayer = makeTarget(false);
+  // Blurred background/far layer for frosted glass transmission, at quarter size.
+  const frostLayer = makeTarget(false);
   // The objects mirrored in the floor, at half size. Not multisampled: it is blurred.
   const mirrorLayer = new THREE.RenderTarget(4, 4, {
     type: THREE.HalfFloatType,
@@ -260,6 +262,8 @@ export function createInstancedGlass(
   const uTint = uniform(new THREE.Vector4(1, 1, 1, 1)); // the colour of all the glass (linear rgb), and how strongly it applies
   const uCmy = uniform(0); // above 0: boxes are CMY cubes, with filters this strong
   const uBevel = uniform(0); // how much is cut off the edges of boxes (m)
+  const uRoughness = uniform(0); // frosted glass roughness (0: clear, 1: frosted)
+  const uFrostScale = uniform(4); // frosted glass grain density (higher = smaller particles)
   const uSpot = uniform(new THREE.Vector4()); // stage spotlight: beam radius at the floor (0: off), distance of the lamp
   const uFloor = uniform(new THREE.Vector4()); // x: how reflective the floor is; y: how dark its shadows are
   const uBlurDir = uniform(new THREE.Vector2());
@@ -267,6 +271,7 @@ export function createInstancedGlass(
 
   const lightNode = texture(causticMap.texture);
   const behindNode = texture(background.texture);
+  const frostNode = texture(frostLayer.texture);
   const lampDepthNode = texture(lampDepth.texture);
   const mirrorNode = texture(mirrorLayer.texture);
   const shadeNode = texture(shadeNear.texture);
@@ -293,6 +298,8 @@ export function createInstancedGlass(
     meshEntry: uMeshEntry,
     glassP: uGlass,
     sdfTex: volumeNode,
+    roughness: uRoughness,
+    frostScale: uFrostScale,
   };
   // v rotated by the instance quaternion: v + 2 q.xyz x (q.xyz x v + q.w v)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TSL node types are too loose to spell out here
@@ -466,6 +473,7 @@ export function createInstancedGlass(
       camPos: mirrored ? uMirrorCam : uCamPos,
       viewProj: uViewProj,
       behindTex: behindNode,
+      behindBlurTex: frostNode,
       lampDepthTex: lampDepthNode,
       lampDepthSize: LAMP_DEPTH_SIZE,
     });
@@ -699,12 +707,13 @@ export function createInstancedGlass(
     shadedLayer.setSize(width, height);
     glowScratch.setSize(Math.max(1, width >> 2), Math.max(1, height >> 2));
     glowLayer.setSize(Math.max(1, width >> 2), Math.max(1, height >> 2));
+    frostLayer.setSize(Math.max(1, width >> 2), Math.max(1, height >> 2));
     mirrorLayer.setSize(Math.max(1, width >> 1), Math.max(1, height >> 1));
     uRes.value.set(width, height);
   }
 
   /** `moved`: some object changed since the last frame (redraws the caustic map). */
-  function render(glass: { ior: number; dispersion: number; cmy?: number; bevel?: number; color?: [number, number, number, number]; wireframe?: boolean; wireColor?: [number, number, number, number] }, light: InstancedLighting, moved: boolean) {
+  function render(glass: { ior: number; dispersion: number; roughness?: number; frostScale?: number; cmy?: number; bevel?: number; color?: [number, number, number, number]; wireframe?: boolean; wireColor?: [number, number, number, number] }, light: InstancedLighting, moved: boolean) {
     marks = timed ? [] : null;
     // Wireframe only: the edges in place of the glass, and nothing mirrored in the floor.
     const wantWire = glass.wireframe ?? false;
@@ -718,6 +727,8 @@ export function createInstancedGlass(
     for (const m of wireMaterials) m.blendColor.setRGB(wa, wa, wa);
     uTint.value.fromArray(glass.color ?? [1, 1, 1, 1]);
     uBevel.value = glass.bevel ?? 0;
+    uRoughness.value = glass.roughness ?? 0;
+    uFrostScale.value = glass.frostScale ?? 4;
     if (uCmy.value !== (glass.cmy ?? 0)) lightDirty = true; // its shadow is coloured too
     uCmy.value = glass.cmy ?? 0;
     // Camera.
@@ -847,6 +858,19 @@ export function createInstancedGlass(
     groundQuad.render(renderer);
 
     // 4. Far half of the glass over a copy of the background.
+    const rough = uRoughness.value;
+    const frostBlur = (source: THREE.Texture) => {
+      const aspect = uRes.value.x / uRes.value.y;
+      const r1 = 0.01 + rough * 0.025;
+      const r2 = 0.022 + rough * 0.055;
+      blur(source, frostLayer, r1, r1 * aspect, glowScratch);
+      blur(frostLayer.texture, frostLayer, r2, r2 * aspect, glowScratch);
+      if (rough > 0.25) {
+        const r3 = 0.035 + rough * 0.085;
+        blur(frostLayer.texture, frostLayer, r3, r3 * aspect, glowScratch);
+      }
+    };
+    if (rough > 0.001) frostBlur(background.texture);
     uGlass.value.set(glass.ior, many ? 0 : glass.dispersion, many ? 4 : 6, 0);
     mark('Far glass');
     renderer.setRenderTarget(farLayer);
@@ -858,6 +882,7 @@ export function createInstancedGlass(
 
     // 5. Near half over a copy of that, seeing the far half refracted.
     renderer.autoClear = true;
+    if (rough > 0.001 && light.seeThrough) frostBlur(farLayer.texture);
     mark('Near glass');
     renderer.setRenderTarget(nearLayer);
     copySource.value = farLayer.texture;

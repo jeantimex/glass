@@ -31,6 +31,8 @@ export interface SceneInputs {
   /** The caustic map blurred a little and far wider (only for a pass that sees the floor directly). */
   shadeTex?: N;
   shadeFarTex?: N;
+  /** Frosted glass roughness (0: crystal clear, 1: fully frosted). */
+  roughness?: N;
 }
 
 /**
@@ -56,6 +58,9 @@ export function sceneFunctions(s: SceneInputs, backdrop: boolean) {
     // (Under a spotlight the backdrop is outside the pool, so the lamp does not reach it.)
     if (backdrop) return s.albedo.mul(s.skyE.add(s.sunE.mul(select(spotOn, 0, 1))));
     const lampShare = mix(0.35, 1, lampLit);
+    const r = (s.roughness ?? float(0)).toVar();
+    const r2 = r.mul(r).toVar();
+    const sharp = float(1).sub(r.mul(0.85)).toVar();
     const az = atan(d.z, d.x).toVar();
     const out = vec3(0).toVar();
     If(dark.greaterThan(0.5), () => {
@@ -67,37 +72,51 @@ export function sceneFunctions(s: SceneInputs, backdrop: boolean) {
         // (The room is not quite black: a dim grey, lighter toward the floor, which is
         // what the dark band low in a glass ball is showing.)
         k.assign(mix(0.11, 0.035, smoothstep(0, 0.6, d.y)));
-        k.addAssign(lampShare.mul(40).mul(smoothstep(0.988, 0.996, dot(d, s.lamp))));
+        const spotGlow = smoothstep(float(0.988).sub(r.mul(0.55)), float(0.996).add(r.mul(0.004)), dot(d, s.lamp));
+        k.addAssign(lampShare.mul(40).div(r2.mul(28).add(1)).mul(spotGlow));
         // A jeweller's softboxes, out of the picture: four panels overhead round a
         // dark hole (where the camera looks down through the tent), and a tall strip
         // either side. Only the glass sees them: they make a stone's facets flash.
-        const ring = smoothstep(0.78, 0.86, d.y).mul(float(1).sub(smoothstep(0.94, 0.97, d.y)));
-        k.addAssign(ring.mul(2.6).mul(smoothstep(-0.2, 0.3, cos(az.mul(4)))));
+        const ring = smoothstep(float(0.78).sub(r.mul(0.35)), float(0.86).add(r.mul(0.1)), d.y).mul(
+          float(1).sub(smoothstep(0.94, 0.97, d.y).mul(sharp)),
+        );
+        k.addAssign(ring.mul(2.6).div(r2.mul(3).add(1)).mul(mix(smoothstep(-0.2, 0.3, cos(az.mul(4))), 0.5, r)));
         const tall = smoothstep(0.05, 0.15, d.y).mul(float(1).sub(smoothstep(0.55, 0.7, d.y))).toVar();
         // (Left and right of where the camera starts, not behind the stones, where a
         // table facing up would mirror one straight into the camera as a white blank.)
-        k.addAssign(tall.mul(4).mul(smoothstep(0.95, 0.985, cos(az.sub(2.5)))));
-        k.addAssign(tall.mul(4).mul(smoothstep(0.95, 0.985, cos(az.add(0.63)))));
+        const stripLo = float(0.95).sub(r.mul(0.55));
+        const stripHi = float(0.985).add(r.mul(0.015));
+        const stripGain = float(4).div(r2.mul(5).add(1));
+        k.addAssign(tall.mul(stripGain).mul(smoothstep(stripLo, stripHi, cos(az.sub(2.5)))));
+        k.addAssign(tall.mul(stripGain).mul(smoothstep(stripLo, stripHi, cos(az.add(0.63)))));
+        k.addAssign(r.mul(0.12));
       }).Else(() => {
-        k.addAssign(lampShare.mul(6).mul(smoothstep(0.84, 0.95, dot(d, s.lamp))));
-        k.addAssign(smoothstep(0.8, 0.97, d.y).mul(1.6));
+        const mainGlow = smoothstep(float(0.84).sub(r.mul(0.55)), float(0.95).add(r.mul(0.05)), dot(d, s.lamp));
+        k.addAssign(lampShare.mul(6).div(r2.mul(4).add(1)).mul(mainGlow));
+        k.addAssign(smoothstep(float(0.8).sub(r.mul(0.45)), 0.97, d.y).mul(1.6).div(r2.mul(2).add(1)));
         const tall = smoothstep(0.02, 0.1, d.y).mul(float(1).sub(smoothstep(0.6, 0.75, d.y))).toVar();
-        k.addAssign(tall.mul(5).mul(smoothstep(0.985, 0.996, cos(az.sub(0.5)))));
-        k.addAssign(tall.mul(3.5).mul(smoothstep(0.99, 0.998, cos(az.add(1.9)))));
+        k.addAssign(tall.mul(float(5).div(r2.mul(6).add(1))).mul(smoothstep(float(0.985).sub(r.mul(0.6)), 0.996, cos(az.sub(0.5)))));
+        k.addAssign(tall.mul(float(3.5).div(r2.mul(6).add(1))).mul(smoothstep(float(0.99).sub(r.mul(0.6)), 0.998, cos(az.add(1.9)))));
+        k.addAssign(r.mul(0.1));
       });
       out.assign(vec3(k));
     }).Else(() => {
       // A light tent: pale overhead, dark grey toward the floor.
-      const c = mix(0.15, 0.72, smoothstep(-0.1, 0.95, d.y)).toVar();
+      const c = mix(mix(0.15, 0.38, r), mix(0.72, 0.65, r), smoothstep(-0.1, 0.95, d.y)).toVar();
       // A few grey cards standing round the set, and a small dark one overhead (the
       // camera): they are what the stone's darker facets are looking at.
       const band = smoothstep(0.03, 0.1, d.y).mul(float(1).sub(smoothstep(0.68, 0.82, d.y)));
-      c.assign(mix(c, 0.04, band.mul(0.96).mul(smoothstep(-0.1, 0.15, sin(az.mul(5).add(1))))));
-      c.assign(mix(c, 0.05, smoothstep(0.9, 0.95, d.y)));
+      c.assign(mix(c, 0.04, band.mul(0.96).mul(sharp).mul(smoothstep(-0.1, 0.15, sin(az.mul(5).add(1))))));
+      c.assign(mix(c, 0.05, smoothstep(0.9, 0.95, d.y).mul(sharp)));
       // Lamps: the main one up and to the left, and two small ones.
-      c.addAssign(lampShare.mul(3).mul(smoothstep(0.86, 0.96, dot(d, s.lamp))));
-      c.addAssign(smoothstep(0.985, 0.995, dot(d, normalize(vec3(Math.cos(3), 0.6, Math.sin(3))))).mul(3));
-      c.addAssign(smoothstep(0.985, 0.995, dot(d, normalize(vec3(Math.cos(5), 0.9, Math.sin(5))))).mul(3));
+      const mainLo = float(0.86).sub(r.mul(0.55));
+      const mainHi = float(0.96).add(r.mul(0.04));
+      c.addAssign(lampShare.mul(3).div(r2.mul(3).add(1)).mul(smoothstep(mainLo, mainHi, dot(d, s.lamp))));
+      const smallLo = float(0.985).sub(r.mul(0.55));
+      const smallGain = float(3).div(r2.mul(8).add(1));
+      c.addAssign(smoothstep(smallLo, 0.995, dot(d, normalize(vec3(Math.cos(3), 0.6, Math.sin(3))))).mul(smallGain));
+      c.addAssign(smoothstep(smallLo, 0.995, dot(d, normalize(vec3(Math.cos(5), 0.9, Math.sin(5))))).mul(smallGain));
+      c.addAssign(r.mul(0.08));
       out.assign(vec3(c));
     });
     return out;

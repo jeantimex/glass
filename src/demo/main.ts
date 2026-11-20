@@ -56,6 +56,10 @@ const settings = {
   // The glass (of a grid of objects; one on its own has its own settings).
   ior: 1.52,
   dispersion: 1,
+  /** Frosted glass roughness (0: crystal clear, 1: fully frosted). */
+  roughness: 0,
+  /** Frosted glass grain fineness (higher = smaller micro-particles). */
+  frostScale: 4,
   /** How much is cut off the edges of boxes (m). */
   bevel: 0,
   /** The colour of the glass, and how strongly it applies (0: clear, whatever the colour). */
@@ -323,7 +327,7 @@ async function main() {
    * settings: the shape's measurements (named per shape), how far it is turned,
    * its IOR and its dispersion.
    */
-  type Single = { measures: number[]; turn: number; ior: number; dispersion: number; bevel: number; colour: number; glassColor: RGB; glassAlpha: number };
+  type Single = { measures: number[]; turn: number; ior: number; dispersion: number; roughness: number; frostScale: number; bevel: number; colour: number; glassColor: RGB; glassAlpha: number };
   const SINGLE_SHAPES: Record<number, { labels: string[]; measures: number[]; turn: number }> = {
     [KIND.box]: { labels: ['Half width', 'Half height', 'Half depth'], measures: [0.6, 0.6, 0.6], turn: -15 },
     [KIND.sphere]: { labels: ['Radius'], measures: [0.6], turn: 0 },
@@ -350,6 +354,8 @@ async function main() {
       turn: shape.turn,
       ior: demo.ior ?? 1.52,
       dispersion: demo.dispersion ?? 1,
+      roughness: 0,
+      frostScale: 4,
       // A CMY cube gets fine bevels: its edges catch the light, as cut glass does.
       bevel: demo.cmy ? 0.008 : 0,
       colour: CMY_STRENGTH,
@@ -422,17 +428,23 @@ async function main() {
     return isSingle() ? Math.max(singleFor(view.shape).colour, 0.001) : CMY_STRENGTH;
   };
   /** Set the scene up: a shape on its own resting in place, or a grid of them. */
-  const placeObjects = () => {
+  const placeObjects = (keepGlass = false) => {
     const shape = current();
     if (isSingle()) {
       const single = singleFor(view.shape);
-      settings.ior = single.ior;
-      settings.dispersion = single.dispersion;
+      if (!keepGlass) {
+        settings.ior = single.ior;
+        settings.dispersion = single.dispersion;
+        settings.roughness = single.roughness;
+        settings.frostScale = single.frostScale;
+      }
       placeShowcase(view.shape);
     } else {
-      // Each shape sets its own glass.
-      settings.ior = shape.ior ?? 1.52;
-      settings.dispersion = shape.dispersion ?? 1;
+      // Each shape sets its own glass when switching shapes (kept when only changing count/layout).
+      if (!keepGlass) {
+        settings.ior = shape.ior ?? 1.52;
+        settings.dispersion = shape.dispersion ?? 1;
+      }
       const bounds = layoutGrid(glassObjects, view.count, shape.kinds, shape.cubic ?? false, view.layout);
       gridReach = bounds.reach;
       gridCenterY = bounds.centerY;
@@ -494,31 +506,42 @@ async function main() {
     else address.searchParams.delete('layout');
     history.replaceState(null, '', address);
   };
-  /**
-   * Start the scene from scratch: every setting back to how the page opened (the
-   * shape's own settings too), and the camera back where it frames the scene.
-   */
-  const startOver = () => {
-    updateAddress();
-    Object.assign(settings, structuredClone(DEFAULTS), lookOf());
-    delete singles[view.shape];
-    placeObjects();
-    frameScene();
-    showPanels();
-    resize(); // a shape on its own is drawn larger than the screen
-    gui.controllersRecursive().forEach((c) => c.updateDisplay());
-  };
   let wasSingle = isSingle();
-  /** A new count: a new grid, or, between one object on its own and a grid, a fresh start. */
+  /** A new count: keeps all lighting, scene, camera, and glass settings intact. */
   const changeCount = () => {
     view.count = Math.min(Math.max(Math.round(view.count) || 1, 1), MAX_COUNT);
-    if (isSingle() !== wasSingle) startOver();
-    else {
+    const nowSingle = isSingle();
+    if (nowSingle !== wasSingle) {
+      const single = singleFor(view.shape);
+      if (wasSingle && !nowSingle) {
+        // Carry single-object glass settings over to the grid.
+        settings.ior = single.ior;
+        settings.dispersion = single.dispersion;
+        settings.roughness = single.roughness;
+        settings.frostScale = single.frostScale;
+        Object.assign(settings.glassColor, single.glassColor);
+        settings.glassAlpha = single.glassAlpha;
+      } else if (!wasSingle && nowSingle) {
+        // Carry grid glass settings over to the single object.
+        single.ior = settings.ior;
+        single.dispersion = settings.dispersion;
+        single.roughness = settings.roughness;
+        single.frostScale = settings.frostScale;
+        Object.assign(single.glassColor, settings.glassColor);
+        single.glassAlpha = settings.glassAlpha;
+      }
       updateAddress();
-      placeObjects();
+      placeObjects(true);
+      frameScene();
+      showPanels();
+      resize(); // a shape on its own is drawn larger than the screen
+      gui.controllersRecursive().forEach((c) => c.updateDisplay());
+    } else {
+      updateAddress();
+      placeObjects(true);
       layoutController.show(view.count > 1);
     }
-    wasSingle = isSingle();
+    wasSingle = nowSingle;
   };
   // A new shape keeps everything else as it is (the scene, lighting and camera
   // settings, the camera, the count): only the objects change.
@@ -536,7 +559,7 @@ async function main() {
     .name('Layout')
     .onChange(() => {
       updateAddress();
-      placeObjects();
+      placeObjects(true);
       frameScene();
     });
   // The stats panel in the corner: frame rate, triangles, and GPU time per part.
@@ -624,10 +647,21 @@ async function main() {
     if (single) {
       glass.add(single, 'ior', 1, 2.5, 0.01).name('IOR').onChange((v: number) => (settings.ior = v));
       glass.add(single, 'dispersion', 0, 5, 0.05).name('Dispersion').onChange((v: number) => (settings.dispersion = v));
+      const roughCtrl = glass.add(single, 'roughness', 0, 1, 0.01).name('Roughness');
+      const frostGrainCtrl = glass.add(single, 'frostScale', 0.5, 12, 0.1).name('Frost grain').onChange((v: number) => (settings.frostScale = v));
+      roughCtrl.onChange((v: number) => {
+        settings.roughness = v;
+        frostGrainCtrl.show(v > 0);
+      });
+      frostGrainCtrl.show(single.roughness > 0);
       glass.add(single, 'turn', -180, 180, 1).name('Turn').onChange(place);
     } else {
       glass.add(settings, 'ior', 1, 2.5, 0.01).name('IOR').listen();
       glass.add(settings, 'dispersion', 0, 5, 0.05).name('Dispersion').listen();
+      const roughCtrl = glass.add(settings, 'roughness', 0, 1, 0.01).name('Roughness').listen();
+      const frostGrainCtrl = glass.add(settings, 'frostScale', 0.5, 12, 0.1).name('Frost grain').listen();
+      roughCtrl.onChange((v: number) => frostGrainCtrl.show(v > 0));
+      frostGrainCtrl.show(settings.roughness > 0);
     }
     glass.add(settings, 'seeThrough').name('Glass through glass');
     glass.add(settings, 'realCaustics').name('Real caustics');
@@ -655,6 +689,8 @@ async function main() {
         } else {
           settings.ior = demo.ior ?? 1.52;
           settings.dispersion = demo.dispersion ?? 1;
+          settings.roughness = DEFAULTS.roughness;
+          settings.frostScale = DEFAULTS.frostScale;
           Object.assign(settings.glassColor, DEFAULTS.glassColor);
           settings.glassAlpha = DEFAULTS.glassAlpha;
           colourObjects();
@@ -681,9 +717,9 @@ async function main() {
     if (demo.cmy) folder.add(single, 'colour', 0, 1, 0.01).name('Colour strength');
     // Reset: the shape's measurements as it starts (its glass is left as it is).
     const reset = () => {
-      const { ior, dispersion, glassColor, glassAlpha, turn } = single;
+      const { ior, dispersion, roughness, frostScale, glassColor, glassAlpha, turn } = single;
       delete singles[name];
-      Object.assign(singleFor(name), { ior, dispersion, glassColor, glassAlpha, turn });
+      Object.assign(singleFor(name), { ior, dispersion, roughness, frostScale, glassColor, glassAlpha, turn });
       placeObjects();
       rebuildShapeFolder();
     };
@@ -801,7 +837,7 @@ async function main() {
     const lampUp = THREE.MathUtils.degToRad(settings.lampHeight);
     const lampRound = THREE.MathUtils.degToRad(settings.lampTurn);
     instanced.render(
-      { ior: settings.ior, dispersion: settings.dispersion, cmy: cmyStrength(), bevel: boxBevel(), color: glassColour(), wireframe: settings.wireframe,
+      { ior: settings.ior, dispersion: settings.dispersion, roughness: settings.roughness, frostScale: settings.frostScale, cmy: cmyStrength(), bevel: boxBevel(), color: glassColour(), wireframe: settings.wireframe,
         wireColor: [srgbToLinear(settings.wireColor.r), srgbToLinear(settings.wireColor.g), srgbToLinear(settings.wireColor.b), settings.wireAlpha] },
       {
         ground: settings.ground,
