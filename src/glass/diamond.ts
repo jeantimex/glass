@@ -58,8 +58,8 @@ function restingFacet(planes: number[]): { rest: number; lean: number } {
     const ny = planes[p * 4 + 1];
     const nz = planes[p * 4 + 2];
     if (ny >= -0.25 || nx <= 0.1) continue;
-    // Prefer a facet aligned with the +X/-Y plane (|nz| ≈ 0) and moderate pavilion slope.
-    const score = -Math.abs(nz) * 10 - Math.abs(ny + 0.72);
+    // Prefer an active pavilion main facet aligned with the +X/-Y plane (|nz| ≈ 0).
+    const score = -Math.abs(nz) * 10 - Math.abs(ny + 0.76) - planes[p * 4 + 3] * 0.2;
     if (score > bestScore) {
       bestScore = score;
       best = p;
@@ -351,9 +351,22 @@ export function diamondGeometry(cut: DiamondCut = 'round'): THREE.BufferGeometry
       poly = next;
     }
 
-    if (poly.length < 3) continue;
-    for (let i = 1; i + 1 < poly.length; i++) {
-      for (const vert of [poly[0], poly[i], poly[i + 1]]) {
+    // Remove near-coincident vertices produced when multiple planes meet at one corner.
+    const clean: THREE.Vector3[] = [];
+    for (const vert of poly) {
+      const prev = clean[clean.length - 1];
+      if (!prev || prev.distanceToSquared(vert) > 1e-10) clean.push(vert);
+    }
+    if (clean.length >= 2 && clean[0].distanceToSquared(clean[clean.length - 1]) <= 1e-10) clean.pop();
+    if (clean.length < 3) continue;
+    const ab = new THREE.Vector3();
+    const ac = new THREE.Vector3();
+    const cross = new THREE.Vector3();
+    for (let i = 1; i + 1 < clean.length; i++) {
+      ab.subVectors(clean[i], clean[0]);
+      ac.subVectors(clean[i + 1], clean[0]);
+      if (cross.crossVectors(ab, ac).dot(n) <= 1e-10) continue;
+      for (const vert of [clean[0], clean[i], clean[i + 1]]) {
         positions.push(vert.x, vert.y, vert.z);
         normals.push(nx, ny, nz);
       }
