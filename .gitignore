@@ -24,6 +24,10 @@ desktop.ini
 # Old comparison renders, if any are still lying around locally.
 renders/
 
+# Playwright artifacts
+test-results/
+playwright-report/
+
 # The original shader file is a third-party asset: keep it local.
 *.blend
 *.blend1

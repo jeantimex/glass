@@ -291,12 +291,19 @@ async function main() {
   window.addEventListener('resize', resize);
 
   /* Settings GUI */
+  const hideUi = query.get('ui') === '0';
   const gui = new GUI({ title: 'Settings', width: 300 });
   // Folded to its title bar at first, so the scene is not covered.
   gui.close();
+  if (hideUi) {
+    gui.domElement.style.display = 'none';
+    for (const el of document.querySelectorAll<HTMLElement>('#github, #stats')) {
+      el.style.display = 'none';
+    }
+  }
   const status = { fps: '0', triangles: '0' };
-  /** Settings of the page itself, kept whatever the scene (shown by default; ?stats=0 hides it). */
-  const ui = { stats: query.get('stats') !== '0' };
+  /** Settings of the page itself, kept whatever the scene (shown by default; ?stats=0 or ?ui=0 hides it). */
+  const ui = { stats: !hideUi && query.get('stats') !== '0' };
 
   /** Keep the address in step, so that reloading or sharing it opens the same scene. */
   const updateAddress = () => {
@@ -713,14 +720,18 @@ async function main() {
   renderer.setAnimationLoop(() => {
     if (firstFrame) {
       firstFrame = false;
+      const finishLoading = () => {
+        loading.done();
+        document.documentElement.dataset.glassReady = 'true';
+      };
       requestAnimationFrame(() => {
         // (WebGL cannot say when the GPU is done: by the next frame is close enough.)
         if (device)
           device.queue.onSubmittedWorkDone().then(
-            () => loading.done(),
-            () => loading.done(),
+            () => finishLoading(),
+            () => finishLoading(),
           );
-        else requestAnimationFrame(() => loading.done());
+        else requestAnimationFrame(() => finishLoading());
       });
     }
     orbit.update();
@@ -828,6 +839,38 @@ async function main() {
     );
     status.triangles = instanced.triangles().toLocaleString('en-US');
   });
+
+  /* Test automation hook for deterministic visual screenshot regression tests */
+  (window as unknown as Record<string, unknown>).__glassTest = {
+    async setScene(opts: {
+      shape: string;
+      dark?: boolean;
+      hdri?: typeof settings.hdri;
+      ground?: boolean;
+    }): Promise<void> {
+      view.shape = opts.shape;
+      view.count = 1;
+      view.layout = 'flat';
+      delete singles[opts.shape];
+      Object.assign(settings, structuredClone(DEFAULTS), lookOf());
+      if (opts.dark !== undefined) settings.dark = opts.dark;
+      if (opts.ground !== undefined) settings.ground = opts.ground;
+      const hdriPreset = opts.hdri ?? 'none';
+      settings.hdri = hdriPreset;
+      if (hdriPreset !== 'none') {
+        await loadHdriPreset(hdriPreset, '2k');
+      }
+      placeObjects();
+      frameScene();
+      instanced.markChanged();
+      dirtyFrames = 3;
+      // Wait for at least 3 rendered animation frames and GPU completion.
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+      );
+      if (device) await device.queue.onSubmittedWorkDone();
+    },
+  };
 }
 
 main().catch((err) => {

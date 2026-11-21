@@ -2,4 +2,7 @@ dist
 node_modules
 public
 renders
+test-results
+playwright-report
+e2e/__screenshots__
 package-lock.json
