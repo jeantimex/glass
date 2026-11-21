@@ -2,17 +2,18 @@
   <img src="showcase.png" alt="Glass Material Showcase" />
 </p>
 
-Real-time physical glass rendering in the browser with **Three.js** and **TSL** (compiles to **WebGPU / WGSL**, with automatic fallback to **WebGL 2 / GLSL**): exact dielectric Fresnel, Cauchy chromatic dispersion, Beer–Lambert volumetric absorption, frosted glass (毛玻璃), 6 diamond cuts, caustics, and instanced rendering of thousands of glass objects.
+Real-time physical glass rendering in the browser with **Three.js** and **TSL** (compiles to **WebGPU / WGSL**, with automatic fallback to **WebGL 2 / GLSL**): exact dielectric Fresnel, 6-band CIE 1931 spectral dispersion, Beer–Lambert volumetric absorption, HDRI environments (`envMap`), frosted glass (毛玻璃), 6 diamond cuts, CMY dichroic cubes, photon-traced caustics, and instanced rendering of thousands of glass objects.
 
 ---
 
 ## Features
 
-- **Standalone [`GlassMaterial`](src/glass/material.ts)** (`extends THREE.MeshBasicNodeMaterial`) — drop directly onto any `THREE.Mesh` / `THREE.BufferGeometry`.
-- **Exact Optical Math** — unpolarized Cook–Torrance dielectric Fresnel, conserved-wavelength Cauchy dispersion (Fraunhofer C/d/F lines), Beer–Lambert volumetric absorption, and Total Internal Reflection (TIR).
+- **Standalone [`GlassMaterial`](src/glass/material.ts)** (`extends THREE.MeshBasicNodeMaterial`) — drop directly onto any `THREE.Mesh` / `THREE.BufferGeometry`, with reactive GPU uniforms, `envMap` / `envMapIntensity`, and `clone()`.
+- **Exact Optical Math** — unpolarized Cook–Torrance dielectric Fresnel, 6-band CIE 1931 spectral dispersion (Fraunhofer C/d/F Cauchy curve), Beer–Lambert volumetric absorption, ray-cone analytic filtering, and Total Internal Reflection (TIR).
+- **HDRI Environments & Firefly-Free Bloom** — equirectangular HDRI `envMap` support with roughness-driven mipmap LOD (with automatic procedural studio fallback), 4K/2K Poly Haven CC0 HDRI presets in the interactive `lil-gui` demo, and a quarter-res 4×4 prefiltered bloom pass with a hue-preserving soft firefly shoulder.
 - **Frosted Glass (毛玻璃)** — noise-free analytic environment softening, 3-octave organic micro-particle grain (`frostScale`), creamy translucent frost veil, and crisp Fresnel rim.
-- **6 Diamond Cuts** — `round` (Round Brilliant), `princess`, `emerald`, `asscher`, `cushion`, and `radiant`, built as exact watertight convex polyhedra matching the ray-traced facet planes.
-- **Instanced Studio Renderer** — [`createInstancedGlass`](src/glass/renderer.ts) for rendering up to 20,000 glass objects with real photon-traced caustics, floor reflections, contact shadows, depth of field, and bloom.
+- **6 Diamond Cuts & Concave SDF Volumes** — `round` (Round Brilliant), `princess`, `emerald`, `asscher`, `cushion`, and `radiant` watertight convex polyhedra, plus 8-tap tricubic B-spline 3D SDF tracing for complex meshes (Suzanne, Stanford Dragon).
+- **Instanced Studio Renderer** — [`createInstancedGlass`](src/glass/renderer.ts) for rendering up to 20,000 glass objects with glass-through-glass depth layering, real photon-traced caustics, floor reflections, half-res bilateral contact shadows, CMY dichroic face filters, depth of field, and bloom.
 
 ---
 
@@ -98,7 +99,34 @@ glass.colorAlpha = 0.8; // Blend toward clear
 glass.dark = true; // Switch to dark studio lighting
 ```
 
-### 4. Refracting a Live Scene Background
+### 4. Equirectangular HDRI Environments (`envMap`) & Cloning
+
+Load any equirectangular `.hdr` / `.exr` environment map and bind it directly to `GlassMaterial` (mipmaps are sampled automatically by `roughness`, falling back to the built-in procedural studio when `null`):
+
+```ts
+import * as THREE from 'three/webgpu';
+import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
+
+const hdr = await new HDRLoader().loadAsync(
+  'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/4k/santos_beach_pavillion_4k.hdr',
+);
+hdr.mapping = THREE.EquirectangularReflectionMapping;
+hdr.wrapS = THREE.RepeatWrapping;
+hdr.wrapT = THREE.ClampToEdgeWrapping;
+hdr.minFilter = THREE.LinearMipmapLinearFilter;
+hdr.magFilter = THREE.LinearFilter;
+hdr.generateMipmaps = true;
+hdr.needsUpdate = true;
+
+glass.envMap = hdr;
+glass.envMapIntensity = 1.0;
+
+// Create an independent clone sharing the same HDRI with a different tint:
+const amberGlass = glass.clone();
+amberGlass.color.set('#ffaa44');
+```
+
+### 5. Refracting a Live Scene Background
 
 Pass a rendered background texture (and optional blurred copy for frosted glass) with `setBackground`:
 
@@ -110,7 +138,7 @@ glass.setBackground(backgroundTarget.texture, blurredBackgroundTarget.texture);
 glass.setBackground(null);
 ```
 
-### 5. High-Scale Instanced Renderer (`createInstancedGlass`)
+### 6. High-Scale Instanced Renderer (`createInstancedGlass`)
 
 For scenes with hundreds or thousands of glass objects, real caustics, floor reflections, and contact shadows, pass a `GlassMaterial` directly to `instanced.render()`:
 
@@ -216,6 +244,9 @@ Metadata for each cut: `{ label, planes, planeCount, rest, lean }`, where `rest`
 npm install          # Install dependencies
 npm run dev          # Start Vite dev server (open ?shape=diamond or ?shape=torus-knot&count=27&layout=grid)
 npm test             # Run Vitest unit test suite
+npm run lint         # Run oxlint static analysis
+npm run format       # Format codebase with Prettier
+npm run format:check # Verify Prettier formatting
 npm run typecheck    # TypeScript check (tsc --noEmit)
 npm run build        # Production build
 npm run deploy       # Build and deploy demo to GitHub Pages
@@ -225,5 +256,6 @@ npm run deploy       # Build and deploy demo to GitHub Pages
 
 ## Credits
 
+- **HDRI environments:** CC0 4K/2K equirectangular HDRIs streamed from [Poly Haven](https://polyhaven.com/hdris) (Santos Beach Pavilion, Kloofendal Sky, Venice Sunset, Belfast Sunset, Photo Studio, Rogland Clear Night).
 - **Dragon model:** the Stanford dragon, © 1996 Stanford University Computer Graphics Laboratory ([Stanford 3D Scanning Repository](https://graphics.stanford.edu/data/3Dscanrep/)), converted and cleaned up by Morgan McGuire (© 2017), from the [Khronos glTF sample models](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/DragonAttenuation). Free for non-commercial use with credit to the Stanford Computer Graphics Laboratory; not to be used in a product for sale without their permission.
 - **Suzanne:** Blender’s test mesh.
