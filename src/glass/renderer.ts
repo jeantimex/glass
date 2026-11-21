@@ -16,7 +16,7 @@ import * as THREE from 'three/webgpu';
 import { InstanceBatch } from './batch';
 import { DIAMOND_CUTS, diamondGeometry, type DiamondCut } from './diamond';
 import { createShapeGeometries, triangleCount, UNIT_TUBE } from './geometries';
-import { GlassMaterial } from './material';
+import { MeshGlassMaterial } from './material';
 import {
   attribute,
   cross,
@@ -91,6 +91,16 @@ export interface InstancedLighting {
   envMap?: THREE.Texture | null;
   /** Intensity multiplier for `envMap` (default 1). */
   envMapIntensity?: number;
+  /** CMY dichroic face-filter strength for box instances (0 = off). */
+  cmy?: number;
+  /** CMY face color permutation for box instances (default `'cym'`). */
+  cmyOrder?: CmyFaceOrder;
+  /** Diamond cut used for diamond instances (default `'round'`). */
+  diamondCut?: DiamondCut;
+  /** Edge bevel for box instances in local units (default `0`). */
+  bevel?: number;
+  /** Blend strength for `MeshGlassMaterial.color` (0 = clear, 1 = full tint; default `1`). */
+  colorAlpha?: number;
 }
 
 const CAUSTIC_MAP_SIZE = 1024;
@@ -827,7 +837,7 @@ export function createInstancedGlass(
   /** `moved`: some object changed since the last frame (redraws the caustic map). */
   function render(
     glass:
-      | GlassMaterial
+      | MeshGlassMaterial
       | {
           ior: number;
           dispersion: number;
@@ -845,17 +855,17 @@ export function createInstancedGlass(
     moved: boolean,
     wireColorOverride?: [number, number, number, number],
   ) {
-    const isMat = glass instanceof GlassMaterial;
+    const isMat = glass instanceof MeshGlassMaterial;
     const ior = glass.ior;
     const dispersion = glass.dispersion;
     const roughness = glass.roughness ?? 0;
     const frostScale = glass.frostScale ?? 4;
-    const diamondCut = glass.diamondCut ?? 'round';
-    const cmy = glass.cmy ?? 0;
-    const cmyOrder: CmyFaceOrder = glass.cmyOrder ?? 'cym';
-    const bevel = glass.bevel ?? 0;
+    const diamondCut = light.diamondCut ?? (isMat ? 'round' : (glass.diamondCut ?? 'round'));
+    const cmy = light.cmy ?? (isMat ? 0 : (glass.cmy ?? 0));
+    const cmyOrder: CmyFaceOrder = light.cmyOrder ?? (isMat ? 'cym' : (glass.cmyOrder ?? 'cym'));
+    const bevel = light.bevel ?? (isMat ? 0 : (glass.bevel ?? 0));
     const color: [number, number, number, number] = isMat
-      ? [glass.color.r, glass.color.g, glass.color.b, glass.colorAlpha]
+      ? [glass.color.r, glass.color.g, glass.color.b, light.colorAlpha ?? 1]
       : (glass.color ?? [1, 1, 1, 1]);
     const wantWire = glass.wireframe ?? false;
     const wireColor = wireColorOverride ?? (!isMat ? glass.wireColor : undefined) ?? [0.01, 0.01, 0.01, 1];

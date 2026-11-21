@@ -1,6 +1,6 @@
 // Frosted glass (roughness) shading in TSL: 3-octave organic micro-particle noise,
 // surface normal perturbation, translucent frost veil, and grazing Fresnel rim.
-// Shared by both the instanced glass shader (glass.ts) and standalone GlassMaterial (material.ts).
+// Shared by both the instanced glass shader (glass.ts) and standalone MeshGlassMaterial (material.ts).
 /* eslint-disable @typescript-eslint/no-explicit-any -- TSL node types are too loose to spell out */
 import * as TSL from 'three/tsl';
 

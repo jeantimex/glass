@@ -2,7 +2,7 @@ import * as THREE from 'three/webgpu';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import GUI from 'three/addons/libs/lil-gui.module.min.js';
 import {
-  GlassMaterial,
+  MeshGlassMaterial,
   KIND,
   createGlassObjects,
   createInstancedGlass,
@@ -152,12 +152,11 @@ async function main() {
     glassObjects.vary.set([0, 1, 0], 0); // exactly the IOR and dispersion it is set to
     glassObjects.tint.set([1, 1, 1], 0); // and the colour
   };
-  const glassMaterial = new GlassMaterial({
+  const glassMaterial = new MeshGlassMaterial({
     ior: settings.ior,
     dispersion: settings.dispersion,
     roughness: settings.roughness,
     frostScale: settings.frostScale,
-    diamondCut: settings.diamondCut,
   });
   const instanced = createInstancedGlass(renderer, camera, glassObjects, {
     suzanne: suzanneGeo,
@@ -756,16 +755,16 @@ async function main() {
     glassMaterial.dispersion = settings.dispersion;
     glassMaterial.roughness = settings.roughness;
     glassMaterial.frostScale = settings.frostScale;
-    glassMaterial.diamondCut = settings.diamondCut;
-    glassMaterial.cmy = cmyStrength();
-    glassMaterial.cmyOrder = cmyFaceOrder();
-    glassMaterial.bevel = boxBevel();
     glassMaterial.color.setRGB(gr, gg, gb);
-    glassMaterial.colorAlpha = ga;
     glassMaterial.wireframe = settings.wireframe;
     instanced.render(
       glassMaterial,
       {
+        cmy: cmyStrength(),
+        cmyOrder: cmyFaceOrder(),
+        diamondCut: settings.diamondCut,
+        bevel: boxBevel(),
+        colorAlpha: ga,
         ground: settings.ground,
         dark: settings.dark,
         seeThrough: settings.seeThrough,

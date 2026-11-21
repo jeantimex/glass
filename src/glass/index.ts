@@ -4,5 +4,6 @@
 export { KIND, MAX_OBJECTS, createGlassObjects, type GlassObjects } from './objects';
 export { createInstancedGlass, type InstancedLighting } from './renderer';
 export { DIAMOND_CUTS, DIAMOND_LEAN, DIAMOND_REST, diamondGeometry, type DiamondCut } from './diamond';
-export { GlassMaterial, type GlassMaterialParameters, type GlassShape } from './material';
+export { DiamondMesh, type DiamondMeshParameters } from './diamondMesh';
+export { MeshGlassMaterial, type MeshGlassMaterialParameters } from './material';
 export { CMY_FACE_ORDERS, type CmyFaceOrder } from './tsl/cmy';

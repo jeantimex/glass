@@ -73,15 +73,12 @@ describe('modular TSL shader units', () => {
   });
 
   it('builds standalone studioEnv, sceneFunctions, groundNode, and finishing passes', () => {
-    const studio = makeStudioEnv(
-      uniform(0),
-      uniform(1),
-      uniform(new THREE.Color(0xeeeeee)),
-      uniform(new THREE.Vector3(0, 1, 0)),
-      uniform(0.2),
-    );
+    const studio = makeStudioEnv(uniform(0.2), {
+      envTexNode: texture(dummyTex),
+      uHasEnvMap: uniform(1),
+      uEnvMapIntensity: uniform(1.2),
+    });
     expect(studio.env(vec3(0, 1, 0))).toBeTruthy();
-    expect(studio.sampleScene(vec3(0, 1, 0), vec3(0, -1, 0))).toBeTruthy();
 
     const sInputs = {
       room: uniform(1),

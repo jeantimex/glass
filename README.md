@@ -8,12 +8,12 @@ Real-time physical glass rendering in the browser with **Three.js** and **TSL** 
 
 ## Features
 
-- **Standalone [`GlassMaterial`](src/glass/material.ts)** (`extends THREE.MeshBasicNodeMaterial`) — drop directly onto any `THREE.Mesh` / `THREE.BufferGeometry`, with reactive GPU uniforms, `envMap` / `envMapIntensity`, and `clone()`.
+- **Standalone [`MeshGlassMaterial`](src/glass/material.ts)** (`extends THREE.MeshBasicNodeMaterial`) — 100% geometry-agnostic physical glass matching `MeshPhysicalMaterial` ergonomics (`ior`, `dispersion`, `roughness`, `thickness`, `transmission`, `envMap`, `envMapIntensity`, `clone()`).
+- **Standalone [`DiamondMesh`](src/glass/diamondMesh.ts)** (`extends THREE.Mesh`) — self-contained multi-bounce ray-traced diamond across all 6 cuts (`round`, `princess`, `emerald`, `asscher`, `cushion`, `radiant`) with automatic geometry + facet-shader switching and `restOnFloor()`.
 - **Exact Optical Math** — unpolarized Cook–Torrance dielectric Fresnel, 6-band CIE 1931 spectral dispersion (Fraunhofer C/d/F Cauchy curve), Beer–Lambert volumetric absorption, ray-cone analytic filtering, and Total Internal Reflection (TIR).
 - **HDRI Environments & Firefly-Free Bloom** — equirectangular HDRI `envMap` support with roughness-driven mipmap LOD (with automatic procedural studio fallback), 4K/2K Poly Haven CC0 HDRI presets in the interactive `lil-gui` demo, and a quarter-res 4×4 prefiltered bloom pass with a hue-preserving soft firefly shoulder.
 - **Frosted Glass (毛玻璃)** — noise-free analytic environment softening, 3-octave organic micro-particle grain (`frostScale`), creamy translucent frost veil, and crisp Fresnel rim.
-- **6 Diamond Cuts & Concave SDF Volumes** — `round` (Round Brilliant), `princess`, `emerald`, `asscher`, `cushion`, and `radiant` watertight convex polyhedra, plus 8-tap tricubic B-spline 3D SDF tracing for complex meshes (Suzanne, Stanford Dragon).
-- **Instanced Studio Renderer** — [`createInstancedGlass`](src/glass/renderer.ts) for rendering up to 20,000 glass objects with glass-through-glass depth layering, real photon-traced caustics, floor reflections, half-res bilateral contact shadows, CMY dichroic face filters, depth of field, and bloom.
+- **Instanced Studio Renderer** — [`createInstancedGlass`](src/glass/renderer.ts) for rendering up to 20,000 glass objects (including 8-tap tricubic SDF meshes for Suzanne & Stanford Dragon) with glass-through-glass depth layering, real photon-traced caustics, floor reflections, half-res bilateral contact shadows, CMY dichroic face filters, depth of field, and bloom.
 
 ---
 
@@ -23,7 +23,7 @@ Real-time physical glass rendering in the browser with **Three.js** and **TSL** 
 
 ```ts
 import * as THREE from 'three/webgpu';
-import { GlassMaterial } from './src/glass';
+import { MeshGlassMaterial } from './src/glass';
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -33,13 +33,14 @@ const renderer = new THREE.WebGPURenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-const glass = new GlassMaterial({
+const glass = new MeshGlassMaterial({
   ior: 1.52, // Optical crown glass
   dispersion: 0.6, // Chromatic dispersion
   roughness: 0.25, // Frosted glass (0 = clear, 1 = fully frosted)
   frostScale: 5, // Higher = finer sandblasted micro-particles
   color: '#b8e0ff', // Beer-Lambert volumetric tint
   thickness: 1.2, // Approximate thickness in world units
+  transmission: 1, // Automatically refract opaque meshes behind the glass
 });
 
 const knot = new THREE.Mesh(new THREE.TorusKnotGeometry(0.8, 0.28, 180, 36), glass);
@@ -52,37 +53,24 @@ renderer.setAnimationLoop(() => {
 });
 ```
 
-### 2. Exact Multi-Bounce Diamond with Cut Switching
+### 2. Exact Multi-Bounce `DiamondMesh` with Cut Switching
 
 ```ts
-import * as THREE from 'three/webgpu';
-import { GlassMaterial, diamondGeometry, DIAMOND_CUTS, type DiamondCut } from './src/glass';
+import { DiamondMesh } from './src/glass';
 
-const cut: DiamondCut = 'princess';
-
-const diamondMat = new GlassMaterial({
-  shape: 'diamond',
-  diamondCut: cut,
+const diamond = new DiamondMesh({
+  cut: 'princess',
   ior: 2.42, // Real diamond IOR
   dispersion: 0.4, // Spectral fire
   bounces: 6, // Internal reflections
-  dark: true, // Dark studio with overhead softboxes & spotlight
+  envMap: hdr, // Optional equirectangular HDRI
 });
-
-const diamond = new THREE.Mesh(diamondGeometry(cut), diamondMat);
-// Rest the stone flush on the floor (y = 0)
-diamond.rotation.z = -DIAMOND_CUTS[cut].lean;
-diamond.position.y = DIAMOND_CUTS[cut].rest;
+diamond.restOnFloor(); // Tilts flush onto a pavilion facet at y = 0
 scene.add(diamond);
 
-// Switch cuts dynamically at runtime:
-function setCut(nextCut: DiamondCut) {
-  diamond.geometry.dispose();
-  diamond.geometry = diamondGeometry(nextCut);
-  diamondMat.diamondCut = nextCut;
-  diamond.rotation.z = -DIAMOND_CUTS[nextCut].lean;
-  diamond.position.y = DIAMOND_CUTS[nextCut].rest;
-}
+// Switch cuts dynamically at runtime (updates geometry + facet shader atomically):
+diamond.cut = 'emerald';
+diamond.restOnFloor();
 ```
 
 ### 3. Live Reactive Updates (Zero Shader Recompilation)
@@ -95,13 +83,12 @@ glass.dispersion = 1.2; // Stronger prismatic fire
 glass.roughness = 0.4; // Frosted glass
 glass.frostScale = 8; // Ultra-fine micro-particles
 glass.color.set('#ff88aa'); // Rose quartz tint
-glass.colorAlpha = 0.8; // Blend toward clear
-glass.dark = true; // Switch to dark studio lighting
+glass.envMapIntensity = 1.2; // Scale HDRI brightness
 ```
 
 ### 4. Equirectangular HDRI Environments (`envMap`) & Cloning
 
-Load any equirectangular `.hdr` / `.exr` environment map and bind it directly to `GlassMaterial` (mipmaps are sampled automatically by `roughness`, falling back to the built-in procedural studio when `null`):
+Load any equirectangular `.hdr` / `.exr` environment map and bind it directly to `MeshGlassMaterial` (mipmaps are sampled automatically by `roughness`, falling back to a neutral studio when `null`):
 
 ```ts
 import * as THREE from 'three/webgpu';
@@ -126,24 +113,12 @@ const amberGlass = glass.clone();
 amberGlass.color.set('#ffaa44');
 ```
 
-### 5. Refracting a Live Scene Background
+### 5. High-Scale Instanced Renderer (`createInstancedGlass`)
 
-Pass a rendered background texture (and optional blurred copy for frosted glass) with `setBackground`:
-
-```ts
-// Render your opaque background scene to a RenderTarget, then bind it:
-glass.setBackground(backgroundTarget.texture, blurredBackgroundTarget.texture);
-
-// Revert to the built-in procedural studio environment:
-glass.setBackground(null);
-```
-
-### 6. High-Scale Instanced Renderer (`createInstancedGlass`)
-
-For scenes with hundreds or thousands of glass objects, real caustics, floor reflections, and contact shadows, pass a `GlassMaterial` directly to `instanced.render()`:
+For scenes with hundreds or thousands of glass objects, real caustics, floor reflections, and contact shadows, pass a `MeshGlassMaterial` directly to `instanced.render()`:
 
 ```ts
-import { GlassMaterial, KIND, createGlassObjects, createInstancedGlass } from './src/glass';
+import { MeshGlassMaterial, KIND, createGlassObjects, createInstancedGlass } from './src/glass';
 
 const objects = createGlassObjects();
 objects.count = 1;
@@ -152,7 +127,7 @@ objects.center.set([0, 0.6, 0], 0);
 objects.quat.set([0, 0, 0, 1], 0);
 objects.size.set([0.6, 0.6, 0.6], 0);
 
-const glass = new GlassMaterial({ ior: 1.52, dispersion: 1, roughness: 0.15 });
+const glass = new MeshGlassMaterial({ ior: 1.52, dispersion: 1, roughness: 0.15 });
 const instanced = createInstancedGlass(renderer, camera, objects, meshes);
 
 instanced.render(glass, lighting, false);
@@ -162,65 +137,41 @@ instanced.render(glass, lighting, false);
 
 ## API Reference
 
-### `new GlassMaterial(params?: GlassMaterialParameters)`
+### `new MeshGlassMaterial(params?: MeshGlassMaterialParameters)`
 
 Extends `THREE.MeshBasicNodeMaterial`.
 
 #### Constructor Parameters & Live Properties
 
-| Property                | Type                                        | Default            | Description                                                                                                                                         |
-| :---------------------- | :------------------------------------------ | :----------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ior`                   | `number`                                    | `1.52`             | Index of refraction (`1.0` – `2.5`). Examples: `1.47` borosilicate, `1.49` acrylic, `1.52` crown glass, `1.62` flint glass, `2.42` diamond.         |
-| `dispersion`            | `number`                                    | `0.5`              | Chromatic dispersion strength (`0` disables RGB splitting; `0.4` realistic diamond fire; `1.0+` vivid prism fire).                                  |
-| `roughness`             | `number`                                    | `0`                | Frosted glass amount (`0` = crystal clear, `1` = fully frosted 毛玻璃).                                                                             |
-| `frostScale`            | `number`                                    | `4`                | Frosted grain density (`0.5` = coarse etched frost, `4`–`12` = fine sandblasted micro-particles).                                                   |
-| `color`                 | `THREE.ColorRepresentation`                 | `0xffffff`         | Volumetric glass tint color (Beer–Lambert transmittance across one characteristic diameter).                                                        |
-| `colorAlpha`            | `number`                                    | `1`                | Blend strength of `color` (`0` = clear regardless of `color`, `1` = full tint).                                                                     |
-| `thickness`             | `number`                                    | `1`                | Characteristic thickness in world units used for `'mesh'` mode refraction & absorption.                                                             |
-| `bounces`               | `number`                                    | `6`                | Maximum internal reflection/refraction events for analytic shapes.                                                                                  |
-| `shape`                 | [`GlassShape`](#glassshape)                 | `'mesh'`           | `'mesh'` for any `THREE.BufferGeometry`, or an analytic shape for exact multi-bounce internal raytracing. _(Read-only after construction.)_         |
-| `shapeSize`             | `[number, number, number] \| THREE.Vector3` | `[1, 1, 1]`        | Local-space size parameters for analytic shapes (radius, half-extents, etc.).                                                                       |
-| `diamondCut`            | [`DiamondCut`](#diamondcut)                 | `'round'`          | Facet cut when `shape === 'diamond'`. Updating this property on a diamond material rebuilds the facet shader automatically.                         |
-| `bevel`                 | `number`                                    | `0`                | Edge bevel width in local units when `shape === 'box'`.                                                                                             |
-| `cmy`                   | `number`                                    | `0`                | CMY dichroic face-filter strength (`0`–`1`) when `shape === 'box'`.                                                                                 |
-| `dark`                  | `boolean`                                   | `false`            | Switches the procedural studio lighting from bright light-tent (`false`) to dark jeweller’s studio (`true`).                                        |
-| `ground`                | `boolean`                                   | `true`             | Includes a procedural ground plane in reflections and refractions.                                                                                  |
-| `groundColor`           | `THREE.ColorRepresentation`                 | `0xeeeeee`         | Albedo color of the procedural ground plane.                                                                                                        |
-| `lampDirection`         | `THREE.Vector3 \| [number, number, number]` | `[-0.6, 0.7, 0.4]` | Direction vector toward the main studio lamp (automatically normalized).                                                                            |
-| `exposure`              | `number`                                    | `1`                | Linear exposure multiplier before tone mapping.                                                                                                     |
-| `filmic`                | `boolean`                                   | `false`            | Applies Khronos Neutral filmic tone mapping inside the material (default `false` so `renderer.toneMapping` handles it without double tone-mapping). |
-| `envMap`                | `THREE.Texture \| null`                     | `null`             | Optional equirectangular HDRI / environment texture (overrides the built-in procedural studio; mip-blurred automatically by `roughness`).           |
-| `envMapIntensity`       | `number`                                    | `1`                | Intensity multiplier applied to `envMap`.                                                                                                           |
-| `backgroundTexture`     | `THREE.Texture \| null`                     | `null`             | Optional screen-space background texture to refract through the glass.                                                                              |
-| `backgroundBlurTexture` | `THREE.Texture \| null`                     | `null`             | Optional blurred copy of `backgroundTexture` used when `roughness > 0`.                                                                             |
+| Property          | Type                        | Default    | Description                                                                                                                                 |
+| :---------------- | :-------------------------- | :--------- | :------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ior`             | `number`                    | `1.52`     | Index of refraction (`1.0` – `2.5`). Examples: `1.47` borosilicate, `1.49` acrylic, `1.52` crown glass, `1.62` flint glass, `2.42` diamond. |
+| `dispersion`      | `number`                    | `0.5`      | Chromatic dispersion strength (`0` disables RGB splitting; `0.4` realistic diamond fire; `1.0+` vivid prism fire).                          |
+| `roughness`       | `number`                    | `0`        | Frosted glass amount (`0` = crystal clear, `1` = fully frosted 毛玻璃).                                                                     |
+| `frostScale`      | `number`                    | `4`        | Frosted grain density (`0.5` = coarse etched frost, `4`–`12` = fine sandblasted micro-particles).                                           |
+| `color`           | `THREE.ColorRepresentation` | `0xffffff` | Volumetric glass tint color (Beer–Lambert transmittance across `thickness`).                                                                |
+| `thickness`       | `number`                    | `1`        | Characteristic thickness in world units used for refraction & Beer–Lambert absorption.                                                      |
+| `transmission`    | `number`                    | `0`        | Automatic scene refraction (`0`–`1`), matching `MeshPhysicalMaterial` via Three.js `viewportOpaqueMipTexture` with roughness mipmaps.       |
+| `envMap`          | `THREE.Texture \| null`     | `null`     | Optional equirectangular HDRI / environment texture (overrides the neutral fallback studio; mip-blurred automatically by `roughness`).      |
+| `envMapIntensity` | `number`                    | `1`        | Intensity multiplier applied to `envMap`.                                                                                                   |
 
 #### Methods
 
-- **`setBackground(sharp: THREE.Texture | null, blurred?: THREE.Texture | null): void`**
-  Binds or clears the screen-space refraction textures at runtime.
-- **`clone(): GlassMaterial`**
-  Creates an independent clone with identical optical parameters and texture bindings.
+- **`clone(): MeshGlassMaterial`**
+  Creates an independent clone with identical optical parameters and `envMap` binding.
+
+---
+
+### `new DiamondMesh(params?: DiamondMeshParameters)`
+
+Extends `THREE.Mesh`. Owns both the watertight convex facet `BufferGeometry` (`diamondGeometry(cut)`) and exact multi-bounce internal facet-plane raytracing.
+
+- **Properties**: `cut` (`DiamondCut`), `ior` (default `2.42`), `dispersion` (default `0.4`), `bounces` (default `6`), `roughness`, `frostScale`, `color`, `transmission`, `envMap`, `envMapIntensity`, `restHeight`, `restLean`.
+- **Methods**: `restOnFloor(y?: number): this`, `dispose(): void`.
 
 ---
 
 ### Types & Helpers
-
-#### `GlassShape`
-
-```ts
-type GlassShape =
-  | 'mesh'
-  | 'box'
-  | 'sphere'
-  | 'cylinder'
-  | 'capsule'
-  | 'cone'
-  | 'torus'
-  | 'octahedron'
-  | 'prism'
-  | 'hexprism'
-  | 'diamond';
-```
 
 #### `DiamondCut`
 
