@@ -90,15 +90,20 @@ export function restingPose(
   return { height, quat };
 }
 
-/**
- * Fill `objects` with `count` random objects, each resting on the floor in its own
- * cell of a square grid centred on the middle of the floor.
- * @param only  shape ids to draw from; null for the mix of every shape
- * @param cubic make boxes cubes (equal sides)
- * @returns half-width of the grid (m)
- */
 export type GridLayout = 'flat' | 'grid';
 
+/**
+ * Fill `objects` with `count` deterministic random objects arranged in a centered 2D (`'flat'`)
+ * or 3D (`'grid'`) lattice, each resting in its own cell.
+ *
+ * @param objects    Target flat-array container populated in place.
+ * @param count      Number of objects to generate (clamped to `[1, MAX_OBJECTS]`).
+ * @param only       Shape KIND ids to draw from, or `null` for a mix of all shapes.
+ * @param cubic      When `true`, boxes are constrained to equal side lengths (cubes).
+ * @param layout     `'flat'` (single floor layer) or `'grid'` (3D cubic stack).
+ * @param diamondCut Diamond cut used to compute resting height and tilt for diamond instances.
+ * @returns `{ reach, centerY }` half-extent and vertical midpoint of the laid-out grid.
+ */
 export function layoutGrid(
   objects: GlassObjects,
   count: number,

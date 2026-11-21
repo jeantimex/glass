@@ -29,6 +29,8 @@ const DEFAULTS = structuredClone(settings);
 const view = parseInitialView(query);
 const loading = createLoadingScreen();
 
+const singleKind = (name: string): number => SHAPES[name].kinds?.[0] ?? KIND.box;
+
 async function main() {
   const canvas = document.getElementById('view') as HTMLCanvasElement;
   // Anti-aliased (4x multisampling): it smooths the edges of the glass.
@@ -109,7 +111,6 @@ async function main() {
     glassAlpha: number;
   };
   const singles: Record<string, Single> = {};
-  const singleKind = (name: string): number => SHAPES[name].kinds?.[0] ?? KIND.box;
   /** The settings of a shape on its own (its defaults, the first time). */
   const singleFor = (name: string): Single => {
     const demo = SHAPES[name];

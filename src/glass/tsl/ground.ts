@@ -172,7 +172,7 @@ export function groundNode(cam: ScreenCamera, s: SceneInputs, mirror: N): N {
       const probe = m0.a.add(p1.a).add(p2.a).add(p3.a).add(p4.a);
       const m = m0.toVar();
       If(probe.greaterThan(1e-4), () => {
-        const diag = px.mul(0.70710678).toVar();
+        const diag = px.mul(Math.SQRT1_2).toVar();
         m.assign(
           m0
             .add(p1)

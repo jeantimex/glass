@@ -4,6 +4,7 @@ import type { GridLayout } from './grid';
 
 export type RGB = { r: number; g: number; b: number };
 
+/** Return a fresh copy of the default lighting, floor, camera, and glass demo settings. */
 export function createDefaultSettings() {
   return {
     // Lighting: bright light-tent or dark jeweller's studio.

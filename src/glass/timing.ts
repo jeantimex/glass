@@ -12,6 +12,7 @@ export interface PassTimer {
   passTimes(): Promise<Record<string, number> | null>;
 }
 
+/** Create a per-pass GPU timestamp profiler bound to `renderer` (no-op when `trackTimestamp` is off). */
 export function createPassTimer(renderer: THREE.WebGPURenderer): PassTimer {
   const enabled = (renderer.backend as unknown as { trackTimestamp?: boolean }).trackTimestamp === true;
   let currentMarks: [number, string][] | null = null;

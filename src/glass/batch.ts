@@ -3,6 +3,10 @@
 import * as THREE from 'three/webgpu';
 import { MAX_OBJECTS, type GlassObjects } from './objects';
 
+/**
+ * Manages per-instance GPU attribute buffers (`instCenter`, `instQuat`, `instSize`, `instVary`,
+ * `instTint`) for one shape `KIND`, uploading only the active instance range on `commit()`.
+ */
 export class InstanceBatch {
   readonly geometry = new THREE.InstancedBufferGeometry();
   readonly center: THREE.InstancedBufferAttribute;

@@ -102,6 +102,15 @@ const FINE_UP_TO = 64;
 /** Above this many objects, the less visible passes are drawn more cheaply. */
 const MANY_OBJECTS = 3000;
 
+/**
+ * Create the multi-pass instanced studio glass renderer supporting up to `MAX_OBJECTS` shapes,
+ * photon-traced caustics, floor reflections, half-res bilateral contact shadows, bloom, and DoF.
+ *
+ * @param renderer Initialized Three.js `WebGPURenderer` (WebGPU or WebGL 2 backend).
+ * @param camera   Active scene perspective camera.
+ * @param objects  Flat-array instance container read on each `render()` call.
+ * @param meshes   Baked triangle meshes and stacked 128^3 SDF 3D texture for Suzanne and Dragon.
+ */
 export function createInstancedGlass(
   renderer: THREE.WebGPURenderer,
   camera: THREE.PerspectiveCamera,
@@ -894,14 +903,14 @@ export function createInstancedGlass(
     sortIntoLayers(moved || lightDirty);
     // Triangles drawn this frame: every object once, again for its mirror image,
     // and again when the shadow map is redrawn.
-    let drawn = 0;
+    let drawnTriangles = 0;
     for (let kind = 0; kind < KIND_COUNT; kind++) {
-      drawn +=
+      drawnTriangles +=
         trianglesOf[kind] * (far[kind].count + near[kind].count) +
         fineTrianglesOf[kind] * (fineFar[kind].count + fineNear[kind].count);
     }
     const passes = 1 + (light.ground && light.floorReflection > 0 ? 1 : 0) + (lightDirty ? 1 : 0);
-    lastTriangles = drawn * passes + 2 * 4; // plus the full-screen passes
+    lastTriangles = drawnTriangles * passes + 2 * 4; // plus the full-screen passes
 
     // 1. Caustic map, from the main lamp's direction, covering everything.
     if (lightDirty) {

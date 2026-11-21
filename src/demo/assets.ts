@@ -19,6 +19,8 @@ export function showFatalError(message: string): never {
   throw new Error(message);
 }
 
+const formatMegabytes = (bytes: number) => (bytes / 1048576).toFixed(1);
+
 /** Wire up the DOM loading bar & progress tracker for binary model downloads. */
 export function createLoadingScreen(): LoadingProgress {
   const root = document.getElementById('loading')!;
@@ -39,10 +41,11 @@ export function createLoadingScreen(): LoadingProgress {
     const total = entries.reduce((sum, f) => sum + (f.total ?? 0), 0);
     const fraction =
       allKnown && total > 0 ? loaded / total : entries.filter((f) => f.done).length / Math.max(entries.length, 1);
-    const mb = (bytes: number) => (bytes / 1048576).toFixed(1);
     setProgress(
       fraction * DOWNLOAD_SHARE,
-      allKnown ? `Downloading models… ${mb(loaded)} / ${mb(total)} MB` : `Downloading models… ${mb(loaded)} MB`,
+      allKnown
+        ? `Downloading models… ${formatMegabytes(loaded)} / ${formatMegabytes(total)} MB`
+        : `Downloading models… ${formatMegabytes(loaded)} MB`,
     );
   };
 

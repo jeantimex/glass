@@ -44,6 +44,7 @@ export interface GlassObjects {
   tint: Float32Array;
 }
 
+/** Allocate an empty flat-array `GlassObjects` container with capacity for `MAX_OBJECTS` instances. */
 export function createGlassObjects(): GlassObjects {
   return {
     count: 0,

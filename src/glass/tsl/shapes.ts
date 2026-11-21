@@ -57,12 +57,15 @@ export const isCurvedShape = (shape: number): boolean =>
   isBakedMesh(shape) ||
   shape === KIND.torusknot;
 
+const signBit = (k: number) => (k & 1 ? 1 : -1);
+const boxExitAlongAxis = (d: N, half: N, p: N) =>
+  select(abs(d).greaterThan(1e-7), sign(d).mul(half).sub(p).div(d), 1e9);
+
 /**
  * Outward face planes (xyz = unit normal, w = offset) for analytic polyhedra,
  * or null for diamonds whose facet planes are stored in a constant TSL array.
  */
 function polyhedronPlanes(shape: number, size: N, bevel: N): N[] | null {
-  const signBit = (k: number) => (k & 1 ? 1 : -1);
   if (shape === KIND.box) {
     const faces = [0, 1, 2, 3, 4, 5].map((k) => {
       const axis = k >> 1;
@@ -439,11 +442,9 @@ export function shapeFunctions(shape: number, uniforms: ShapeUniforms, diamondPl
       n.assign(normalize(dir.add(normalize(pos).mul(0.35))));
     } else if (shape === KIND.box) {
       If(bevel.greaterThan(0), exitPolyhedron).Else(() => {
-        const alongAxis = (d: N, half: N, p: N) =>
-          select(abs(d).greaterThan(1e-7), sign(d).mul(half).sub(p).div(d), 1e9);
-        const tx = alongAxis(dir.x, size.x, pos.x).toVar();
-        const ty = alongAxis(dir.y, size.y, pos.y).toVar();
-        const tz = alongAxis(dir.z, size.z, pos.z).toVar();
+        const tx = boxExitAlongAxis(dir.x, size.x, pos.x).toVar();
+        const ty = boxExitAlongAxis(dir.y, size.y, pos.y).toVar();
+        const tz = boxExitAlongAxis(dir.z, size.z, pos.z).toVar();
         t.assign(max(min(tx, min(ty, tz)), 0));
         If(tx.lessThanEqual(ty).and(tx.lessThanEqual(tz)), () => {
           n.assign(vec3(sign(dir.x), 0, 0));
