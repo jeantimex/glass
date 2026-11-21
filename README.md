@@ -113,7 +113,41 @@ const amberGlass = glass.clone();
 amberGlass.color.set('#ffaa44');
 ```
 
-### 5. High-Scale Instanced Renderer (`createInstancedGlass`)
+### 5. CMY Dichroic Cube with `MeshGlassMaterial`
+
+Because `MeshGlassMaterial` is geometry-agnostic and supports `.clone()`, you can build a standalone CMY cube by pairing Three.js's 6-face `BoxGeometry` with Cyan, Yellow, and Magenta clones of a base `MeshGlassMaterial`:
+
+```ts
+import * as THREE from 'three/webgpu';
+import { MeshGlassMaterial } from './src/glass';
+
+const base = new MeshGlassMaterial({
+  ior: 1.49, // Optical acrylic
+  dispersion: 0.35,
+  thickness: 1.0,
+  transmission: 1,
+  envMap: hdr,
+});
+
+const cyan = base.clone();
+cyan.color.set('#00e5ff');
+const yellow = base.clone();
+yellow.color.set('#ffe600');
+const magenta = base.clone();
+magenta.color.set('#ff00aa');
+
+// BoxGeometry face order: [+X, -X, +Y, -Y, +Z, -Z]
+const cmyCube = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), [cyan, cyan, yellow, yellow, magenta, magenta]);
+scene.add(cmyCube);
+```
+
+For exact multi-bounce subtractive dichroic filtering and colored floor caustics, use `KIND.box` with `cmy` / `cmyOrder` in [`createInstancedGlass`](#6-high-scale-instanced-renderer-createinstancedglass):
+
+```ts
+instanced.render(glass, { ...lighting, cmy: 1, cmyOrder: 'cym', bevel: 0.02 }, false);
+```
+
+### 6. High-Scale Instanced Renderer (`createInstancedGlass`)
 
 For scenes with hundreds or thousands of glass objects, real caustics, floor reflections, and contact shadows, pass a `MeshGlassMaterial` directly to `instanced.render()`:
 
