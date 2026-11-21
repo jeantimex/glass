@@ -15,13 +15,18 @@ const {
   If,
   Loop,
   abs,
+  batchColor,
   cameraPosition,
   clamp,
+  diffuseColor,
   dot,
   exp,
   float,
+  instanceColor,
   int,
+  length,
   log,
+  materialOpacity,
   max,
   mix,
   normalWorld,
@@ -37,6 +42,7 @@ const {
   vec2,
   vec3,
   vec4,
+  vertexColor,
   viewportOpaqueMipTexture,
 } = TSL as N;
 
@@ -63,6 +69,11 @@ export interface MeshGlassMaterialParameters {
   envMap?: THREE.Texture | null;
   /** Intensity multiplier for `envMap` (default 1.0). */
   envMapIntensity?: number;
+  /**
+   * Optional back-face normal & depth map from `GlassBackfacePass` (`rgb = outward normal`,
+   * `a = camera distance`) for exact exit refraction & thickness on arbitrary concave meshes.
+   */
+  backfaceMap?: THREE.Texture | null;
 }
 
 /** Shared 1x1 white fallback texture so optional texture nodes bind cleanly without per-instance leaks. */
@@ -96,6 +107,7 @@ export const FALLBACK_ENV_TEXTURE = (() => {
  */
 export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
   private _envMap: THREE.Texture | null = null;
+  private _backfaceMap: THREE.Texture | null = null;
   private _transmission = 0;
 
   private readonly uIor = uniform(1.52);
@@ -106,7 +118,9 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
   private readonly uTransmission = uniform(0);
   private readonly uHasEnvMap = uniform(0);
   private readonly uEnvMapIntensity = uniform(1);
+  private readonly uHasBackface = uniform(0);
   private readonly envTexNode: N;
+  private readonly backfaceTexNode: N;
 
   constructor(params: MeshGlassMaterialParameters = {}) {
     super();
@@ -125,6 +139,10 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     this._envMap = params.envMap ?? null;
     this.envTexNode = texture(this._envMap ?? FALLBACK_ENV_TEXTURE);
     this.uHasEnvMap.value = this._envMap ? 1 : 0;
+
+    this._backfaceMap = params.backfaceMap ?? null;
+    this.backfaceTexNode = texture(this._backfaceMap ?? FALLBACK_ENV_TEXTURE);
+    this.uHasBackface.value = this._backfaceMap ? 1 : 0;
 
     this.colorNode = this.buildColorNode();
   }
@@ -201,6 +219,17 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     this.uEnvMapIntensity.value = v;
   }
 
+  get backfaceMap(): THREE.Texture | null {
+    return this._backfaceMap;
+  }
+  set backfaceMap(tex: THREE.Texture | null) {
+    this._backfaceMap = tex;
+    if (this.backfaceTexNode) {
+      this.backfaceTexNode.value = tex ?? FALLBACK_ENV_TEXTURE;
+      this.uHasBackface.value = tex ? 1 : 0;
+    }
+  }
+
   /** Create an independent clone of this `MeshGlassMaterial` with identical optical parameters. */
   override clone(): this {
     return new MeshGlassMaterial({
@@ -213,12 +242,36 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
       transmission: this.transmission,
       envMap: this._envMap,
       envMapIntensity: this.envMapIntensity,
+      backfaceMap: this._backfaceMap,
     }) as this;
   }
 
+  /**
+   * Route per-instance (`InstancedMesh.setColorAt`), batched (`BatchedMesh.setColorAt`),
+   * and vertex colors into volumetric Beer–Lambert absorption instead of post-multiplying
+   * the final shaded output (which would tint white dielectric Fresnel highlights).
+   */
+  override setupDiffuseColor(builder: N): void {
+    const { object, geometry } = builder;
+    const hasVertexColor = this.vertexColors === true && Boolean(geometry?.hasAttribute?.('color'));
+    const hasInstanceColor = Boolean(object?.instanceColor);
+    const hasBatchColor = Boolean(object?.isBatchedMesh && object?._colorsTexture);
+    if (!hasVertexColor && !hasInstanceColor && !hasBatchColor) {
+      super.setupDiffuseColor(builder);
+      return;
+    }
+    let tint: N = uniform(this.color);
+    if (hasVertexColor) tint = tint.mul(vertexColor().rgb);
+    if (hasInstanceColor) tint = tint.mul(instanceColor);
+    if (hasBatchColor) tint = tint.mul(batchColor);
+    diffuseColor.assign(this.buildColorNode(tint));
+    const opacityNode = this.opacityNode ? float(this.opacityNode) : materialOpacity;
+    diffuseColor.a.assign(diffuseColor.a.mul(opacityNode));
+  }
+
   /** Two-interface dielectric refraction, TIR, Beer-Lambert absorption, 6-band CIE dispersion & frost. */
-  private buildColorNode(): N {
-    const uTint = uniform(this.color);
+  private buildColorNode(tintNode: N = uniform(this.color)): N {
+    const uTint = tintNode;
     const { env } = makeStudioEnv(this.uRoughness, {
       envTexNode: this.envTexNode,
       uHasEnvMap: this.uHasEnvMap,
@@ -262,6 +315,15 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
 
       const d0DotN0 = dot(d0, n0).toVar();
       const outerRefl = env(reflect(d0, n0)).toVar();
+      const frontDist = length(positionWorld.sub(cameraPosition)).toVar();
+      const bfSample = vec4(0).toVar();
+      const hasExactExit = float(0).toVar();
+      If(this.uHasBackface.greaterThan(0.5), () => {
+        bfSample.assign(this.backfaceTexNode.sample(screenUV).level(0));
+        If(bfSample.a.greaterThan(frontDist.add(1e-4)).and(dot(bfSample.rgb, bfSample.rgb).greaterThan(1e-4)), () => {
+          hasExactExit.assign(1);
+        });
+      });
 
       Loop({ start: int(0), end: layers, type: 'int', condition: '<', name: 'lc' }, ({ lc }: { lc: N }) => {
         const bandOffset = select(layers.equal(1), float(0), spectralCauchy(lc));
@@ -271,9 +333,18 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
         const thr = float(1).sub(f0).toVar();
         const t1 = refract(d0, n0, float(1).div(iorIn)).toVar();
         If(dot(t1, t1).greaterThan(1e-6), () => {
-          // Estimate internal chord length & curved back-face exit normal for arbitrary meshes.
-          const dist = reach.mul(mix(0.35, 1, abs(dot(t1, n0)))).toVar();
-          const nExit = normalize(mix(t1, n0.negate(), 0.55)).toVar();
+          // Use exact back-face chord thickness & outward normal when `backfaceMap` is bound;
+          // otherwise fall back to analytic chord estimation from `thickness`.
+          const dist = select(
+            hasExactExit.greaterThan(0.5),
+            max(bfSample.a.sub(frontDist), 0.01),
+            reach.mul(mix(0.35, 1, abs(dot(t1, n0)))),
+          ).toVar();
+          const nExit = select(
+            hasExactExit.greaterThan(0.5),
+            normalize(bfSample.rgb),
+            normalize(mix(t1, n0.negate(), 0.55)),
+          ).toVar();
           const absorb = exp(sigma.mul(dist.negate())).toVar();
           const t2 = refract(t1, nExit.negate(), iorIn).toVar();
           const f1 = fresnel(dot(t1, nExit), float(1).div(iorIn)).toVar();

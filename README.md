@@ -141,13 +141,25 @@ const cmyCube = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), [cyan, cyan, yell
 scene.add(cmyCube);
 ```
 
-For exact multi-bounce subtractive dichroic filtering and colored floor caustics, use `KIND.box` with `cmy` / `cmyOrder` in [`createInstancedGlass`](#6-high-scale-instanced-renderer-createinstancedglass):
+For exact multi-bounce subtractive dichroic filtering and colored floor caustics, use `KIND.box` with `cmy` / `cmyOrder` in [`createInstancedGlass`](#7-high-scale-studio-caustics-renderer-createinstancedglass):
 
 ```ts
 instanced.render(glass, { ...lighting, cmy: 1, cmyOrder: 'cym', bevel: 0.02 }, false);
 ```
 
-### 6. High-Scale Instanced Renderer (`createInstancedGlass`)
+### 6. Standard Three.js `InstancedMesh` (with Per-Instance Colors)
+
+`MeshGlassMaterial` works natively with `THREE.InstancedMesh` and `THREE.BatchedMesh`. Per-instance colors from `setColorAt()` are routed directly into Beer–Lambert volumetric absorption so outer Fresnel highlights stay crisp white:
+
+```ts
+const glass = new MeshGlassMaterial({ ior: 1.52, dispersion: 0.6, transmission: 1, envMap: hdr });
+const spheres = new THREE.InstancedMesh(new THREE.SphereGeometry(0.4, 32, 32), glass, 100);
+spheres.setColorAt(0, new THREE.Color('#ff6688'));
+spheres.setColorAt(1, new THREE.Color('#66ccff'));
+scene.add(spheres);
+```
+
+### 7. High-Scale Studio Caustics Renderer (`createInstancedGlass`)
 
 For scenes with hundreds or thousands of glass objects, real caustics, floor reflections, and contact shadows, pass a `MeshGlassMaterial` directly to `instanced.render()`:
 
@@ -188,11 +200,27 @@ Extends `THREE.MeshBasicNodeMaterial`.
 | `transmission`    | `number`                    | `0`        | Automatic scene refraction (`0`–`1`), matching `MeshPhysicalMaterial` via Three.js `viewportOpaqueMipTexture` with roughness mipmaps.       |
 | `envMap`          | `THREE.Texture \| null`     | `null`     | Optional equirectangular HDRI / environment texture (overrides the neutral fallback studio; mip-blurred automatically by `roughness`).      |
 | `envMapIntensity` | `number`                    | `1`        | Intensity multiplier applied to `envMap`.                                                                                                   |
+| `backfaceMap`     | `THREE.Texture \| null`     | `null`     | Optional back-face normal & depth map from `GlassBackfacePass` for exact exit refraction & thickness on arbitrary concave meshes.           |
 
 #### Methods
 
 - **`clone(): MeshGlassMaterial`**
-  Creates an independent clone with identical optical parameters and `envMap` binding.
+  Creates an independent clone with identical optical parameters and texture bindings.
+
+---
+
+### `new GlassBackfacePass(options?: { resolutionScale?: number })`
+
+Optional offscreen `THREE.BackSide` pre-pass for arbitrary concave meshes (Suzanne, Stanford Dragon, custom GLTFs) without offline SDF baking:
+
+```ts
+const backfacePass = new GlassBackfacePass({ resolutionScale: 0.5 });
+glass.backfaceMap = backfacePass.texture;
+
+// Before renderer.render(scene, camera):
+backfacePass.render(renderer, scene, camera);
+renderer.render(scene, camera);
+```
 
 ---
 

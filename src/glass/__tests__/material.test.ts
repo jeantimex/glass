@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three/webgpu';
+import * as TSL from 'three/tsl';
 import { MeshGlassMaterial } from '../material';
 
 describe('MeshGlassMaterial standalone API', () => {
@@ -102,5 +103,35 @@ describe('MeshGlassMaterial standalone API', () => {
     expect(copy.envMapIntensity).toBeCloseTo(0.8);
     copy.ior = 2.0;
     expect(mat.ior).toBeCloseTo(1.66);
+  });
+
+  it('routes InstancedMesh instanceColor into Beer-Lambert tint via setupDiffuseColor', () => {
+    const mat = new MeshGlassMaterial({ color: '#ffffff', ior: 1.52 });
+    const inst = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), mat, 2);
+    inst.setColorAt(0, new THREE.Color('#ff4466'));
+    inst.setColorAt(1, new THREE.Color('#44ccff'));
+    expect(inst.instanceColor).toBeTruthy();
+
+    // Verify setupDiffuseColor runs cleanly inside a TSL Fn context for an InstancedMesh with instanceColor.
+    expect(() =>
+      TSL.Fn(() => {
+        mat.setupDiffuseColor({ object: inst, geometry: inst.geometry });
+        return TSL.vec4(1);
+      })(),
+    ).not.toThrow();
+  });
+
+  it('binds, clears, and clones backfaceMap reactively without recompiling', () => {
+    const bf = new THREE.DataTexture(new Uint8Array([128, 255, 128, 255]), 1, 1);
+    const mat = new MeshGlassMaterial({ backfaceMap: bf });
+    const originalNode = mat.colorNode;
+    expect(mat.backfaceMap).toBe(bf);
+
+    const copy = mat.clone();
+    expect(copy.backfaceMap).toBe(bf);
+
+    mat.backfaceMap = null;
+    expect(mat.backfaceMap).toBeNull();
+    expect(mat.colorNode).toBe(originalNode);
   });
 });
