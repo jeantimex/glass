@@ -6,14 +6,46 @@ import * as THREE from 'three/webgpu';
 import * as TSL from 'three/tsl';
 import { DIAMOND_CUTS, type DiamondCut } from './diamond';
 import { KIND } from './objects';
+import { CMY_FACE_ORDERS, cmyTint, type CmyFaceOrder } from './tsl/cmy';
 import { tones } from './tsl/finish';
-import { CMY_FACE_ORDERS, cmyTint, fresnel, frostNoise3, shapeFunctions, SPECTRAL_COUNT, spectralCauchy, spectralWeight, type CmyFaceOrder } from './tsl/glass';
+import { applyFrostVeil, perturbFrostNormal } from './tsl/frost';
+import { fresnel, SPECTRAL_COUNT, spectralCauchy, spectralWeight } from './tsl/optics';
+import { shapeFunctions } from './tsl/shapes';
+import { makeStudioEnv } from './tsl/studioEnv';
 
 type N = any;
 const {
-  Break, Fn, If, Loop, abs, atan, cameraPosition, clamp, cos, dot, exp, float, int, log, max, mix,
-  modelWorldMatrix, modelWorldMatrixInverse, normalLocal, normalWorld, normalize, positionLocal, positionWorld,
-  reflect, refract, screenUV, select, sin, smoothstep, sqrt, texture, uniform, vec2, vec3, vec4,
+  Break,
+  Fn,
+  If,
+  Loop,
+  abs,
+  cameraPosition,
+  clamp,
+  dot,
+  exp,
+  float,
+  int,
+  log,
+  max,
+  mix,
+  modelWorldMatrix,
+  modelWorldMatrixInverse,
+  normalLocal,
+  normalWorld,
+  normalize,
+  positionLocal,
+  positionWorld,
+  reflect,
+  refract,
+  screenUV,
+  select,
+  sqrt,
+  texture,
+  uniform,
+  vec2,
+  vec3,
+  vec4,
 } = TSL as N;
 
 /** Analytic shape for exact multi-bounce internal raytracing, or `'mesh'` for any BufferGeometry. */
@@ -88,73 +120,6 @@ export interface GlassMaterialParameters {
   backgroundTexture?: THREE.Texture | null;
   /** Optional blurred background texture for frosted transmission. */
   backgroundBlurTexture?: THREE.Texture | null;
-}
-
-/** Procedural studio environment (matching scene.ts) for standalone GlassMaterial. */
-function makeStudioEnv(
-  uDark: N,
-  uGround: N,
-  uGroundColor: N,
-  uLampDir: N,
-  uRoughness: N,
-) {
-  const env = Fn(([d]: N[]) => {
-    const r = uRoughness.toVar();
-    const r2 = r.mul(r).toVar();
-    const sharp = float(1).sub(r.mul(0.85)).toVar();
-    const az = atan(d.z, d.x).toVar();
-    const lamp = normalize(uLampDir).toVar();
-    const out = vec3(0).toVar();
-    If(uDark.greaterThan(0.5), () => {
-      const k = mix(0.11, 0.035, smoothstep(0, 0.6, d.y)).toVar();
-      const spotGlow = smoothstep(float(0.988).sub(r.mul(0.55)), float(0.996).add(r.mul(0.004)), dot(d, lamp));
-      k.addAssign(float(40).div(r2.mul(28).add(1)).mul(spotGlow));
-      const ring = smoothstep(float(0.78).sub(r.mul(0.35)), float(0.86).add(r.mul(0.1)), d.y).mul(
-        float(1).sub(smoothstep(0.94, 0.97, d.y).mul(sharp)),
-      );
-      k.addAssign(ring.mul(2.6).div(r2.mul(3).add(1)).mul(mix(smoothstep(-0.2, 0.3, cos(az.mul(4))), 0.5, r)));
-      const tall = smoothstep(0.05, 0.15, d.y).mul(float(1).sub(smoothstep(0.55, 0.7, d.y))).toVar();
-      const stripLo = float(0.95).sub(r.mul(0.55));
-      const stripHi = float(0.985).add(r.mul(0.015));
-      const stripGain = float(4).div(r2.mul(5).add(1));
-      k.addAssign(tall.mul(stripGain).mul(smoothstep(stripLo, stripHi, cos(az.sub(2.5)))));
-      k.addAssign(tall.mul(stripGain).mul(smoothstep(stripLo, stripHi, cos(az.add(0.63)))));
-      k.addAssign(r.mul(0.12));
-      out.assign(vec3(k));
-    }).Else(() => {
-      const c = mix(mix(0.15, 0.38, r), mix(0.72, 0.65, r), smoothstep(-0.1, 0.95, d.y)).toVar();
-      const band = smoothstep(0.03, 0.1, d.y).mul(float(1).sub(smoothstep(0.68, 0.82, d.y)));
-      c.assign(mix(c, 0.04, band.mul(0.96).mul(sharp).mul(smoothstep(-0.1, 0.15, sin(az.mul(5).add(1))))));
-      c.assign(mix(c, 0.05, smoothstep(0.9, 0.95, d.y).mul(sharp)));
-      const mainLo = float(0.86).sub(r.mul(0.55));
-      const mainHi = float(0.96).add(r.mul(0.04));
-      c.addAssign(float(3).div(r2.mul(3).add(1)).mul(smoothstep(mainLo, mainHi, dot(d, lamp))));
-      const smallLo = float(0.985).sub(r.mul(0.55));
-      const smallGain = float(3).div(r2.mul(8).add(1));
-      c.addAssign(smoothstep(smallLo, 0.995, dot(d, normalize(vec3(Math.cos(3), 0.6, Math.sin(3))))).mul(smallGain));
-      c.addAssign(smoothstep(smallLo, 0.995, dot(d, normalize(vec3(Math.cos(5), 0.9, Math.sin(5))))).mul(smallGain));
-      c.addAssign(r.mul(0.08));
-      out.assign(vec3(c));
-    });
-    return out;
-  }).setLayout({ name: 'gmEnv', type: 'vec3', inputs: [{ name: 'd', type: 'vec3' }] });
-
-  const sampleScene = Fn(([ro, rd]: N[]) => {
-    const out = vec3(0).toVar();
-    If(uGround.greaterThan(0.5).and(rd.y.lessThan(-1e-5)), () => {
-      const t = max(ro.y.negate().div(rd.y), 0).toVar();
-      const horizon = env(normalize(vec3(rd.x, 0.03, rd.z)));
-      const skyLit = select(uDark.greaterThan(0.5), vec3(0.05), vec3(0.52));
-      const sunLit = select(uDark.greaterThan(0.5), vec3(0.28), vec3(0.42));
-      const floorCol = uGroundColor.mul(skyLit.add(sunLit));
-      out.assign(mix(floorCol, horizon, smoothstep(60, 240, t)));
-    }).Else(() => {
-      out.assign(env(rd));
-    });
-    return out;
-  }).setLayout({ name: 'gmScene', type: 'vec3', inputs: [{ name: 'ro', type: 'vec3' }, { name: 'rd', type: 'vec3' }] });
-
-  return { env, sampleScene };
 }
 
 /**
@@ -248,7 +213,7 @@ export class GlassMaterial extends THREE.MeshBasicNodeMaterial {
     this.colorNode = this.buildColorNode();
   }
 
-  // ---- Reactive optical properties (live GPU uniform updates, no recompile) ----
+  /* Reactive optical properties (live GPU uniform updates, no recompile) */
 
   get diamondCut(): DiamondCut {
     return this._diamondCut;
@@ -420,7 +385,11 @@ export class GlassMaterial extends THREE.MeshBasicNodeMaterial {
     }).setLayout({
       name: 'gmLookEnv',
       type: 'vec3',
-      inputs: [{ name: 'ro', type: 'vec3' }, { name: 'rd', type: 'vec3' }, { name: 'bendOffset', type: 'vec2' }],
+      inputs: [
+        { name: 'ro', type: 'vec3' },
+        { name: 'rd', type: 'vec3' },
+        { name: 'bendOffset', type: 'vec2' },
+      ],
     });
 
     if (this.shape === 'mesh') {
@@ -450,26 +419,16 @@ export class GlassMaterial extends THREE.MeshBasicNodeMaterial {
 
       const reach = max(uThickness, 0.05).toVar();
       const frostGrain = float(0.5).toVar();
-      If(uRoughness.greaterThan(0.001), () => {
-        const fs = max(uFrostScale, 0.25).toVar();
-        const fp = positionLocal.div(reach).mul(fs).toVar();
-        const fn0 = frostNoise3(fp).toVar();
-        frostGrain.assign(fn0);
-        const eps = float(0.008).toVar();
-        const gx = frostNoise3(fp.add(vec3(eps, 0, 0))).sub(fn0);
-        const gy = frostNoise3(fp.add(vec3(0, eps, 0))).sub(fn0);
-        const gz = frostNoise3(fp.add(vec3(0, 0, eps))).sub(fn0);
-        const perturbed = normalize(n0.add(vec3(gx, gy, gz).mul(uRoughness.mul(0.45)))).toVar();
-        If(dot(d0, perturbed).lessThan(-0.02), () => {
-          n0.assign(perturbed);
-        });
-      });
+      perturbFrostNormal(n0, d0, positionLocal, reach, uRoughness, uFrostScale, frostGrain);
 
       const ior = max(uIor, 1.0001).toVar();
       const disp = uDispersion.div(12).toVar();
       const layers = select(disp.greaterThan(0).and(uRoughness.lessThan(0.35)), int(SPECTRAL_COUNT), int(1)).toVar();
       const baseTint = mix(vec3(1), uTint, uColorAlpha).toVar();
-      const sigma = log(max(baseTint, vec3(1e-4))).negate().div(max(reach, 1e-4)).toVar();
+      const sigma = log(max(baseTint, vec3(1e-4)))
+        .negate()
+        .div(max(reach, 1e-4))
+        .toVar();
       const col = vec3(0).toVar();
 
       const d0DotN0 = dot(d0, n0).toVar();
@@ -502,7 +461,12 @@ export class GlassMaterial extends THREE.MeshBasicNodeMaterial {
           If(bounceW.greaterThan(0.004), () => {
             const rInt = reflect(t1, nExit.negate());
             const bend = rInt.sub(d0).xy.mul(0.12);
-            layer.addAssign(absorb.mul(absorb).mul(bounceW).mul(lookEnv(pExit, rInt, bend)));
+            layer.addAssign(
+              absorb
+                .mul(absorb)
+                .mul(bounceW)
+                .mul(lookEnv(pExit, rInt, bend)),
+            );
           });
         });
         const weight = select(layers.equal(1), vec3(1), spectralWeight(lc));
@@ -510,17 +474,8 @@ export class GlassMaterial extends THREE.MeshBasicNodeMaterial {
       });
 
       // Creamy frosted veil + crisp Fresnel rim when roughness > 0.
-      If(uRoughness.greaterThan(0.001), () => {
-        const veilOpacity = uRoughness.mul(0.42).mul(frostGrain.mul(0.24).add(0.88)).toVar();
-        const studioLight = select(uDark.greaterThan(0.5), vec3(0.22), vec3(0.75)).toVar();
-        const frostTint = baseTint.mul(studioLight).toVar();
-        const lifted = col.mul(1.03).add(frostTint.mul(0.22));
-        const frosted = mix(mix(col, lifted, veilOpacity), frostTint, veilOpacity.mul(0.55));
-        const ndotv = clamp(dot(d0, n0).negate(), 0, 1);
-        const rim = float(1).sub(ndotv).toVar();
-        const rimGlow = rim.mul(rim).mul(rim).mul(uRoughness.mul(0.35)).mul(studioLight);
-        col.assign(frosted.add(rimGlow));
-      });
+      const studioLight = select(uDark.greaterThan(0.5), vec3(0.22), vec3(0.75)).toVar();
+      applyFrostVeil(col, d0, n0, baseTint, studioLight, uRoughness, frostGrain);
 
       col.mulAssign(uExposure);
       If(uFilmic.greaterThan(0.5), () => {
@@ -566,27 +521,17 @@ export class GlassMaterial extends THREE.MeshBasicNodeMaterial {
       });
 
       const frostGrain = float(0.5).toVar();
-      If(uRoughness.greaterThan(0.001), () => {
-        const fs = max(uFrostScale, 0.25).toVar();
-        const fp = p0.div(max(reach, 0.05)).mul(fs).toVar();
-        const fn0 = frostNoise3(fp).toVar();
-        frostGrain.assign(fn0);
-        const eps = float(0.008).toVar();
-        const gx = frostNoise3(fp.add(vec3(eps, 0, 0))).sub(fn0);
-        const gy = frostNoise3(fp.add(vec3(0, eps, 0))).sub(fn0);
-        const gz = frostNoise3(fp.add(vec3(0, 0, eps))).sub(fn0);
-        const perturbed = normalize(n0.add(vec3(gx, gy, gz).mul(uRoughness.mul(0.45)))).toVar();
-        If(dot(d0, perturbed).lessThan(-0.02), () => {
-          n0.assign(perturbed);
-        });
-      });
+      perturbFrostNormal(n0, d0, p0, reach, uRoughness, uFrostScale, frostGrain);
 
       const ior = max(uIor, 1.0001).toVar();
       const disp = uDispersion.div(12).toVar();
       const maxEvents = uBounces.toInt();
       const layers = select(disp.greaterThan(0).and(uRoughness.lessThan(0.35)), int(SPECTRAL_COUNT), int(1)).toVar();
       const baseTint = mix(vec3(1), uTint, uColorAlpha).toVar();
-      const sigma = log(max(baseTint, vec3(1e-4))).negate().div(max(reach.mul(2), 1e-4)).toVar();
+      const sigma = log(max(baseTint, vec3(1e-4)))
+        .negate()
+        .div(max(reach.mul(2), 1e-4))
+        .toVar();
       const entryFace = vec3(1).toVar();
       if (cmyBox)
         If(uCmy.greaterThan(0), () => {
@@ -645,17 +590,8 @@ export class GlassMaterial extends THREE.MeshBasicNodeMaterial {
         col.addAssign(layer.mul(weight));
       });
 
-      If(uRoughness.greaterThan(0.001), () => {
-        const veilOpacity = uRoughness.mul(0.42).mul(frostGrain.mul(0.24).add(0.88)).toVar();
-        const studioLight = select(uDark.greaterThan(0.5), vec3(0.22), vec3(0.75)).toVar();
-        const frostTint = baseTint.mul(studioLight).toVar();
-        const lifted = col.mul(1.03).add(frostTint.mul(0.22));
-        const frosted = mix(mix(col, lifted, veilOpacity), frostTint, veilOpacity.mul(0.55));
-        const ndotv = clamp(dot(d0, n0).negate(), 0, 1);
-        const rim = float(1).sub(ndotv).toVar();
-        const rimGlow = rim.mul(rim).mul(rim).mul(uRoughness.mul(0.35)).mul(studioLight);
-        col.assign(frosted.add(rimGlow));
-      });
+      const studioLight = select(uDark.greaterThan(0.5), vec3(0.22), vec3(0.75)).toVar();
+      applyFrostVeil(col, d0, n0, baseTint, studioLight, uRoughness, frostGrain);
 
       col.mulAssign(uExposure);
       If(uFilmic.greaterThan(0.5), () => {

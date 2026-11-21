@@ -6,7 +6,8 @@ import type { ScreenCamera } from './finish';
 import { sceneFunctions, type SceneInputs } from './scene';
 
 type N = any;
-const { Fn, If, abs, bool, clamp, dot, exp, float, fract, max, min, mix, normalize, select, sqrt, vec2, vec3, vec4 } = TSL as N;
+const { Fn, If, abs, bool, clamp, dot, exp, float, fract, max, min, mix, normalize, select, sqrt, vec2, vec3, vec4 } =
+  TSL as N;
 
 /**
  * How far a ray travels inside the cone of the spotlight (from the lamp, spot.y
@@ -79,7 +80,15 @@ function beamFn(spot: N, lamp: N) {
         });
     });
     return out;
-  }).setLayout({ name: 'icBeam', type: 'float', inputs: [{ name: 'o', type: 'vec3' }, { name: 'd', type: 'vec3' }, { name: 'tEnd', type: 'float' }] });
+  }).setLayout({
+    name: 'icBeam',
+    type: 'float',
+    inputs: [
+      { name: 'o', type: 'vec3' },
+      { name: 'd', type: 'vec3' },
+      { name: 'tEnd', type: 'float' },
+    ],
+  });
 }
 
 /**
@@ -98,7 +107,9 @@ export function groundNode(cam: ScreenCamera, s: SceneInputs, mirror: N): N {
   const beam = beamFn(spot, s.lamp);
   return Fn(() => {
     const ndc = fragCoord.div(res).mul(2).sub(1).mul(vec2(1, -1)).toVar();
-    const rd = normalize(camFwd.xyz.add(camRight.xyz.mul(ndc.x.mul(camFwd.w).mul(camRight.w))).add(camUp.mul(ndc.y.mul(camFwd.w)))).toVar();
+    const rd = normalize(
+      camFwd.xyz.add(camRight.xyz.mul(ndc.x.mul(camFwd.w).mul(camRight.w))).add(camUp.mul(ndc.y.mul(camFwd.w))),
+    ).toVar();
     const col = scene(camPos, rd, float(1), float(0)).toVar();
     // The studio backdrop is lit a little unevenly: brighter up and to the left.
     col.mulAssign(ndc.y.mul(0.8).sub(ndc.x.mul(0.5)).mul(0.07).add(1));
@@ -112,7 +123,9 @@ export function groundNode(cam: ScreenCamera, s: SceneInputs, mirror: N): N {
       // How much floor one pixel covers there (it stretches away from the camera).
       const pixel = floorT.mul(camFwd.w.mul(2).div(res.y)).div(max(rd.y.negate(), 0.02)).toVar();
       const near1 = abs(fract(g.sub(0.5)).sub(0.5)).toVar();
-      const near5 = abs(fract(g.div(5).sub(0.5)).sub(0.5)).mul(5).toVar();
+      const near5 = abs(fract(g.div(5).sub(0.5)).sub(0.5))
+        .mul(5)
+        .toVar();
       const fine = gridLine(min(near1.x, near1.y), 0.009, pixel);
       const heavy = gridLine(min(near5.x, near5.y), 0.02, pixel);
       const lines = min(fine.mul(0.38).add(heavy.mul(0.5)), 0.62).toVar();
@@ -136,12 +149,26 @@ export function groundNode(cam: ScreenCamera, s: SceneInputs, mirror: N): N {
       // and more blurred. Reuse the 4 probe taps inside the 9-tap disc blur to avoid
       // redundant texture fetches and trig on every floor pixel.
       const m0 = mirror.sample(uv).level(0).toVar();
-      const px = vec2(mix(9, 1, clamp(m0.a.mul(1.3), 0, 1))).div(res).toVar();
+      const px = vec2(mix(9, 1, clamp(m0.a.mul(1.3), 0, 1)))
+        .div(res)
+        .toVar();
       const ax = px.mul(0.7).toVar();
-      const p1 = mirror.sample(uv.add(vec2(ax.x, 0))).level(0).toVar();
-      const p2 = mirror.sample(uv.sub(vec2(ax.x, 0))).level(0).toVar();
-      const p3 = mirror.sample(uv.add(vec2(0, ax.y))).level(0).toVar();
-      const p4 = mirror.sample(uv.sub(vec2(0, ax.y))).level(0).toVar();
+      const p1 = mirror
+        .sample(uv.add(vec2(ax.x, 0)))
+        .level(0)
+        .toVar();
+      const p2 = mirror
+        .sample(uv.sub(vec2(ax.x, 0)))
+        .level(0)
+        .toVar();
+      const p3 = mirror
+        .sample(uv.add(vec2(0, ax.y)))
+        .level(0)
+        .toVar();
+      const p4 = mirror
+        .sample(uv.sub(vec2(0, ax.y)))
+        .level(0)
+        .toVar();
       const probe = m0.a.add(p1.a).add(p2.a).add(p3.a).add(p4.a);
       const m = m0.toVar();
       If(probe.greaterThan(1e-4), () => {
@@ -159,9 +186,13 @@ export function groundNode(cam: ScreenCamera, s: SceneInputs, mirror: N): N {
             .div(9),
         );
       });
-      const grazing = float(1).sub(clamp(rd.y.negate(), 0, 1)).toVar();
+      const grazing = float(1)
+        .sub(clamp(rd.y.negate(), 0, 1))
+        .toVar();
       // (A black floor shows its reflections the more clearly: twice as strong in the dark studio.)
-      const k = min(floorP.x.mul(select(dark.greaterThan(0.5), 2, 1)).mul(grazing.mul(grazing).mul(0.65).add(0.35)), 1).mul(m.a).mul(floorAlpha);
+      const k = min(floorP.x.mul(select(dark.greaterThan(0.5), 2, 1)).mul(grazing.mul(grazing).mul(0.65).add(0.35)), 1)
+        .mul(m.a)
+        .mul(floorAlpha);
       If(m.a.greaterThan(1e-4), () => {
         col.assign(mix(col, m.rgb.div(m.a), k));
       });
@@ -174,7 +205,9 @@ export function groundNode(cam: ScreenCamera, s: SceneInputs, mirror: N): N {
     // Fog: the floor fades into a pale haze with distance, and the haze hangs along
     // the horizon.
     If(floorP.w.greaterThan(0), () => {
-      const haze = env(normalize(vec3(rd.x, 0.03, rd.z)), float(1), float(0)).mul(1.07).toVar();
+      const haze = env(normalize(vec3(rd.x, 0.03, rd.z)), float(1), float(0))
+        .mul(1.07)
+        .toVar();
       If(onFloor, () => {
         col.assign(mix(col, haze, float(1).sub(exp(floorP.w.mul(-0.05).mul(floorT)))));
       }).Else(() => {

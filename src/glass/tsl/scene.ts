@@ -5,7 +5,27 @@
 import * as TSL from 'three/tsl';
 
 type N = any;
-const { Fn, If, abs, atan, clamp, cos, dot, float, floor, length, max, min, mix, normalize, select, sin, smoothstep, vec2, vec3 } = TSL as N;
+const {
+  Fn,
+  If,
+  abs,
+  atan,
+  clamp,
+  cos,
+  dot,
+  float,
+  floor,
+  length,
+  max,
+  min,
+  mix,
+  normalize,
+  select,
+  sin,
+  smoothstep,
+  vec2,
+  vec3,
+} = TSL as N;
 
 /** The uniforms and textures that describe the room, shared by the passes that see it. */
 export interface SceneInputs {
@@ -88,8 +108,15 @@ export function sceneFunctions(s: SceneInputs, backdrop: boolean) {
         const ring = smoothstep(float(0.78).sub(r.mul(0.35)), float(0.86).add(r.mul(0.1)), d.y).mul(
           float(1).sub(smoothstep(0.94, 0.97, d.y).mul(sharp)),
         );
-        k.addAssign(ring.mul(2.6).div(r2.mul(3).add(1)).mul(mix(smoothstep(-0.2, 0.3, cos(az.mul(4))), 0.5, r)));
-        const tall = smoothstep(0.05, 0.15, d.y).mul(float(1).sub(smoothstep(0.55, 0.7, d.y))).toVar();
+        k.addAssign(
+          ring
+            .mul(2.6)
+            .div(r2.mul(3).add(1))
+            .mul(mix(smoothstep(-0.2, 0.3, cos(az.mul(4))), 0.5, r)),
+        );
+        const tall = smoothstep(0.05, 0.15, d.y)
+          .mul(float(1).sub(smoothstep(0.55, 0.7, d.y)))
+          .toVar();
         // (Left and right of where the camera starts, not behind the stones, where a
         // table facing up would mirror one straight into the camera as a white blank.)
         const stripLo = float(0.95).sub(r.mul(0.55));
@@ -101,10 +128,24 @@ export function sceneFunctions(s: SceneInputs, backdrop: boolean) {
       }).Else(() => {
         const mainGlow = smoothstep(float(0.84).sub(r.mul(0.55)), float(0.95).add(r.mul(0.05)), dot(d, s.lamp));
         k.addAssign(lampShare.mul(6).div(r2.mul(4).add(1)).mul(mainGlow));
-        k.addAssign(smoothstep(float(0.8).sub(r.mul(0.45)), 0.97, d.y).mul(1.6).div(r2.mul(2).add(1)));
-        const tall = smoothstep(0.02, 0.1, d.y).mul(float(1).sub(smoothstep(0.6, 0.75, d.y))).toVar();
-        k.addAssign(tall.mul(float(5).div(r2.mul(6).add(1))).mul(smoothstep(float(0.985).sub(r.mul(0.6)), 0.996, cos(az.sub(0.5)))));
-        k.addAssign(tall.mul(float(3.5).div(r2.mul(6).add(1))).mul(smoothstep(float(0.99).sub(r.mul(0.6)), 0.998, cos(az.add(1.9)))));
+        k.addAssign(
+          smoothstep(float(0.8).sub(r.mul(0.45)), 0.97, d.y)
+            .mul(1.6)
+            .div(r2.mul(2).add(1)),
+        );
+        const tall = smoothstep(0.02, 0.1, d.y)
+          .mul(float(1).sub(smoothstep(0.6, 0.75, d.y)))
+          .toVar();
+        k.addAssign(
+          tall
+            .mul(float(5).div(r2.mul(6).add(1)))
+            .mul(smoothstep(float(0.985).sub(r.mul(0.6)), 0.996, cos(az.sub(0.5)))),
+        );
+        k.addAssign(
+          tall
+            .mul(float(3.5).div(r2.mul(6).add(1)))
+            .mul(smoothstep(float(0.99).sub(r.mul(0.6)), 0.998, cos(az.add(1.9)))),
+        );
         k.addAssign(rough.mul(0.1));
       });
       out.assign(vec3(k));
@@ -114,12 +155,26 @@ export function sceneFunctions(s: SceneInputs, backdrop: boolean) {
       // A few grey cards standing round the set, and a small dark one overhead (the
       // camera): they are what the stone's darker facets are looking at.
       const band = smoothstep(0.03, 0.1, d.y).mul(float(1).sub(smoothstep(0.68, 0.82, d.y)));
-      c.assign(mix(c, 0.04, band.mul(0.96).mul(sharp).mul(smoothstep(-0.1, 0.15, sin(az.mul(5).add(1))))));
+      c.assign(
+        mix(
+          c,
+          0.04,
+          band
+            .mul(0.96)
+            .mul(sharp)
+            .mul(smoothstep(-0.1, 0.15, sin(az.mul(5).add(1)))),
+        ),
+      );
       c.assign(mix(c, 0.05, smoothstep(0.9, 0.95, d.y).mul(sharp)));
       // Lamps: the main one up and to the left, and two small ones.
       const mainLo = float(0.86).sub(r.mul(0.55));
       const mainHi = float(0.96).add(r.mul(0.04));
-      c.addAssign(lampShare.mul(3).div(r2.mul(3).add(1)).mul(smoothstep(mainLo, mainHi, dot(d, s.lamp))));
+      c.addAssign(
+        lampShare
+          .mul(3)
+          .div(r2.mul(3).add(1))
+          .mul(smoothstep(mainLo, mainHi, dot(d, s.lamp))),
+      );
       const smallLo = float(0.985).sub(r.mul(0.55));
       const smallGain = float(3).div(r2.mul(8).add(1));
       c.addAssign(smoothstep(smallLo, 0.995, dot(d, normalize(vec3(Math.cos(3), 0.6, Math.sin(3))))).mul(smallGain));
@@ -128,7 +183,15 @@ export function sceneFunctions(s: SceneInputs, backdrop: boolean) {
       out.assign(vec3(c));
     });
     return out;
-  }).setLayout({ name: 'icEnv', type: 'vec3', inputs: [{ name: 'd', type: 'vec3' }, { name: 'lampLit', type: 'float' }, { name: 'cone', type: 'float' }] });
+  }).setLayout({
+    name: 'icEnv',
+    type: 'vec3',
+    inputs: [
+      { name: 'd', type: 'vec3' },
+      { name: 'lampLit', type: 'float' },
+      { name: 'cone', type: 'float' },
+    ],
+  });
 
   /** Where a ground point falls in the caustic map. */
   const lightUv = (g: N) => {
@@ -163,7 +226,12 @@ export function sceneFunctions(s: SceneInputs, backdrop: boolean) {
         // It fades out gradually toward its edge, and (the lamp being near) the floor
         // is brighter on the side toward the lamp than on the far side.
         const nearness = s.spot.y.div(max(along, s.spot.y.mul(0.3))).toVar();
-        out.assign(float(1).sub(smoothstep(0.3, 1, across.div(along).mul(s.spot.y).div(s.spot.x))).mul(nearness).mul(nearness));
+        out.assign(
+          float(1)
+            .sub(smoothstep(0.3, 1, across.div(along).mul(s.spot.y).div(s.spot.x)))
+            .mul(nearness)
+            .mul(nearness),
+        );
       });
     });
     return out;
@@ -218,7 +286,12 @@ export function sceneFunctions(s: SceneInputs, backdrop: boolean) {
   }).setLayout({
     name: 'icScene',
     type: 'vec3',
-    inputs: [{ name: 'ro', type: 'vec3' }, { name: 'rd', type: 'vec3' }, { name: 'lampLit', type: 'float' }, { name: 'cone', type: 'float' }],
+    inputs: [
+      { name: 'ro', type: 'vec3' },
+      { name: 'rd', type: 'vec3' },
+      { name: 'lampLit', type: 'float' },
+      { name: 'cone', type: 'float' },
+    ],
   });
 
   return { dark, groundOn, env, sunT, spotPool, groundColor, scene };

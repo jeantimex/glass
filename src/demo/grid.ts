@@ -18,7 +18,14 @@ const MAX_REACH = 0.6;
 /** About how far a shape reaches from its centre (m). */
 function reachOf(kind: number, s: [number, number, number]): number {
   if (kind === KIND.capsule || kind === KIND.torus) return s[0] + s[1];
-  if (kind === KIND.box || kind === KIND.cylinder || kind === KIND.cone || kind === KIND.hexprism || kind === KIND.prism) return Math.hypot(s[0], s[1], s[2]);
+  if (
+    kind === KIND.box ||
+    kind === KIND.cylinder ||
+    kind === KIND.cone ||
+    kind === KIND.hexprism ||
+    kind === KIND.prism
+  )
+    return Math.hypot(s[0], s[1], s[2]);
   return 1.1 * Math.max(s[0], s[1], s[2]); // sphere, octahedron, diamond, the meshes
 }
 
@@ -44,18 +51,35 @@ const PICK_FOR_KIND: Record<number, number> = {
  * upright: how high its centre is, and its rotation. Most stand on their base; an
  * octahedron lies on a face and a diamond on a pavilion facet, its table turned up.
  */
-export function restingPose(kind: number, size: ArrayLike<number>, turn: number, diamondCut: DiamondCut = 'round'): { height: number; quat: THREE.Quaternion } {
+export function restingPose(
+  kind: number,
+  size: ArrayLike<number>,
+  turn: number,
+  diamondCut: DiamondCut = 'round',
+): { height: number; quat: THREE.Quaternion } {
   const [a, b] = [size[0], size[1]];
   let height = a;
   let lean: THREE.Quaternion | null = null;
-  if (kind === KIND.box || kind === KIND.cylinder || kind === KIND.cone || kind === KIND.hexprism || kind === KIND.torus) height = b;
+  if (
+    kind === KIND.box ||
+    kind === KIND.cylinder ||
+    kind === KIND.cone ||
+    kind === KIND.hexprism ||
+    kind === KIND.torus
+  )
+    height = b;
   else if (kind === KIND.capsule) height = a + b;
   else if (kind === KIND.octahedron) {
     height = a * 0.57735;
-    lean = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(-1, -1, -1).normalize(), new THREE.Vector3(0, -1, 0));
+    lean = new THREE.Quaternion().setFromUnitVectors(
+      new THREE.Vector3(-1, -1, -1).normalize(),
+      new THREE.Vector3(0, -1, 0),
+    );
   } else if (kind === KIND.prism) height = a / 2;
-  else if (kind === KIND.suzanne) height = a * 0.72; // her chin is 0.72 below her centre at size 1
-  else if (kind === KIND.dragon) height = a * 0.7053; // its feet are 0.7053 below its centre at size 1
+  else if (kind === KIND.suzanne)
+    height = a * 0.72; // her chin is 0.72 below her centre at size 1
+  else if (kind === KIND.dragon)
+    height = a * 0.7053; // its feet are 0.7053 below its centre at size 1
   else if (kind === KIND.diamond) {
     const spec = DIAMOND_CUTS[diamondCut];
     height = spec.rest * a;
@@ -75,7 +99,14 @@ export function restingPose(kind: number, size: ArrayLike<number>, turn: number,
  */
 export type GridLayout = 'flat' | 'grid';
 
-export function layoutGrid(objects: GlassObjects, count: number, only: number[] | null = null, cubic = false, layout: GridLayout = 'flat', diamondCut: DiamondCut = 'round'): { reach: number; centerY: number } {
+export function layoutGrid(
+  objects: GlassObjects,
+  count: number,
+  only: number[] | null = null,
+  cubic = false,
+  layout: GridLayout = 'flat',
+  diamondCut: DiamondCut = 'round',
+): { reach: number; centerY: number } {
   count = Math.min(Math.max(1, Math.round(count)), MAX_OBJECTS);
   let seed = (count * 2654435761) >>> 0;
   const rnd = () => {

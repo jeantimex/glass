@@ -13,18 +13,38 @@
 // The layers carry each pixel's distance from the camera in their alpha, which is
 // what the finishing passes work from.
 import * as THREE from 'three/webgpu';
+import { InstanceBatch } from './batch';
 import { DIAMOND_CUTS, diamondGeometry, type DiamondCut } from './diamond';
+import { createShapeGeometries, triangleCount, UNIT_TUBE } from './geometries';
 import { GlassMaterial } from './material';
-import { attribute, cross, normalLocal, positionGeometry, positionWorld, screenCoordinate, select, texture, texture3D, uniform, vec2, vec3, float, uv, vec4, varying, instanceIndex } from 'three/tsl';
+import {
+  attribute,
+  cross,
+  normalLocal,
+  positionGeometry,
+  positionWorld,
+  screenCoordinate,
+  select,
+  texture,
+  texture3D,
+  uniform,
+  vec2,
+  vec3,
+  float,
+  uv,
+  vec4,
+  varying,
+  instanceIndex,
+} from 'three/tsl';
 import { KIND, MAX_OBJECTS, type GlassObjects } from './objects';
+import { createPassTimer } from './timing';
+import { causticNode, photonNode as photonRayNode } from './tsl/caustics';
+import { CMY_FACE_ORDERS, type CmyFaceOrder } from './tsl/cmy';
 import { blurNode, contactShadeNode, lensNode } from './tsl/finish';
+import { glassNode } from './tsl/glass';
 import { groundNode } from './tsl/ground';
-import { CMY_FACE_ORDERS, causticNode, glassNode, photonNode as photonRayNode, type CmyFaceOrder } from './tsl/glass';
 
 const KIND_COUNT = 13;
-
-/** Tube radius of the unit torus geometry (its ring radius is 1). */
-const UNIT_TUBE = 0.25;
 
 export interface InstancedLighting {
   ground: boolean;
@@ -82,79 +102,6 @@ const FINE_UP_TO = 64;
 /** Above this many objects, the less visible passes are drawn more cheaply. */
 const MANY_OBJECTS = 3000;
 
-/** One batch of instances of one shape: per-instance centre, rotation and size. */
-class Batch {
-  geometry = new THREE.InstancedBufferGeometry();
-  center: THREE.InstancedBufferAttribute;
-  quat: THREE.InstancedBufferAttribute;
-  size: THREE.InstancedBufferAttribute;
-  vary: THREE.InstancedBufferAttribute;
-  tint: THREE.InstancedBufferAttribute;
-  count = 0;
-
-  /** @param capacity the most instances it will ever hold */
-  constructor(base: THREE.BufferGeometry, capacity = MAX_OBJECTS) {
-    this.center = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3);
-    this.quat = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 4), 4);
-    this.size = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3);
-    this.vary = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3);
-    this.tint = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3);
-    this.geometry.index = base.index;
-    this.geometry.setAttribute('position', base.getAttribute('position'));
-    this.geometry.setAttribute('normal', base.getAttribute('normal'));
-    // Left as ordinary (static) buffers on purpose: three.js uploads a buffer marked
-    // dynamic in full on every render pass, changed or not, which at thousands of
-    // objects costs more than everything else. These are sent when commit() says so.
-    this.geometry.setAttribute('instCenter', this.center);
-    this.geometry.setAttribute('instQuat', this.quat);
-    this.geometry.setAttribute('instSize', this.size);
-    this.geometry.setAttribute('instVary', this.vary);
-    this.geometry.setAttribute('instTint', this.tint);
-    this.geometry.instanceCount = 0;
-  }
-
-  push(objects: GlassObjects, i: number) {
-    const k = this.count++;
-    // (Copied number by number: for a few values that is far quicker than subarray and set.)
-    const center = this.center.array;
-    const quat = this.quat.array;
-    const size = this.size.array;
-    const vary = this.vary.array;
-    center[k * 3] = objects.center[i * 3];
-    center[k * 3 + 1] = objects.center[i * 3 + 1];
-    center[k * 3 + 2] = objects.center[i * 3 + 2];
-    quat[k * 4] = objects.quat[i * 4];
-    quat[k * 4 + 1] = objects.quat[i * 4 + 1];
-    quat[k * 4 + 2] = objects.quat[i * 4 + 2];
-    quat[k * 4 + 3] = objects.quat[i * 4 + 3];
-    size[k * 3] = objects.size[i * 3];
-    size[k * 3 + 1] = objects.size[i * 3 + 1];
-    size[k * 3 + 2] = objects.size[i * 3 + 2];
-    vary[k * 3] = objects.vary[i * 3];
-    vary[k * 3 + 1] = objects.vary[i * 3 + 1];
-    vary[k * 3 + 2] = objects.vary[i * 3 + 2];
-    const tint = this.tint.array;
-    tint[k * 3] = objects.tint[i * 3];
-    tint[k * 3 + 1] = objects.tint[i * 3 + 1];
-    tint[k * 3 + 2] = objects.tint[i * 3 + 2];
-  }
-
-  /** Instances uploaded last time: nothing needs sending while a batch stays empty. */
-  private sent = 0;
-
-  commit() {
-    this.geometry.instanceCount = this.count;
-    if (!this.count && !this.sent) return;
-    this.sent = this.count;
-    // Send only the instances in use, not the whole (mostly empty) buffers.
-    for (const a of [this.center, this.quat, this.size, this.vary, this.tint]) {
-      a.clearUpdateRanges();
-      a.addUpdateRange(0, Math.max(this.count, 1) * a.itemSize);
-      a.needsUpdate = true;
-    }
-  }
-}
-
 export function createInstancedGlass(
   renderer: THREE.WebGPURenderer,
   camera: THREE.PerspectiveCamera,
@@ -164,13 +111,20 @@ export function createInstancedGlass(
    * simplified for piles), and their baked distance volumes, one after the other in
    * a single 3D texture (Suzanne's, then the dragon's).
    */
-  meshes: { suzanne: THREE.BufferGeometry; dragon: THREE.BufferGeometry; dragonLod: THREE.BufferGeometry; volume: THREE.Data3DTexture },
+  meshes: {
+    suzanne: THREE.BufferGeometry;
+    dragon: THREE.BufferGeometry;
+    dragonLod: THREE.BufferGeometry;
+    volume: THREE.Data3DTexture;
+  },
 ) {
-  // ------------------------------------------------------------ targets ---
+  /* Render targets */
   const isMobile =
     typeof navigator !== 'undefined' &&
     (/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
-      (navigator.maxTouchPoints > 1 && typeof window !== 'undefined' && Math.min(window.innerWidth, window.innerHeight) < 900));
+      (navigator.maxTouchPoints > 1 &&
+        typeof window !== 'undefined' &&
+        Math.min(window.innerWidth, window.innerHeight) < 900));
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
   const causticMapSize = isMobile ? 512 : CAUSTIC_MAP_SIZE;
   const lampDepthSize = isMobile ? 512 : LAMP_DEPTH_SIZE;
@@ -255,7 +209,7 @@ export function createInstancedGlass(
     magFilter: THREE.LinearFilter,
   });
 
-  // ----------------------------------------------------------- uniforms ---
+  /* Uniforms */
   const uRes = uniform(new THREE.Vector2(4, 4));
   const uAoRes = uniform(new THREE.Vector2(4, 4));
   // 1 when few enough objects are on show for light to enter a baked mesh through its volume (see entry in tsl/glass.ts).
@@ -303,7 +257,7 @@ export function createInstancedGlass(
   const blurSource = texture(causticMap.texture);
   const volumeNode = texture3D(meshes.volume);
 
-  // ------------------------------------------------- per-instance nodes ---
+  /* Per-instance nodes */
   const instCenter = attribute('instCenter', 'vec3');
   const instQuat = attribute('instQuat', 'vec4');
   const instSize = attribute('instSize', 'vec3');
@@ -351,7 +305,7 @@ export function createInstancedGlass(
   const plainNormal = rotate(normalLocal);
   const scaledNormal = rotate(normalLocal.div(instSize).normalize());
 
-  // ---------------------------------------------------------- materials ---
+  /* Pass materials */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const makeLampDepthMaterial = (position: any) => {
     const material = new THREE.NodeMaterial();
@@ -394,8 +348,19 @@ export function createInstancedGlass(
     lightTexSize: causticMapSize,
   };
   /** The camera as the passes over the whole picture see it. */
-  const screenCamera = { fragCoord: screenCoordinate, res: uRes, camPos: uCamPos, camRight: uCamRight, camUp: uCamUp, camFwd: uCamFwd };
-  groundMaterial.fragmentNode = groundNode(screenCamera, { ...sceneInputs, shadeTex: shadeNode, shadeFarTex: shadeFarNode }, mirrorNode);
+  const screenCamera = {
+    fragCoord: screenCoordinate,
+    res: uRes,
+    camPos: uCamPos,
+    camRight: uCamRight,
+    camUp: uCamUp,
+    camFwd: uCamFwd,
+  };
+  groundMaterial.fragmentNode = groundNode(
+    screenCamera,
+    { ...sceneInputs, shadeTex: shadeNode, shadeFarTex: shadeFarNode },
+    mirrorNode,
+  );
   // (Its alpha is the distance of each pixel, so it is written as it is.)
   groundMaterial.transparent = true;
   groundMaterial.blending = THREE.NoBlending;
@@ -411,7 +376,15 @@ export function createInstancedGlass(
    * Blur `from` into `to` (through a scratch target) by `radiusX` and `radiusY`, in
    * texture coordinates, keeping only what is brighter than `cut`.
    */
-  const blur = (from: THREE.Texture, to: THREE.RenderTarget, radiusX: number, radiusY = radiusX, scratch = shadeScratch, cut = 0, maxPasses = 4) => {
+  const blur = (
+    from: THREE.Texture,
+    to: THREE.RenderTarget,
+    radiusX: number,
+    radiusY = radiusX,
+    scratch = shadeScratch,
+    cut = 0,
+    maxPasses = 4,
+  ) => {
     // Each bilinear-paired tap covers 2 texels (up to 6 pairs = 13 fetches per pass).
     const texels = Math.max(radiusX * scratch.width, radiusY * scratch.height);
     const passes = Math.min(Math.max(Math.ceil((texels / 22) ** 2), 1), maxPasses);
@@ -440,7 +413,17 @@ export function createInstancedGlass(
     material.transparent = true;
     material.blending = THREE.NoBlending;
     material.positionNode = position;
-    material.fragmentNode = photonRayNode(kind, positionWorld, normal, glassInputs, uSunDir, uLightR, uLightU, photonMapSize, diamondPlanes);
+    material.fragmentNode = photonRayNode(
+      kind,
+      positionWorld,
+      normal,
+      glassInputs,
+      uSunDir,
+      uLightR,
+      uLightU,
+      photonMapSize,
+      diamondPlanes,
+    );
     return material;
   };
 
@@ -455,12 +438,21 @@ export function createInstancedGlass(
   // if the glass fanned it out: see photonNode in tsl/glass.ts), moved to where it landed and added on.
   const rayIndex = float(instanceIndex);
   const rayRow = rayIndex.div(photonMapSize).floor();
-  const rayAt = vec2(rayIndex.sub(rayRow.mul(photonMapSize)), rayRow).add(0.5).div(photonMapSize);
+  const rayAt = vec2(rayIndex.sub(rayRow.mul(photonMapSize)), rayRow)
+    .add(0.5)
+    .div(photonMapSize);
   const ray = texture(photonMap.texture, rayAt);
   const landMaterial = new THREE.NodeMaterial();
   const landPos = vec2(rayAt.x.mul(2).sub(1), float(1).sub(rayAt.y.mul(2)))
     .add(ray.xy)
-    .add(vec2(positionGeometry.x, positionGeometry.y).mul(ray.a.sub(1).max(1).mul(2 / photonMapSize)));
+    .add(
+      vec2(positionGeometry.x, positionGeometry.y).mul(
+        ray.a
+          .sub(1)
+          .max(1)
+          .mul(2 / photonMapSize),
+      ),
+    );
   // Cull empty photon rays (no glass hit or zero carried light) offscreen before rasterization.
   const landActive = ray.z.greaterThan(1e-5);
   landMaterial.vertexNode = vec4(select(landActive, landPos.x, 2), select(landActive, landPos.y, 2), 0, 1);
@@ -493,14 +485,23 @@ export function createInstancedGlass(
     }
     // One program per shape, so each only contains (and compiles) its own formulas.
     const worldPos = mirrored ? positionWorld.mul(upsideDown) : positionWorld;
-    material.colorNode = glassNode(kind, mirrored, worldPos, normal, glassInputs, sceneInputs, {
-      camPos: mirrored ? uMirrorCam : uCamPos,
-      viewProj: uViewProj,
-      behindTex: behindNode,
-      behindBlurTex: frostNode,
-      lampDepthTex: lampDepthNode,
-      lampDepthSize,
-    }, diamondPlanes);
+    material.colorNode = glassNode(
+      kind,
+      mirrored,
+      worldPos,
+      normal,
+      glassInputs,
+      sceneInputs,
+      {
+        camPos: mirrored ? uMirrorCam : uCamPos,
+        viewProj: uViewProj,
+        behindTex: behindNode,
+        behindBlurTex: frostNode,
+        lampDepthTex: lampDepthNode,
+        lampDepthSize,
+      },
+      diamondPlanes,
+    );
     return material;
   };
 
@@ -522,7 +523,10 @@ export function createInstancedGlass(
     material.blendDstAlpha = THREE.ZeroFactor;
     wireMaterials.push(material);
     material.positionNode = position;
-    material.colorNode = vec4(uWireColor, positionWorld.sub(uCamPos).length()) as unknown as THREE.MeshBasicNodeMaterial['colorNode'];
+    material.colorNode = vec4(
+      uWireColor,
+      positionWorld.sub(uCamPos).length(),
+    ) as unknown as THREE.MeshBasicNodeMaterial['colorNode'];
     return material;
   };
 
@@ -546,7 +550,14 @@ export function createInstancedGlass(
 
   // The finishing passes.
   const shadeSource = texture(nearLayer.texture);
-  const aoCamera = { fragCoord: screenCoordinate, res: uAoRes, camPos: uCamPos, camRight: uCamRight, camUp: uCamUp, camFwd: uCamFwd };
+  const aoCamera = {
+    fragCoord: screenCoordinate,
+    res: uAoRes,
+    camPos: uCamPos,
+    camRight: uCamRight,
+    camUp: uCamUp,
+    camFwd: uCamFwd,
+  };
   const shadeMaterial = new THREE.NodeMaterial();
   shadeMaterial.fragmentNode = contactShadeNode(aoCamera, uShade, shadeSource, isMobile ? 6 : 8);
   shadeMaterial.transparent = true;
@@ -557,63 +568,24 @@ export function createInstancedGlass(
   const glowNode = texture(glowLayer.texture);
   // (A basic material, so that three.js converts its colour for the screen.)
   const lensMaterial = new THREE.MeshBasicNodeMaterial();
-  lensMaterial.colorNode = (lensNode(screenCoordinate, uRes, uLens, uFinish, shadeSource, glowNode, aoNode) as { rgb: THREE.MeshBasicNodeMaterial['colorNode'] }).rgb;
+  lensMaterial.colorNode = (
+    lensNode(screenCoordinate, uRes, uLens, uFinish, shadeSource, glowNode, aoNode) as {
+      rgb: THREE.MeshBasicNodeMaterial['colorNode'];
+    }
+  ).rgb;
   lensMaterial.depthTest = lensMaterial.depthWrite = false;
   const lensQuad = new THREE.QuadMesh(lensMaterial);
 
-  // ------------------------------------------------------------- scenes ---
-  // Unit geometry per shape, indexed by KIND.
-  const flat = (g: THREE.BufferGeometry) => {
-    const out = g.index ? g.toNonIndexed() : g;
-    out.computeVertexNormals();
-    return out;
-  };
-  // Triangular prism: apex at y = 1, base at y = -0.5, from z = -1 to 1.
-  const triangle = new THREE.Shape([new THREE.Vector2(0, 1), new THREE.Vector2(-0.8660254, -0.5), new THREE.Vector2(0.8660254, -0.5)]);
-  // Unit torus knot, centred and scaled so its bottom rests at y = -1.
-  const unitKnot = (tubular: number, radial: number) => {
-    const g = new THREE.TorusKnotGeometry(0.62, 0.2, tubular, radial);
-    g.computeBoundingBox();
-    const b = g.boundingBox!;
-    const cy = (b.min.y + b.max.y) * 0.5;
-    const s = 2 / (b.max.y - b.min.y);
-    return g.translate(0, -cy, 0).scale(s, s, s);
-  };
-  const bases: THREE.BufferGeometry[] = [
-    new THREE.BoxGeometry(2, 2, 2),
-    new THREE.IcosahedronGeometry(1, 4),
-    new THREE.CylinderGeometry(1, 1, 2, 40, 1),
-    new THREE.CapsuleGeometry(1, 2, 10, 32),
-    new THREE.ConeGeometry(1, 2, 48, 1),
-    new THREE.TorusGeometry(1, UNIT_TUBE, 20, 64).rotateX(Math.PI / 2),
-    flat(new THREE.OctahedronGeometry(1)),
-    flat(new THREE.ExtrudeGeometry(triangle, { depth: 2, bevelEnabled: false }).translate(0, 0, -1)),
-    // Hexagon with corners on the X axis; 1 is the distance to its side faces.
-    flat(new THREE.CylinderGeometry(1 / Math.cos(Math.PI / 6), 1 / Math.cos(Math.PI / 6), 2, 6, 1).rotateY(Math.PI / 2)),
-    meshes.suzanne,
-    diamondGeometry(),
-    meshes.dragonLod,
-    unitKnot(96, 16),
-  ];
-  // The round shapes again, far finer: with only a few objects on show, each is
-  // large on screen, and the corners of the coarse ones show on their outlines.
-  // (Thousands of fine ones would cost too many triangles.)
-  const fineBases = [...bases];
-  fineBases[KIND.sphere] = new THREE.IcosahedronGeometry(1, 12);
-  fineBases[KIND.cylinder] = new THREE.CylinderGeometry(1, 1, 2, 120, 1);
-  fineBases[KIND.capsule] = new THREE.CapsuleGeometry(1, 2, 24, 96);
-  fineBases[KIND.cone] = new THREE.ConeGeometry(1, 2, 120, 1);
-  fineBases[KIND.torus] = new THREE.TorusGeometry(1, UNIT_TUBE, 40, 144).rotateX(Math.PI / 2);
-  fineBases[KIND.dragon] = meshes.dragon; // the scan in full
-  fineBases[KIND.torusknot] = unitKnot(220, 36);
+  /* Instanced scenes */
+  const { bases, fineBases } = createShapeGeometries(meshes);
   const farScene = new THREE.Scene();
   const nearScene = new THREE.Scene();
   const lightScene = new THREE.Scene();
   const lampDepthScene = new THREE.Scene();
   const mirrorScene = new THREE.Scene();
   const photonScene = new THREE.Scene();
-  const far: Batch[] = [];
-  const near: Batch[] = [];
+  const far: InstanceBatch[] = [];
+  const near: InstanceBatch[] = [];
   // The same objects drawn as glass, mirrored in the floor, or as wireframe.
   /**
    * Every mesh, with its batch and what it draws. A mesh is only visible while its
@@ -621,7 +593,7 @@ export function createInstancedGlass(
    * with every shape's programs compiled up front the first frame took seconds on
    * WebGPU and over a minute on WebGL. A shape is compiled when it first appears.
    */
-  const drawn: { mesh: THREE.Mesh; batch: Batch; role: 'glass' | 'wire' | 'other' }[] = [];
+  const drawn: { mesh: THREE.Mesh; batch: InstanceBatch; role: 'glass' | 'wire' | 'other' }[] = [];
   let wireOn = false;
   const updateVisibility = () => {
     for (const { mesh, batch, role } of drawn) {
@@ -629,8 +601,8 @@ export function createInstancedGlass(
       mesh.visible = batch.count > 0 && (role === 'other' || (role === 'wire') === wireOn);
     }
   };
-  const fineFar: Batch[] = [];
-  const fineNear: Batch[] = [];
+  const fineFar: InstanceBatch[] = [];
+  const fineNear: InstanceBatch[] = [];
   type DiamondCutEntry = {
     geometry: THREE.BufferGeometry;
     glass: THREE.MeshBasicNodeMaterial;
@@ -652,15 +624,31 @@ export function createInstancedGlass(
     const photon = makePhotonMaterial(kind, position, normal);
     const wire = makeWireMaterial(position);
     if (kind === KIND.diamond) diamondCutCache.round = { geometry: bases[kind], glass, mirrored, photon };
-    for (const [batches, scene, fine] of [[far, farScene, false], [near, nearScene, false], [fineFar, farScene, true], [fineNear, nearScene, true]] as const) {
-      const batch = fine ? new Batch(fineBases[kind], FINE_UP_TO) : new Batch(bases[kind]);
+    for (const [batches, scene, fine] of [
+      [far, farScene, false],
+      [near, nearScene, false],
+      [fineFar, farScene, true],
+      [fineNear, nearScene, true],
+    ] as const) {
+      const batch = fine ? new InstanceBatch(fineBases[kind], FINE_UP_TO) : new InstanceBatch(bases[kind]);
       batches.push(batch);
-      for (const [material, target] of [[glass, scene], [caustic, lightScene], [lampDepthMaterial, lampDepthScene], [mirrored, mirrorScene], [photon, photonScene], [wire, scene]] as const) {
+      for (const [material, target] of [
+        [glass, scene],
+        [caustic, lightScene],
+        [lampDepthMaterial, lampDepthScene],
+        [mirrored, mirrorScene],
+        [photon, photonScene],
+        [wire, scene],
+      ] as const) {
         const m = new THREE.Mesh(batch.geometry, material);
         m.frustumCulled = false;
         m.visible = false;
         target.add(m);
-        drawn.push({ mesh: m, batch, role: material === glass || material === mirrored ? 'glass' : material === wire ? 'wire' : 'other' });
+        drawn.push({
+          mesh: m,
+          batch,
+          role: material === glass || material === mirrored ? 'glass' : material === wire ? 'wire' : 'other',
+        });
         if (kind === KIND.diamond) {
           if (material === glass) diamondGlassMeshes.push(m);
           else if (material === mirrored) diamondMirrorMeshes.push(m);
@@ -670,8 +658,6 @@ export function createInstancedGlass(
     }
   }
   const lightCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
-  /** Triangles in one object of each shape, and how many were drawn last frame. */
-  const triangleCount = (g: THREE.BufferGeometry) => (g.index ? g.index.count : g.getAttribute('position').count) / 3;
   const trianglesOf = bases.map(triangleCount);
   const fineTrianglesOf = fineBases.map(triangleCount);
   const setDiamondCut = (cut: DiamondCut) => {
@@ -703,7 +689,7 @@ export function createInstancedGlass(
   };
   let lastTriangles = 0;
 
-  // -------------------------------------------------------------- state ---
+  /* Layer-sorting state */
   let lightDirty = true;
   let lastSun = '';
   const depth = new Float32Array(MAX_OBJECTS);
@@ -733,7 +719,10 @@ export function createInstancedGlass(
     let nearest = Infinity;
     let farthest = -Infinity;
     for (let i = 0; i < n; i++) {
-      const d = (objects.center[i * 3] - c.x) * forward.x + (objects.center[i * 3 + 1] - c.y) * forward.y + (objects.center[i * 3 + 2] - c.z) * forward.z;
+      const d =
+        (objects.center[i * 3] - c.x) * forward.x +
+        (objects.center[i * 3 + 1] - c.y) * forward.y +
+        (objects.center[i * 3 + 2] - c.z) * forward.z;
       depth[i] = d;
       // (Read back, so the limits are rounded to 32 bits just as the stored depths are.)
       if (depth[i] < nearest) nearest = depth[i];
@@ -782,7 +771,9 @@ export function createInstancedGlass(
     const slope = 2 * Math.max(1, Math.hypot(sunDir.x, sunDir.z) / Math.max(sunDir.y, 0.1));
     for (let i = 0; i < objects.count; i++) {
       // Higher objects cast their shadows and caustics farther away, the more so the lower the lamp.
-      const spread = Math.max(Math.abs(objects.center[i * 3]), Math.abs(objects.center[i * 3 + 2])) + objects.center[i * 3 + 1] * slope;
+      const spread =
+        Math.max(Math.abs(objects.center[i * 3]), Math.abs(objects.center[i * 3 + 2])) +
+        objects.center[i * 3 + 1] * slope;
       if (spread > reach) reach = spread;
     }
     return Math.ceil((reach + 3) / 4) * 4; // in 4 m steps, so it does not shimmer
@@ -807,7 +798,19 @@ export function createInstancedGlass(
   function render(
     glass:
       | GlassMaterial
-      | { ior: number; dispersion: number; roughness?: number; frostScale?: number; diamondCut?: DiamondCut; cmy?: number; cmyOrder?: CmyFaceOrder; bevel?: number; color?: [number, number, number, number]; wireframe?: boolean; wireColor?: [number, number, number, number] },
+      | {
+          ior: number;
+          dispersion: number;
+          roughness?: number;
+          frostScale?: number;
+          diamondCut?: DiamondCut;
+          cmy?: number;
+          cmyOrder?: CmyFaceOrder;
+          bevel?: number;
+          color?: [number, number, number, number];
+          wireframe?: boolean;
+          wireColor?: [number, number, number, number];
+        },
     light: InstancedLighting,
     moved: boolean,
     wireColorOverride?: [number, number, number, number],
@@ -827,7 +830,7 @@ export function createInstancedGlass(
     const wantWire = glass.wireframe ?? false;
     const wireColor = wireColorOverride ?? (!isMat ? glass.wireColor : undefined) ?? [0.01, 0.01, 0.01, 1];
     setDiamondCut(diamondCut);
-    marks = timed ? [] : null;
+    timer.beginFrame();
     // Wireframe only: the edges in place of the glass, and nothing mirrored in the floor.
     if (wantWire !== wireOn) {
       wireOn = wantWire;
@@ -869,7 +872,19 @@ export function createInstancedGlass(
     uSunE.value.fromArray(light.sunE);
     uAlbedo.value.fromArray(light.groundColor);
     sunDir.fromArray(light.sunDir);
-    const sunKey = light.sunDir.join() + light.shadowSoftness + light.causticSoftness + '/' + light.causticStrength + ior + cmy + cmyOrder + bevel + color.join() + String(light.realCaustics) + String(light.objectShadows);
+    const sunKey =
+      light.sunDir.join() +
+      light.shadowSoftness +
+      light.causticSoftness +
+      '/' +
+      light.causticStrength +
+      ior +
+      cmy +
+      cmyOrder +
+      bevel +
+      color.join() +
+      String(light.realCaustics) +
+      String(light.objectShadows);
     if (sunKey !== lastSun) {
       lastSun = sunKey;
       lightDirty = true;
@@ -881,7 +896,9 @@ export function createInstancedGlass(
     // and again when the shadow map is redrawn.
     let drawn = 0;
     for (let kind = 0; kind < KIND_COUNT; kind++) {
-      drawn += trianglesOf[kind] * (far[kind].count + near[kind].count) + fineTrianglesOf[kind] * (fineFar[kind].count + fineNear[kind].count);
+      drawn +=
+        trianglesOf[kind] * (far[kind].count + near[kind].count) +
+        fineTrianglesOf[kind] * (fineFar[kind].count + fineNear[kind].count);
     }
     const passes = 1 + (light.ground && light.floorReflection > 0 ? 1 : 0) + (lightDirty ? 1 : 0);
     lastTriangles = drawn * passes + 2 * 4; // plus the full-screen passes
@@ -923,9 +940,25 @@ export function createInstancedGlass(
       const perMetre = 0.5 / half; // texture coordinates per metre of floor
       if (!light.realCaustics) {
         blur(causticMap.texture, shadeNear, light.shadowSoftness * perMetre);
-        blur(shadeNear.texture, shadeFar, Math.max(light.shadowSoftness * 3, 0.25) * perMetre, undefined, shadeFarScratch, 0, 2);
+        blur(
+          shadeNear.texture,
+          shadeFar,
+          Math.max(light.shadowSoftness * 3, 0.25) * perMetre,
+          undefined,
+          shadeFarScratch,
+          0,
+          2,
+        );
       } else {
-        blur(causticMap.texture, shadeFar, Math.max(light.shadowSoftness * 3, 0.25) * perMetre, undefined, shadeFarScratch, 0, 2);
+        blur(
+          causticMap.texture,
+          shadeFar,
+          Math.max(light.shadowSoftness * 3, 0.25) * perMetre,
+          undefined,
+          shadeFarScratch,
+          0,
+          2,
+        );
         uGlass.value.set(glass.ior, glass.dispersion, 6, 0);
         mark('Caustics');
         renderer.setClearColor(0x000000, 0);
@@ -1048,7 +1081,15 @@ export function createInstancedGlass(
     if (light.glow > 0) {
       const aspect = uRes.value.x / uRes.value.y;
       const cut = 1 / Math.max(light.exposure, 1e-4);
-      blur(nearLayer.texture, glowLayer, isMobile ? 0.022 : 0.014, (isMobile ? 0.022 : 0.014) * aspect, glowScratch, cut, 1);
+      blur(
+        nearLayer.texture,
+        glowLayer,
+        isMobile ? 0.022 : 0.014,
+        (isMobile ? 0.022 : 0.014) * aspect,
+        glowScratch,
+        cut,
+        1,
+      );
       if (!isMobile) {
         blur(glowLayer.texture, glowLayer, 0.032, 0.032 * aspect, glowScratch, 0, 1);
       }
@@ -1058,48 +1099,17 @@ export function createInstancedGlass(
     uLens.value.set(light.focus, light.depthOfField, light.glow, light.filmic ? 1 : 0);
     renderer.setRenderTarget(null);
     lensQuad.render(renderer);
-    if (marks) {
-      markedFrames.set(renderer.info.frame, marks);
-      for (const frame of markedFrames.keys()) if (frame < renderer.info.frame - 30) markedFrames.delete(frame);
-    }
+    timer.endFrame();
   }
 
-  // ------------------------------------------------------------- timing ---
-  // With the renderer set to keep GPU timestamps (?timing), how long each part of
-  // the frame takes on the GPU. Every render call in a frame is numbered; before
-  // each part, the number of the next call is noted with its name.
-  const timed = (renderer.backend as unknown as { trackTimestamp?: boolean }).trackTimestamp === true;
-  let marks: [number, string][] | null = null;
-  const markedFrames = new Map<number, [number, string][]>();
-  function mark(name: string) {
-    if (marks) marks.push([renderer.info.render.frameCalls + 1, name]);
-  }
-  /** GPU time (ms) of each part of the latest frame timed, or null if not timing. */
-  async function passTimes(): Promise<Record<string, number> | null> {
-    if (!timed) return null;
-    await renderer.resolveTimestampsAsync(THREE.TimestampQuery.RENDER);
-    const pool = (renderer.backend as unknown as { timestampQueryPool: Record<string, { timestamps: Map<string, number> } | null> }).timestampQueryPool.render;
-    if (!pool) return null;
-    // The calls of each frame: number -> GPU time.
-    const frames = new Map<number, Map<number, number>>();
-    for (const [uid, ms] of pool.timestamps) {
-      const match = uid.match(/^r:(\d+):.*:f(\d+)$/);
-      if (!match) continue;
-      const frame = Number(match[2]);
-      if (!frames.has(frame)) frames.set(frame, new Map());
-      frames.get(frame)!.set(Number(match[1]), ms);
-    }
-    const frame = [...frames.keys()].filter((f) => markedFrames.has(f)).sort((a, b) => b - a)[0];
-    if (frame === undefined) return null;
-    const frameMarks = markedFrames.get(frame)!;
-    const out: Record<string, number> = {};
-    for (const [call, ms] of frames.get(frame)!) {
-      let name = 'Other';
-      for (const [from, label] of frameMarks) if (call >= from) name = label;
-      out[name] = (out[name] ?? 0) + ms;
-    }
-    return out;
-  }
+  const timer = createPassTimer(renderer);
+  const mark = (name: string) => timer.mark(name);
 
-  return { render, resize, markChanged: () => (lightDirty = true), triangles: () => lastTriangles, passTimes };
+  return {
+    render,
+    resize,
+    markChanged: () => (lightDirty = true),
+    triangles: () => lastTriangles,
+    passTimes: timer.passTimes,
+  };
 }

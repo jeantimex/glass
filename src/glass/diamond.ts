@@ -35,7 +35,15 @@ function planeThrough(a: V, b: V, c: V): number[] {
 }
 
 /** Outward plane with horizontal direction (hx, hz), vertical slope angle (deg), passing through (px, py, pz). */
-function slopedPlane(hx: number, hz: number, angleDeg: number, px: number, py: number, pz: number, upward: boolean): number[] {
+function slopedPlane(
+  hx: number,
+  hz: number,
+  angleDeg: number,
+  px: number,
+  py: number,
+  pz: number,
+  upward: boolean,
+): number[] {
   const hLen = Math.hypot(hx, hz);
   const rad = THREE.MathUtils.degToRad(angleDeg);
   const sinA = Math.sin(rad);
@@ -72,7 +80,7 @@ function restingFacet(planes: number[]): { rest: number; lean: number } {
   };
 }
 
-// ------------------------------------------------ 1. Round Brilliant ---
+/* 1. Round Brilliant */
 const ROUND_PLANES: number[] = (() => {
   const GIRDLE = 1.0823922;
   const TABLE = 0.56;
@@ -108,7 +116,7 @@ const ROUND_PLANES: number[] = (() => {
   return planes;
 })();
 
-// ------------------------------------------------ 2. Princess Cut ---
+/* 2. Princess Cut */
 const PRINCESS_PLANES: number[] = (() => {
   const W = 0.92;
   const HG = 0.032;
@@ -117,7 +125,12 @@ const PRINCESS_PLANES: number[] = (() => {
   // 4 square girdle faces
   planes.push(1, 0, 0, W, -1, 0, 0, W, 0, 0, 1, W, 0, 0, -1, W);
   // 4 main crown bezels & 4 main pavilion facets
-  for (const [hx, hz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+  for (const [hx, hz] of [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ]) {
     planes.push(...slopedPlane(hx, hz, 35, hx * W, HG, hz * W, true));
     planes.push(...slopedPlane(hx, hz, 44, hx * W, -HG, hz * W, false));
   }
@@ -136,8 +149,15 @@ const PRINCESS_PLANES: number[] = (() => {
   return planes;
 })();
 
-// ---------------------------------------- Helper for step cuts (Emerald & Asscher) ---
-function makeStepCut(wx: number, wz: number, clip: number, tableY: number, crownSteps: [number, number][], pavSteps: [number, number][]): number[] {
+/* Step-cut helper (Emerald & Asscher) */
+function makeStepCut(
+  wx: number,
+  wz: number,
+  clip: number,
+  tableY: number,
+  crownSteps: [number, number][],
+  pavSteps: [number, number][],
+): number[] {
   const HG = 0.032;
   const planes: number[] = [0, 1, 0, tableY]; // table
   // Distance from origin to the 45-degree clipped corner plane
@@ -176,27 +196,43 @@ function makeStepCut(wx: number, wz: number, clip: number, tableY: number, crown
   return planes;
 }
 
-// ------------------------------------------------ 3. Emerald Cut ---
+/* 3. Emerald Cut */
 const EMERALD_PLANES: number[] = makeStepCut(
   0.78, // half-width X
-  1.10, // half-length Z (~1.4:1 classic emerald ratio)
+  1.1, // half-length Z (~1.4:1 classic emerald ratio)
   0.34, // clipped corner width
   0.29, // table height
-  [[52, 0.0], [38, 0.09], [24, 0.17]], // 3 crown steps
-  [[57, 0.0], [45, 0.24], [34, 0.44]], // 3 pavilion steps
+  [
+    [52, 0.0],
+    [38, 0.09],
+    [24, 0.17],
+  ], // 3 crown steps
+  [
+    [57, 0.0],
+    [45, 0.24],
+    [34, 0.44],
+  ], // 3 pavilion steps
 );
 
-// ------------------------------------------------ 4. Asscher Cut ---
+/* 4. Asscher Cut */
 const ASSCHER_PLANES: number[] = makeStepCut(
-  0.90, // square X
-  0.90, // square Z
+  0.9, // square X
+  0.9, // square Z
   0.48, // wider Art Deco clipped corners
   0.35, // taller crown, smaller table
-  [[55, 0.0], [41, 0.11], [27, 0.21]], // 3 high crown steps
-  [[60, 0.0], [48, 0.28], [36, 0.52]], // 3 deep pavilion steps
+  [
+    [55, 0.0],
+    [41, 0.11],
+    [27, 0.21],
+  ], // 3 high crown steps
+  [
+    [60, 0.0],
+    [48, 0.28],
+    [36, 0.52],
+  ], // 3 deep pavilion steps
 );
 
-// ------------------------------------------------ 5. Cushion Cut ---
+/* 5. Cushion Cut */
 const CUSHION_PLANES: number[] = (() => {
   const W = 0.96;
   const HG = 0.032;
@@ -236,9 +272,9 @@ const CUSHION_PLANES: number[] = (() => {
   return planes;
 })();
 
-// ------------------------------------------------ 6. Radiant Cut ---
+/* 6. Radiant Cut */
 const RADIANT_PLANES: number[] = (() => {
-  const WX = 0.80;
+  const WX = 0.8;
   const WZ = 1.06;
   const CLIP = 0.34;
   const HG = 0.032;
@@ -247,9 +283,14 @@ const RADIANT_PLANES: number[] = (() => {
   const planes: number[] = [0, 1, 0, TABLE_Y]; // table
   // 8 clipped-rectangle girdle faces
   const dirs8: [number, number, number][] = [
-    [1, 0, WX], [-1, 0, WX], [0, 1, WZ], [0, -1, WZ],
-    [Math.SQRT1_2, Math.SQRT1_2, cornerD], [-Math.SQRT1_2, Math.SQRT1_2, cornerD],
-    [Math.SQRT1_2, -Math.SQRT1_2, cornerD], [-Math.SQRT1_2, -Math.SQRT1_2, cornerD],
+    [1, 0, WX],
+    [-1, 0, WX],
+    [0, 1, WZ],
+    [0, -1, WZ],
+    [Math.SQRT1_2, Math.SQRT1_2, cornerD],
+    [-Math.SQRT1_2, Math.SQRT1_2, cornerD],
+    [Math.SQRT1_2, -Math.SQRT1_2, cornerD],
+    [-Math.SQRT1_2, -Math.SQRT1_2, cornerD],
   ];
   for (const [hx, hz, dist] of dirs8) {
     planes.push(hx, 0, hz, dist);
@@ -262,14 +303,21 @@ const RADIANT_PLANES: number[] = (() => {
   // 8 intermediate star & pavilion-chevron facets for blazing Radiant fire
   for (const sx of [-1, 1]) {
     for (const sz of [-1, 1]) {
-      for (const [mx, mz] of [[2, 1], [1, 2]]) {
+      for (const [mx, mz] of [
+        [2, 1],
+        [1, 2],
+      ]) {
         const hx = sx * mx;
         const hz = sz * mz;
         const len = Math.hypot(hx, hz);
         const nx = hx / len;
         const nz = hz / len;
         // Support distance on the clipped rectangle along (nx, nz)
-        const dRect = Math.min(WX / Math.max(Math.abs(nx), 1e-4), WZ / Math.max(Math.abs(nz), 1e-4), cornerD / Math.max((Math.abs(nx) + Math.abs(nz)) * Math.SQRT1_2, 1e-4));
+        const dRect = Math.min(
+          WX / Math.max(Math.abs(nx), 1e-4),
+          WZ / Math.max(Math.abs(nz), 1e-4),
+          cornerD / Math.max((Math.abs(nx) + Math.abs(nz)) * Math.SQRT1_2, 1e-4),
+        );
         planes.push(...slopedPlane(nx, nz, 22, nx * dRect * 0.72, TABLE_Y - 0.035, nz * dRect * 0.72, true));
         planes.push(...slopedPlane(nx, nz, 45, nx * dRect * 0.98, -HG, nz * dRect * 0.98, false));
       }

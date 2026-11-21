@@ -54,7 +54,11 @@ describe('diamond cuts & convex polyhedron geometry', () => {
         const vz = pos.getZ(i);
         expect(Number.isFinite(vx) && Number.isFinite(vy) && Number.isFinite(vz)).toBe(true);
         for (let p = 0; p < spec.planeCount; p++) {
-          const signed = spec.planes[p * 4] * vx + spec.planes[p * 4 + 1] * vy + spec.planes[p * 4 + 2] * vz - spec.planes[p * 4 + 3];
+          const signed =
+            spec.planes[p * 4] * vx +
+            spec.planes[p * 4 + 1] * vy +
+            spec.planes[p * 4 + 2] * vz -
+            spec.planes[p * 4 + 3];
           expect(signed).toBeLessThanOrEqual(1e-4);
         }
       }

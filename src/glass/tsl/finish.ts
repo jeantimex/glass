@@ -10,7 +10,33 @@ import * as TSL from 'three/tsl';
 
 type N = any;
 // (Untyped: three's TSL typings reject much that compiles, such as a vector in select.)
-const { Continue, Fn, If, Loop, abs, clamp, cos, cross, dot, exp, float, fract, int, length, max, min, mix, normalize, select, sin, smoothstep, sqrt, vec2, vec3, vec4 } = TSL as N;
+const {
+  Continue,
+  Fn,
+  If,
+  Loop,
+  abs,
+  clamp,
+  cos,
+  cross,
+  dot,
+  exp,
+  float,
+  fract,
+  int,
+  length,
+  max,
+  min,
+  mix,
+  normalize,
+  select,
+  sin,
+  smoothstep,
+  sqrt,
+  vec2,
+  vec3,
+  vec4,
+} = TSL as N;
 
 /**
  * A Gaussian blur of `src` along `dir` (in texture coordinates, out to its full
@@ -88,15 +114,31 @@ export function contactShadeNode(cam: ScreenCamera, p: N, src: N, taps = 8): N {
         const n = vec3(0, 1, 0).toVar();
         If(onFloor.not(), () => {
           // The surface's direction, from its neighbours (on each axis, the one nearer in depth).
-          const right = src.sample(uv.add(vec2(px.x, 0))).level(0).a.toVar();
-          const left = src.sample(uv.sub(vec2(px.x, 0))).level(0).a.toVar();
-          const below = src.sample(uv.add(vec2(0, px.y))).level(0).a.toVar();
-          const above = src.sample(uv.sub(vec2(0, px.y))).level(0).a.toVar();
-          const alongX = fastPointAt(uv.add(vec2(px.x, 0)), right).sub(at).toVar();
+          const right = src
+            .sample(uv.add(vec2(px.x, 0)))
+            .level(0)
+            .a.toVar();
+          const left = src
+            .sample(uv.sub(vec2(px.x, 0)))
+            .level(0)
+            .a.toVar();
+          const below = src
+            .sample(uv.add(vec2(0, px.y)))
+            .level(0)
+            .a.toVar();
+          const above = src
+            .sample(uv.sub(vec2(0, px.y)))
+            .level(0)
+            .a.toVar();
+          const alongX = fastPointAt(uv.add(vec2(px.x, 0)), right)
+            .sub(at)
+            .toVar();
           If(abs(left.sub(dist)).lessThan(abs(right.sub(dist))), () => {
             alongX.assign(at.sub(fastPointAt(uv.sub(vec2(px.x, 0)), left)));
           });
-          const alongY = fastPointAt(uv.add(vec2(0, px.y)), below).sub(at).toVar();
+          const alongY = fastPointAt(uv.add(vec2(0, px.y)), below)
+            .sub(at)
+            .toVar();
           If(abs(above.sub(dist)).lessThan(abs(below.sub(dist))), () => {
             alongY.assign(at.sub(fastPointAt(uv.sub(vec2(0, px.y)), above)));
           });
@@ -130,7 +172,9 @@ export function contactShadeNode(cam: ScreenCamera, p: N, src: N, taps = 8): N {
           const there = point.sub(at).toVar();
           const far = length(there);
           crowded.addAssign(
-            max(dot(n, there).div(far.add(1e-4)).sub(0.1), 0).mul(float(1).sub(smoothstep(p.y.mul(0.7), p.y.mul(1.6), far))),
+            max(dot(n, there).div(far.add(1e-4)).sub(0.1), 0).mul(
+              float(1).sub(smoothstep(p.y.mul(0.7), p.y.mul(1.6), far)),
+            ),
           );
         });
         shade.assign(float(1).sub(p.x.mul(select(onFloor, 1.0, 0.3)).mul(clamp(crowded.div(taps).mul(2.6), 0, 1))));
@@ -142,7 +186,13 @@ export function contactShadeNode(cam: ScreenCamera, p: N, src: N, taps = 8): N {
 
 /** How soft a point at that distance is: the radius of its blur, as a share of the height of the picture. */
 function softness(dist: N, focus: N, aperture: N): N {
-  return min(aperture.mul(0.05).mul(abs(dist.sub(focus))).div(max(dist, 0.1)), 0.02);
+  return min(
+    aperture
+      .mul(0.05)
+      .mul(abs(dist.sub(focus)))
+      .div(max(dist, 0.1)),
+    0.02,
+  );
 }
 
 /**
@@ -158,7 +208,9 @@ export function tones(cIn: N): N {
   const start = 0.76;
   const d = 1 - start;
   If(peak.greaterThanEqual(start), () => {
-    const newPeak = float(1).sub(float(d * d).div(peak.add(d - start))).toVar();
+    const newPeak = float(1)
+      .sub(float(d * d).div(peak.add(d - start)))
+      .toVar();
     const grey = float(1).sub(float(1).div(peak.sub(newPeak).mul(0.15).add(1)));
     c.assign(mix(c.mul(newPeak.div(peak)), vec3(newPeak), grey));
   });
@@ -187,7 +239,10 @@ export function lensNode(fragCoord: N, res: N, p: N, finish: N, src: N, glow: N,
       Loop(5, ({ i }: { i: N }) => {
         const a = float(i).mul(1.2566371);
         const offset = select(i.equal(0), vec2(0), vec2(cos(a), sin(a)).mul(0.03));
-        const d = src.sample(vec2(0.5).add(offset.mul(vec2(res.y.div(res.x), 1)))).level(0).a.toVar();
+        const d = src
+          .sample(vec2(0.5).add(offset.mul(vec2(res.y.div(res.x), 1))))
+          .level(0)
+          .a.toVar();
         If(d.lessThan(900), () => {
           focus.addAssign(d);
           found.addAssign(1);
@@ -205,7 +260,10 @@ export function lensNode(fragCoord: N, res: N, p: N, finish: N, src: N, glow: N,
           const k = float(i);
           const a = turn.add(k.mul(2.3999632));
           const r = blur.mul(sqrt(k.add(0.5).div(16))).toVar();
-          const there = src.sample(uv.add(vec2(cos(a).mul(r).mul(res.y).div(res.x), sin(a).mul(r)))).level(0).toVar();
+          const there = src
+            .sample(uv.add(vec2(cos(a).mul(r).mul(res.y).div(res.x), sin(a).mul(r))))
+            .level(0)
+            .toVar();
           const w = float(1).toVar();
           If(there.a.lessThan(here.a.sub(0.05)), () => {
             w.assign(clamp(softness(there.a, focus, p.y).div(max(r, 1e-5)), 0, 1));
@@ -219,10 +277,22 @@ export function lensNode(fragCoord: N, res: N, p: N, finish: N, src: N, glow: N,
     // Joint-bilateral upsample of half-res contact shadows (prevents silhouette bleeding).
     If(finish.y.greaterThan(0.5).and(here.a.lessThan(900)), () => {
       const h = finish.zw.mul(0.5).toVar();
-      const s0 = ao.sample(uv.add(vec2(h.x.negate(), h.y.negate()))).level(0).toVar();
-      const s1 = ao.sample(uv.add(vec2(h.x, h.y.negate()))).level(0).toVar();
-      const s2 = ao.sample(uv.add(vec2(h.x.negate(), h.y))).level(0).toVar();
-      const s3 = ao.sample(uv.add(vec2(h.x, h.y))).level(0).toVar();
+      const s0 = ao
+        .sample(uv.add(vec2(h.x.negate(), h.y.negate())))
+        .level(0)
+        .toVar();
+      const s1 = ao
+        .sample(uv.add(vec2(h.x, h.y.negate())))
+        .level(0)
+        .toVar();
+      const s2 = ao
+        .sample(uv.add(vec2(h.x.negate(), h.y)))
+        .level(0)
+        .toVar();
+      const s3 = ao
+        .sample(uv.add(vec2(h.x, h.y)))
+        .level(0)
+        .toVar();
       const w0 = float(1).div(abs(s0.g.sub(here.a)).mul(6).add(1));
       const w1 = float(1).div(abs(s1.g.sub(here.a)).mul(6).add(1));
       const w2 = float(1).div(abs(s2.g.sub(here.a)).mul(6).add(1));

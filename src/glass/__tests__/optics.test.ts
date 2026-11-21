@@ -3,7 +3,15 @@ import * as THREE from 'three/webgpu';
 import { float, texture, texture3D, uniform, vec3, vec4 } from 'three/tsl';
 import { DIAMOND_CUTS, type DiamondCut } from '../diamond';
 import { KIND } from '../objects';
-import { causticNode, glassNode, photonNode, SPECTRAL_BANDS, SPECTRAL_BANDS_FAST, SPECTRAL_COUNT, SPECTRAL_FAST_COUNT } from '../tsl/glass';
+import {
+  causticNode,
+  glassNode,
+  photonNode,
+  SPECTRAL_BANDS,
+  SPECTRAL_BANDS_FAST,
+  SPECTRAL_COUNT,
+  SPECTRAL_FAST_COUNT,
+} from '../tsl/glass';
 
 /** Reference CPU implementation of our exact Cook-Torrance dielectric Fresnel formula (glass.ts). */
 function dielectricFresnel(cosI: number, eta: number): number {
@@ -168,7 +176,16 @@ describe('TSL shader node graph construction', () => {
     for (const kind of Object.values(KIND)) {
       const gn = glassNode(kind, false, vec3(0, 1, 0), vec3(0, 1, 0), gInputs, sInputs, vInputs);
       const gm = glassNode(kind, true, vec3(0, -1, 0), vec3(0, 1, 0), gInputs, sInputs, vInputs);
-      const pn = photonNode(kind, vec3(0, 1, 0), vec3(0, 1, 0), gInputs, sInputs.lamp, sInputs.lightR, sInputs.lightU, 1024);
+      const pn = photonNode(
+        kind,
+        vec3(0, 1, 0),
+        vec3(0, 1, 0),
+        gInputs,
+        sInputs.lamp,
+        sInputs.lightR,
+        sInputs.lightU,
+        1024,
+      );
       expect(gn).toBeTruthy();
       expect(gm).toBeTruthy();
       expect(pn).toBeTruthy();
@@ -181,7 +198,17 @@ describe('TSL shader node graph construction', () => {
     for (const cut of Object.keys(DIAMOND_CUTS) as DiamondCut[]) {
       const planes = DIAMOND_CUTS[cut].planes;
       const gn = glassNode(KIND.diamond, false, vec3(0, 1, 0), vec3(0, 1, 0), gInputs, sInputs, vInputs, planes);
-      const pn = photonNode(KIND.diamond, vec3(0, 1, 0), vec3(0, 1, 0), gInputs, sInputs.lamp, sInputs.lightR, sInputs.lightU, 1024, planes);
+      const pn = photonNode(
+        KIND.diamond,
+        vec3(0, 1, 0),
+        vec3(0, 1, 0),
+        gInputs,
+        sInputs.lamp,
+        sInputs.lightR,
+        sInputs.lightU,
+        1024,
+        planes,
+      );
       expect(gn).toBeTruthy();
       expect(pn).toBeTruthy();
     }
