@@ -3,7 +3,7 @@ import * as THREE from 'three/webgpu';
 import { float, texture, texture3D, uniform, vec3, vec4 } from 'three/tsl';
 import { DIAMOND_CUTS, type DiamondCut } from '../diamond';
 import { KIND } from '../objects';
-import { causticNode, glassNode, photonNode, SPECTRAL_BANDS, SPECTRAL_COUNT } from '../tsl/glass';
+import { causticNode, glassNode, photonNode, SPECTRAL_BANDS, SPECTRAL_BANDS_FAST, SPECTRAL_COUNT, SPECTRAL_FAST_COUNT } from '../tsl/glass';
 
 /** Reference CPU implementation of our exact Cook-Torrance dielectric Fresnel formula (glass.ts). */
 function dielectricFresnel(cosI: number, eta: number): number {
@@ -70,6 +70,27 @@ describe('optical physics invariants', () => {
       const expectedCauchy = (1 / band.wavelength ** 2 - invD2) / (invF2 - invC2);
       expect(band.cauchy).toBeCloseTo(expectedCauchy, 3);
       if (i > 0) expect(band.cauchy).toBeLessThan(SPECTRAL_BANDS[i - 1].cauchy);
+      expect(band.rgb[0]).toBeGreaterThanOrEqual(0);
+      expect(band.rgb[1]).toBeGreaterThanOrEqual(0);
+      expect(band.rgb[2]).toBeGreaterThanOrEqual(0);
+      sumR += band.rgb[0];
+      sumG += band.rgb[1];
+      sumB += band.rgb[2];
+    }
+    expect(sumR).toBeCloseTo(1, 4);
+    expect(sumG).toBeCloseTo(1, 4);
+    expect(sumB).toBeCloseTo(1, 4);
+  });
+
+  it('has energy-conserving, non-negative 3-band CIE 1931 fast spectral weights', () => {
+    expect(SPECTRAL_BANDS_FAST.length).toBe(SPECTRAL_FAST_COUNT);
+    expect(SPECTRAL_FAST_COUNT).toBe(3);
+    let sumR = 0;
+    let sumG = 0;
+    let sumB = 0;
+    for (let i = 0; i < SPECTRAL_BANDS_FAST.length; i++) {
+      const band = SPECTRAL_BANDS_FAST[i];
+      if (i > 0) expect(band.cauchy).toBeLessThan(SPECTRAL_BANDS_FAST[i - 1].cauchy);
       expect(band.rgb[0]).toBeGreaterThanOrEqual(0);
       expect(band.rgb[1]).toBeGreaterThanOrEqual(0);
       expect(band.rgb[2]).toBeGreaterThanOrEqual(0);

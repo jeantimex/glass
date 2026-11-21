@@ -508,8 +508,11 @@ async function main() {
     const w = window.innerWidth;
     const h = window.innerHeight;
     const screenRatio = window.devicePixelRatio || 1;
-    // Cap pixel ratio to keep full-screen HalfFloat passes fast on Retina/mobile GPUs.
-    const pixelRatio = Math.min(screenRatio, isMobile ? 1.5 : 2);
+    // Cap total rendered pixel budget so large Retina displays (e.g. MacBook Pro 2x) and
+    // high-DPR phones stay crisp without overflowing HalfFloat fragment bandwidth.
+    const maxPixels = isMobile ? 550_000 : 2_400_000;
+    const budgetRatio = Math.sqrt(maxPixels / Math.max(w * h, 1));
+    const pixelRatio = Math.max(1, Math.min(screenRatio, isMobile ? 1.5 : 2, budgetRatio));
     renderer.setPixelRatio(pixelRatio);
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
@@ -843,6 +846,7 @@ async function main() {
   let fpsSince = performance.now();
 
   const scaled = (v: number): [number, number, number] => [v * settings.lamp, v * settings.lamp, v * settings.lamp];
+  let renderedSincePoll = false;
 
   {
     // Two columns: names on the left, values lined up on the right.
@@ -872,11 +876,14 @@ async function main() {
     // Some parts are drawn only on some frames (the lamp's maps, when something has
     // moved): each part shows its latest time, for as long as it was seen lately.
     const seen = new Map<string, { ms: number; at: number }>();
-    const order = ['Shadow map', 'Caustics', 'Reflection', 'Ground', 'Far glass', 'Near glass', 'Finishing', 'Other'];
+    const order = ['Shadow map', 'Caustics', 'Reflection', 'Ground', 'Glass', 'Far glass', 'Near glass', 'Finishing', 'Other'];
     const show = async () => {
       const now = performance.now();
-      // (Read even while hidden: unread, three.js's store of timestamps fills up.)
-      for (const [name, ms] of Object.entries((await instanced.passTimes()) ?? {})) seen.set(name, { ms, at: now });
+      // Only read back GPU timestamps when frames were actually rendered since the last poll.
+      if (renderedSincePoll) {
+        renderedSincePoll = false;
+        for (const [name, ms] of Object.entries((await instanced.passTimes()) ?? {})) seen.set(name, { ms, at: now });
+      }
       panel.style.display = ui.stats ? 'grid' : 'none';
       const recent = order.filter((name) => seen.has(name) && now - seen.get(name)!.at < 2000).map((name) => [name, seen.get(name)!.ms] as const);
       const total = recent.reduce((a, [, ms]) => a + ms, 0);
@@ -932,6 +939,7 @@ async function main() {
       return;
     }
     dirtyFrames -= 1;
+    renderedSincePoll = true;
     // The page knows which studio is on, so what is drawn over it (the link in the
     // corner) can be dark on the white one and light on the dark one.
     if (document.body.classList.contains('dark-studio') !== settings.dark) document.body.classList.toggle('dark-studio', settings.dark);

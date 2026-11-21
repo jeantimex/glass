@@ -15,7 +15,7 @@
 import * as THREE from 'three/webgpu';
 import { DIAMOND_CUTS, diamondGeometry, type DiamondCut } from './diamond';
 import { GlassMaterial } from './material';
-import { attribute, cross, normalLocal, positionGeometry, positionWorld, screenCoordinate, texture, texture3D, uniform, vec2, vec3, float, uv, vec4, varying, instanceIndex } from 'three/tsl';
+import { attribute, cross, normalLocal, positionGeometry, positionWorld, screenCoordinate, select, texture, texture3D, uniform, vec2, vec3, float, uv, vec4, varying, instanceIndex } from 'three/tsl';
 import { KIND, MAX_OBJECTS, type GlassObjects } from './objects';
 import { blurNode, contactShadeNode, lensNode } from './tsl/finish';
 import { groundNode } from './tsl/ground';
@@ -69,12 +69,14 @@ export interface InstancedLighting {
   sunDir: [number, number, number];
 }
 
-const CAUSTIC_MAP_SIZE = 2048;
+const CAUSTIC_MAP_SIZE = 1024;
 /** The lamp's depth map, for shadows on the objects themselves. */
 const LAMP_DEPTH_SIZE = 1024;
 const SHADE_MAP_SIZE = 1024;
+/** Wide ambient shadow blur runs at 1/4 the shade map width (16x fewer pixels). */
+const SHADE_FAR_SIZE = 256;
 /** Real caustics: this many rays of light each way (so its square in all). */
-const PHOTON_MAP_SIZE = 1024;
+const PHOTON_MAP_SIZE = 768;
 /** Up to this many objects, the round shapes are drawn with their fine meshes. */
 const FINE_UP_TO = 64;
 /** Above this many objects, the less visible passes are drawn more cheaply. */
@@ -169,9 +171,13 @@ export function createInstancedGlass(
     typeof navigator !== 'undefined' &&
     (/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
       (navigator.maxTouchPoints > 1 && typeof window !== 'undefined' && Math.min(window.innerWidth, window.innerHeight) < 900));
-  const causticMapSize = isMobile ? 1024 : CAUSTIC_MAP_SIZE;
+  const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+  const causticMapSize = isMobile ? 512 : CAUSTIC_MAP_SIZE;
+  const lampDepthSize = isMobile ? 512 : LAMP_DEPTH_SIZE;
+  const shadeMapSize = isMobile ? 512 : SHADE_MAP_SIZE;
   const photonMapSize = isMobile ? 512 : PHOTON_MAP_SIZE;
-  const msaaSamples = isMobile ? 0 : 2;
+  // High-DPI Retina displays already supersample edges; avoid costly 2x RGBA16F MSAA resolves on Apple Silicon & mobile.
+  const msaaSamples = isMobile || dpr >= 1.5 ? 0 : 2;
   const causticMap = new THREE.RenderTarget(causticMapSize, causticMapSize, {
     type: THREE.HalfFloatType,
     format: THREE.RGBAFormat,
@@ -182,7 +188,7 @@ export function createInstancedGlass(
   // How far toward the lamp the nearest object reaches, seen from the lamp (red, plus
   // 100 so that 0, as cleared, means nothing there): the shadows objects cast on
   // each other (see lampVisible in tsl/glass.ts).
-  const lampDepth = new THREE.RenderTarget(LAMP_DEPTH_SIZE, LAMP_DEPTH_SIZE, {
+  const lampDepth = new THREE.RenderTarget(lampDepthSize, lampDepthSize, {
     type: THREE.HalfFloatType,
     format: THREE.RGBAFormat,
     depthBuffer: true,
@@ -190,8 +196,8 @@ export function createInstancedGlass(
     magFilter: THREE.NearestFilter,
   });
   // The caustic map blurred, for soft shadows: a little, and far wider.
-  const makeShade = () =>
-    new THREE.RenderTarget(SHADE_MAP_SIZE, SHADE_MAP_SIZE, {
+  const makeShade = (size = shadeMapSize) =>
+    new THREE.RenderTarget(size, size, {
       type: THREE.HalfFloatType,
       format: THREE.RGBAFormat,
       depthBuffer: false,
@@ -199,6 +205,7 @@ export function createInstancedGlass(
       magFilter: THREE.LinearFilter,
     });
   const shadeScratch = makeShade();
+  const shadeFarScratch = makeShade(SHADE_FAR_SIZE);
   // Real caustics: where each ray of the lamp's light lands, and the rays added up there.
   const photonMap = new THREE.RenderTarget(photonMapSize, photonMapSize, {
     type: THREE.HalfFloatType,
@@ -215,7 +222,7 @@ export function createInstancedGlass(
     magFilter: THREE.LinearFilter,
   });
   const shadeNear = makeShade();
-  const shadeFar = makeShade();
+  const shadeFar = makeShade(SHADE_FAR_SIZE);
   // Real caustics, on the way to the near map: the plain shadow, and the gathered light blurred.
   const openMap = makeShade();
   const gatheredSoft = makeShade();
@@ -232,7 +239,8 @@ export function createInstancedGlass(
   const background = makeTarget(false); // ground and sky
   const farLayer = makeTarget(true); // background plus the farther half of the glass
   const nearLayer = makeTarget(true); // plus the nearer half: the whole picture
-  const shadedLayer = makeTarget(false); // with contact shadows
+  // Half-resolution contact shadows (shade + depth), bilaterally upsampled in lensNode.
+  const aoLayer = makeTarget(false);
   // The glow of the brightest glints, at a quarter of the size.
   const glowScratch = makeTarget(false);
   const glowLayer = makeTarget(false);
@@ -249,6 +257,7 @@ export function createInstancedGlass(
 
   // ----------------------------------------------------------- uniforms ---
   const uRes = uniform(new THREE.Vector2(4, 4));
+  const uAoRes = uniform(new THREE.Vector2(4, 4));
   // 1 when few enough objects are on show for light to enter a baked mesh through its volume (see entry in tsl/glass.ts).
   const uMeshEntry = uniform(0);
   const uCamPos = uniform(new THREE.Vector3());
@@ -268,6 +277,7 @@ export function createInstancedGlass(
   const uGlass = uniform(new THREE.Vector4(1.45, 1, 6, 0)); // ior, dispersion, max events, steps to look for other glass
   const uShade = uniform(new THREE.Vector4()); // contact shadows: strength, radius (m), exposure
   const uLens = uniform(new THREE.Vector4()); // focus distance (m), aperture, glow, tones on
+  const uFinish = uniform(new THREE.Vector4(1, 0, 0.001, 0.001)); // exposure, aoActive (0/1), 1/aoW, 1/aoH
   const uBlurCut = uniform(0);
   const uBlurReach = uniform(6);
   const uTint = uniform(new THREE.Vector4(1, 1, 1, 1)); // the colour of all the glass (linear rgb), and how strongly it applies
@@ -401,14 +411,12 @@ export function createInstancedGlass(
    * Blur `from` into `to` (through a scratch target) by `radiusX` and `radiusY`, in
    * texture coordinates, keeping only what is brighter than `cut`.
    */
-  const blur = (from: THREE.Texture, to: THREE.RenderTarget, radiusX: number, radiusY = radiusX, scratch = shadeScratch, cut = 0) => {
-    // Samples no more than about a texel and a half apart, or they leave streaks:
-    // up to 12 each side of the middle in one pass, and a wider blur as several
-    // narrower ones in a row (which add up to the same blur).
+  const blur = (from: THREE.Texture, to: THREE.RenderTarget, radiusX: number, radiusY = radiusX, scratch = shadeScratch, cut = 0, maxPasses = 4) => {
+    // Each bilinear-paired tap covers 2 texels (up to 6 pairs = 13 fetches per pass).
     const texels = Math.max(radiusX * scratch.width, radiusY * scratch.height);
-    const passes = Math.min(Math.max(Math.ceil((texels / 18) ** 2), 1), 5);
+    const passes = Math.min(Math.max(Math.ceil((texels / 22) ** 2), 1), maxPasses);
     const share = 1 / Math.sqrt(passes);
-    uBlurReach.value = Math.min(Math.max(Math.ceil((texels * share) / 1.5), 3), 12);
+    uBlurReach.value = Math.min(Math.max(Math.ceil((texels * share) / 2.2), 2), 6);
     for (let pass = 0; pass < passes; pass++) {
       blurSource.value = pass === 0 ? from : to.texture;
       uBlurCut.value = pass === 0 ? cut : 0;
@@ -450,13 +458,12 @@ export function createInstancedGlass(
   const rayAt = vec2(rayIndex.sub(rayRow.mul(photonMapSize)), rayRow).add(0.5).div(photonMapSize);
   const ray = texture(photonMap.texture, rayAt);
   const landMaterial = new THREE.NodeMaterial();
-  landMaterial.vertexNode = vec4(
-    vec2(rayAt.x.mul(2).sub(1), float(1).sub(rayAt.y.mul(2)))
-      .add(ray.xy)
-      .add(vec2(positionGeometry.x, positionGeometry.y).mul(ray.a.sub(1).max(1).mul(2 / photonMapSize))),
-    0,
-    1,
-  );
+  const landPos = vec2(rayAt.x.mul(2).sub(1), float(1).sub(rayAt.y.mul(2)))
+    .add(ray.xy)
+    .add(vec2(positionGeometry.x, positionGeometry.y).mul(ray.a.sub(1).max(1).mul(2 / photonMapSize)));
+  // Cull empty photon rays (no glass hit or zero carried light) offscreen before rasterization.
+  const landActive = ray.z.greaterThan(1e-5);
+  landMaterial.vertexNode = vec4(select(landActive, landPos.x, 2), select(landActive, landPos.y, 2), 0, 1);
   landMaterial.fragmentNode = vec4(vec3(varying(ray.z)), 1);
   landMaterial.transparent = true;
   landMaterial.blending = THREE.AdditiveBlending;
@@ -492,7 +499,7 @@ export function createInstancedGlass(
       behindTex: behindNode,
       behindBlurTex: frostNode,
       lampDepthTex: lampDepthNode,
-      lampDepthSize: LAMP_DEPTH_SIZE,
+      lampDepthSize,
     }, diamondPlanes);
     return material;
   };
@@ -539,17 +546,18 @@ export function createInstancedGlass(
 
   // The finishing passes.
   const shadeSource = texture(nearLayer.texture);
+  const aoCamera = { fragCoord: screenCoordinate, res: uAoRes, camPos: uCamPos, camRight: uCamRight, camUp: uCamUp, camFwd: uCamFwd };
   const shadeMaterial = new THREE.NodeMaterial();
-  shadeMaterial.fragmentNode = contactShadeNode(screenCamera, uShade, shadeSource);
+  shadeMaterial.fragmentNode = contactShadeNode(aoCamera, uShade, shadeSource, isMobile ? 6 : 8);
   shadeMaterial.transparent = true;
   shadeMaterial.blending = THREE.NoBlending;
   shadeMaterial.depthTest = shadeMaterial.depthWrite = false;
   const shadeQuad = new THREE.QuadMesh(shadeMaterial);
-  const lensSource = texture(shadedLayer.texture);
+  const aoNode = texture(aoLayer.texture);
   const glowNode = texture(glowLayer.texture);
   // (A basic material, so that three.js converts its colour for the screen.)
   const lensMaterial = new THREE.MeshBasicNodeMaterial();
-  lensMaterial.colorNode = (lensNode(screenCoordinate, uRes, uLens, lensSource, glowNode) as { rgb: THREE.MeshBasicNodeMaterial['colorNode'] }).rgb;
+  lensMaterial.colorNode = (lensNode(screenCoordinate, uRes, uLens, uFinish, shadeSource, glowNode, aoNode) as { rgb: THREE.MeshBasicNodeMaterial['colorNode'] }).rgb;
   lensMaterial.depthTest = lensMaterial.depthWrite = false;
   const lensQuad = new THREE.QuadMesh(lensMaterial);
 
@@ -702,6 +710,9 @@ export function createInstancedGlass(
   const slices = new Uint32Array(1024);
   const order = new Uint32Array(MAX_OBJECTS); // the objects, nearest first
   let lastView = '';
+  let lastCount = -1;
+  let hasFar = false;
+  let hasNear = false;
   const forward = new THREE.Vector3();
   const viewProj = new THREE.Matrix4();
 
@@ -710,12 +721,15 @@ export function createInstancedGlass(
    * something changed: an object moved, or the camera did.
    */
   function sortIntoLayers(moved: boolean) {
+    const n = objects.count;
+    // A single object needs no camera-dependent layer sorting; skip re-uploading its instance buffers on orbit.
+    if (!moved && n <= 1 && lastCount === n) return;
     camera.getWorldDirection(forward);
     const c = camera.position;
-    const n = objects.count;
     const view = `${n} ${c.x} ${c.y} ${c.z} ${forward.x} ${forward.y} ${forward.z}`;
     if (!moved && view === lastView) return;
     lastView = view;
+    lastCount = n;
     let nearest = Infinity;
     let farthest = -Infinity;
     for (let i = 0; i < n; i++) {
@@ -754,6 +768,8 @@ export function createInstancedGlass(
       const i = order[k];
       (depth[i] >= split ? farSet : nearSet)[objects.kind[i]].push(objects, i);
     }
+    hasFar = farSet.some((b) => b.count > 0);
+    hasNear = nearSet.some((b) => b.count > 0);
     for (const b of all) b.commit();
     updateVisibility();
   }
@@ -773,15 +789,18 @@ export function createInstancedGlass(
   }
 
   function resize(width: number, height: number) {
+    const halfW = Math.max(1, width >> 1);
+    const halfH = Math.max(1, height >> 1);
     background.setSize(width, height);
     farLayer.setSize(width, height);
     nearLayer.setSize(width, height);
-    shadedLayer.setSize(width, height);
+    aoLayer.setSize(halfW, halfH);
     glowScratch.setSize(Math.max(1, width >> 2), Math.max(1, height >> 2));
     glowLayer.setSize(Math.max(1, width >> 2), Math.max(1, height >> 2));
     frostLayer.setSize(Math.max(1, width >> 2), Math.max(1, height >> 2));
-    mirrorLayer.setSize(Math.max(1, width >> 1), Math.max(1, height >> 1));
+    mirrorLayer.setSize(halfW, halfH);
     uRes.value.set(width, height);
+    uAoRes.value.set(halfW, halfH);
   }
 
   /** `moved`: some object changed since the last frame (redraws the caustic map). */
@@ -841,8 +860,11 @@ export function createInstancedGlass(
     uViewProj.value.copy(viewProj);
 
     // Lighting and glass settings.
+    const objShadowsActive = light.objectShadows && objects.count > 1;
     uRoom.value = (light.ground ? 1 : 0) + (light.dark ? 2 : 0);
-    uSpot.value.set(light.spotRadius, light.spotRadius * 2.2, 0, 0);
+    // z: object-on-object shadows active (skips 4 lampDepth loads when count <= 1 or disabled);
+    // w: 3-band CIE fast spectral mode (mobile / secondary layers).
+    uSpot.value.set(light.spotRadius, light.spotRadius * 2.2, objShadowsActive ? 1 : 0, isMobile ? 1 : 0);
     uSkyE.value.fromArray(light.skyE);
     uSunE.value.fromArray(light.sunE);
     uAlbedo.value.fromArray(light.groundColor);
@@ -889,19 +911,21 @@ export function createInstancedGlass(
       renderer.setRenderTarget(causticMap);
       renderer.render(lightScene, lightCamera);
       // ... and how far toward the lamp the objects reach, for their shadows on each other.
-      renderer.setClearColor(0x000000, 0);
-      renderer.setRenderTarget(lampDepth);
-      // (Without object shadows it is left cleared: nothing stands in any object's way.)
-      if (light.objectShadows) renderer.render(lampDepthScene, lightCamera);
-      else renderer.clear();
+      // Only needed when multiple objects can shadow each other.
+      if (objShadowsActive) {
+        renderer.setClearColor(0x000000, 0);
+        renderer.setRenderTarget(lampDepth);
+        renderer.render(lampDepthScene, lightCamera);
+      }
       renderer.setClearColor(previousClear, previousAlpha);
-      // Soft shadows: the map blurred a little, and again far wider.
+      // Soft shadows: wide ambient blur runs at 256x256 (16x fewer pixels).
+      // When realCaustics is on, shadeNear is overwritten below, so skip the wasted shadeNear blur.
       const perMetre = 0.5 / half; // texture coordinates per metre of floor
-      blur(causticMap.texture, shadeNear, light.shadowSoftness * perMetre);
-      blur(shadeNear.texture, shadeFar, Math.max(light.shadowSoftness * 3, 0.25) * perMetre);
-      // Real caustics take the place of the near map: every ray of the lamp's light
-      // followed to where it lands (see photonNode in tsl/glass.ts), then added up there.
-      if (light.realCaustics) {
+      if (!light.realCaustics) {
+        blur(causticMap.texture, shadeNear, light.shadowSoftness * perMetre);
+        blur(shadeNear.texture, shadeFar, Math.max(light.shadowSoftness * 3, 0.25) * perMetre, undefined, shadeFarScratch, 0, 2);
+      } else {
+        blur(causticMap.texture, shadeFar, Math.max(light.shadowSoftness * 3, 0.25) * perMetre, undefined, shadeFarScratch, 0, 2);
         uGlass.value.set(glass.ior, glass.dispersion, 6, 0);
         mark('Caustics');
         renderer.setClearColor(0x000000, 0);
@@ -911,7 +935,7 @@ export function createInstancedGlass(
         // as the shadows are set to be ...
         renderer.setRenderTarget(openMap);
         openQuad.render(renderer);
-        blur(openMap.texture, shadeNear, light.shadowSoftness * perMetre);
+        blur(openMap.texture, shadeNear, light.shadowSoftness * perMetre, undefined, shadeScratch, 0, 2);
         // ... plus the light that came through the glass, gathered where it lands
         // and blurred as much as the lamp is wide: a small lamp throws sharp
         // caustics, a large soft one smooth pools of light.
@@ -919,7 +943,7 @@ export function createInstancedGlass(
         renderer.setRenderTarget(landedMap);
         renderer.render(landScene, lightCamera);
         renderer.setClearColor(previousClear, previousAlpha);
-        blur(landedMap.texture, gatheredSoft, light.causticSoftness * perMetre);
+        blur(landedMap.texture, gatheredSoft, light.causticSoftness * perMetre, undefined, shadeScratch, 0, 2);
         renderer.setRenderTarget(shadeNear);
         renderer.autoClear = false;
         uAddGain.value = light.causticStrength;
@@ -934,8 +958,8 @@ export function createInstancedGlass(
     // the far half (seen through the near half) skip dispersion and follow the
     // light through fewer bounces.
     const many = objects.count > MANY_OBJECTS;
-    // Floor mirror reflection is half-res and blurred: skip dispersion & cap bounces.
-    uGlass.value.set(ior, 0, many ? 2 : 3, 0);
+    // Floor mirror reflection is half-res and blurred: skip dispersion & cap bounces to 2.
+    uGlass.value.set(ior, 0, 2, 0);
     uFloor.value.x = light.ground ? light.floorReflection : 0;
     uFloor.value.y = light.realCaustics ? -light.shadowDarkness : light.shadowDarkness; // (negative: see icGroundColor)
     uFloor.value.z = light.floorGrid ? 1 : 0;
@@ -963,32 +987,32 @@ export function createInstancedGlass(
     const rough = uRoughness.value;
     const frostBlur = (source: THREE.Texture) => {
       const aspect = uRes.value.x / uRes.value.y;
-      const r1 = 0.01 + rough * 0.025;
-      const r2 = 0.022 + rough * 0.055;
-      blur(source, frostLayer, r1, r1 * aspect, glowScratch);
-      blur(frostLayer.texture, frostLayer, r2, r2 * aspect, glowScratch);
-      if (rough > 0.25) {
-        const r3 = 0.035 + rough * 0.085;
-        blur(frostLayer.texture, frostLayer, r3, r3 * aspect, glowScratch);
-      }
+      const r1 = 0.012 + rough * 0.03;
+      const r2 = 0.026 + rough * 0.065;
+      // Capped to 1 pass each (4 total render passes max vs up to 18 previously).
+      blur(source, frostLayer, r1, r1 * aspect, glowScratch, 0, 1);
+      blur(frostLayer.texture, frostLayer, r2, r2 * aspect, glowScratch, 0, 1);
     };
     if (rough > 0.001) frostBlur(background.texture);
     const twoLayer = light.seeThrough && objects.count > 1;
     if (!twoLayer) {
       // Single-pass fast path (single object, or Glass through glass disabled):
       // skip farLayer and its full-screen copy, and disable lookThrough raymarching.
-      uGlass.value.set(ior, dispersion, many ? 5 : 6, 0);
+      uSpot.value.w = isMobile || many ? 1 : 0;
+      uGlass.value.set(ior, dispersion, many ? 5 : isMobile ? 5 : 6, 0);
       mark('Glass');
       renderer.setRenderTarget(nearLayer);
       copySource.value = background.texture;
       copyQuad.render(renderer);
       renderer.autoClear = false;
       behindNode.value = background.texture;
-      renderer.render(farScene, camera);
-      renderer.render(nearScene, camera);
+      if (hasFar) renderer.render(farScene, camera);
+      if (hasNear) renderer.render(nearScene, camera);
       renderer.autoClear = true;
     } else {
-      uGlass.value.set(ior, many ? 0 : dispersion, many ? 4 : 6, 0);
+      // Far layer is seen refracted behind near glass: use 3-band CIE spectral mode (~2x faster).
+      uSpot.value.w = 1;
+      uGlass.value.set(ior, many ? 0 : dispersion, many ? 4 : isMobile ? 4 : 5, 0);
       mark('Far glass');
       renderer.setRenderTarget(farLayer);
       copySource.value = background.texture;
@@ -1005,24 +1029,32 @@ export function createInstancedGlass(
       copySource.value = farLayer.texture;
       copyQuad.render(renderer);
       renderer.autoClear = false;
-      uGlass.value.set(ior, dispersion, many ? 5 : 6, many ? 4 : 6);
+      uSpot.value.w = isMobile || many ? 1 : 0;
+      uGlass.value.set(ior, dispersion, many ? 4 : isMobile ? 5 : 6, many ? 4 : isMobile ? 4 : 6);
       behindNode.value = farLayer.texture;
       renderer.render(nearScene, camera);
       renderer.autoClear = true;
     }
 
-    // 6. Finishing: contact shadows (and exposure) ...
-    uShade.value.set(light.contactShadows, light.contactRadius, light.exposure, 0);
+    // 6. Finishing: half-res contact shadows (skipped when disabled) ...
+    const aoActive = light.contactShadows > 0.001;
     mark('Finishing');
-    renderer.setRenderTarget(shadedLayer);
-    shadeQuad.render(renderer);
-    // ... the glow of whatever is brighter than white, blurred wide ...
+    if (aoActive) {
+      uShade.value.set(light.contactShadows, light.contactRadius, light.exposure, 0);
+      renderer.setRenderTarget(aoLayer);
+      shadeQuad.render(renderer);
+    }
+    // ... the glow of whatever is brighter than white, blurred wide (cut = 1/exposure, scaled by exposure in lensNode) ...
     if (light.glow > 0) {
       const aspect = uRes.value.x / uRes.value.y;
-      blur(shadedLayer.texture, glowLayer, 0.012, 0.012 * aspect, glowScratch, 1);
-      blur(glowLayer.texture, glowLayer, 0.03, 0.03 * aspect, glowScratch);
+      const cut = 1 / Math.max(light.exposure, 1e-4);
+      blur(nearLayer.texture, glowLayer, isMobile ? 0.022 : 0.014, (isMobile ? 0.022 : 0.014) * aspect, glowScratch, cut, 1);
+      if (!isMobile) {
+        blur(glowLayer.texture, glowLayer, 0.032, 0.032 * aspect, glowScratch, 0, 1);
+      }
     }
-    // ... and the camera: depth of field, glow and tones, onto the screen.
+    // ... and the camera: bilateral contact shadow composite, exposure, depth of field, glow and tones, onto the screen.
+    uFinish.value.set(light.exposure, aoActive ? 1 : 0, 1 / uAoRes.value.x, 1 / uAoRes.value.y);
     uLens.value.set(light.focus, light.depthOfField, light.glow, light.filmic ? 1 : 0);
     renderer.setRenderTarget(null);
     lensQuad.render(renderer);

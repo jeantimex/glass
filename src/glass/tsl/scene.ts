@@ -136,14 +136,12 @@ export function sceneFunctions(s: SceneInputs, backdrop: boolean) {
     return vec2(dot(v, s.lightR).mul(0.5).add(0.5), float(0.5).sub(dot(v, s.lightU).mul(0.5)));
   };
 
-  /** How much of the main lamp's light reaches a ground point: the caustic map, lightly blurred. */
+  /** How much of the main lamp's light reaches a ground point: single hardware-bilinear lookup (used only for refracted rays). */
   const sunT = Fn(([g]: N[]) => {
     const uv = lightUv(g).toVar();
     const out = vec3(1).toVar();
     If(uv.x.greaterThan(0).and(uv.x.lessThan(1)).and(uv.y.greaterThan(0)).and(uv.y.lessThan(1)), () => {
-      const px = 1 / s.lightTexSize;
-      const at = (x: number, y: number) => s.lightTex.sample(uv.add(vec2(x * px, y * px))).level(0).rgb;
-      out.assign(at(0, 0).mul(2).add(at(1.5, 0.5)).add(at(-0.5, 1.5)).add(at(-1.5, -0.5)).add(at(0.5, -1.5)).div(6));
+      out.assign(s.lightTex.sample(uv).level(0).rgb);
     });
     return out;
   }).setLayout({ name: 'icSunT', type: 'vec3', inputs: [{ name: 'g', type: 'vec3' }] });
@@ -178,10 +176,12 @@ export function sceneFunctions(s: SceneInputs, backdrop: boolean) {
   const groundColor = Fn(([g]: N[]) => {
     // The floor's shadows are blurred: the shadow of the main lamp a little, and a
     // much wider, fainter one where objects keep the light of the room off the floor.
-    const direct = clamp(sunT(g), vec3(0), vec3(1)).toVar();
     const pool = spotPool(g).toVar();
     // Blurred only where the floor is seen directly, not through glass.
-    if (!backdrop) return floorAlbedo.mul(s.skyE.mul(direct.mul(0.45).add(0.55)).add(s.sunE.mul(direct).mul(pool)));
+    if (!backdrop) {
+      const direct = clamp(sunT(g), vec3(0), vec3(1)).toVar();
+      return floorAlbedo.mul(s.skyE.mul(direct.mul(0.45).add(0.55)).add(s.sunE.mul(direct).mul(pool)));
+    }
     const uv = lightUv(g).toVar();
     // x a little blurred (the shadow of the lamp), y far wider (the room's light kept off).
     const shade = vec2(s.shadeTex.sample(uv).level(0).g, s.shadeFarTex.sample(uv).level(0).g).toVar();

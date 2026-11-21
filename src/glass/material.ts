@@ -467,7 +467,7 @@ export class GlassMaterial extends THREE.MeshBasicNodeMaterial {
 
       const ior = max(uIor, 1.0001).toVar();
       const disp = uDispersion.div(12).toVar();
-      const layers = select(disp.greaterThan(0), int(SPECTRAL_COUNT), int(1)).toVar();
+      const layers = select(disp.greaterThan(0).and(uRoughness.lessThan(0.35)), int(SPECTRAL_COUNT), int(1)).toVar();
       const baseTint = mix(vec3(1), uTint, uColorAlpha).toVar();
       const sigma = log(max(baseTint, vec3(1e-4))).negate().div(max(reach, 1e-4)).toVar();
       const col = vec3(0).toVar();
@@ -584,7 +584,7 @@ export class GlassMaterial extends THREE.MeshBasicNodeMaterial {
       const ior = max(uIor, 1.0001).toVar();
       const disp = uDispersion.div(12).toVar();
       const maxEvents = uBounces.toInt();
-      const layers = select(disp.greaterThan(0), int(SPECTRAL_COUNT), int(1)).toVar();
+      const layers = select(disp.greaterThan(0).and(uRoughness.lessThan(0.35)), int(SPECTRAL_COUNT), int(1)).toVar();
       const baseTint = mix(vec3(1), uTint, uColorAlpha).toVar();
       const sigma = log(max(baseTint, vec3(1e-4))).negate().div(max(reach.mul(2), 1e-4)).toVar();
       const entryFace = vec3(1).toVar();
@@ -605,7 +605,7 @@ export class GlassMaterial extends THREE.MeshBasicNodeMaterial {
         const dir = refract(d0, n0, float(1).div(iorIn)).toVar();
         const pos = vec3(p0).toVar();
         const filtered = vec3(entryFace).toVar();
-        If(thr.greaterThan(0.004).and(dot(dir, dir).greaterThan(1e-6)), () => {
+        If(thr.greaterThan(0.012).and(dot(dir, dir).greaterThan(1e-6)), () => {
           Loop({ start: int(1), end: maxEvents, type: 'int', condition: '<', name: 'ev' }, () => {
             const hit = exit(pos, dir, size);
             pos.assign(hit.pos);
@@ -622,20 +622,20 @@ export class GlassMaterial extends THREE.MeshBasicNodeMaterial {
               f.assign(1);
             });
             const outW = thr.mul(float(1).sub(f)).toVar();
-            If(outW.greaterThan(0.004), () => {
+            If(outW.greaterThan(0.01), () => {
               const wDir = toWorldDir(rf);
               const bend = wDir.sub(d0World).xy.mul(0.12);
               const seen = lookEnv(toWorldPos(pos.add(nrm.mul(0.003))), wDir, bend);
               layer.addAssign(filtered.mul(face).mul(outW.mul(seen)));
             });
             thr.mulAssign(f);
-            If(thr.lessThan(0.004), () => {
+            If(thr.lessThan(0.015), () => {
               Break();
             });
             dir.assign(reflect(dir, nrm.negate()));
             filtered.mulAssign(face);
           });
-          If(thr.greaterThanEqual(0.004), () => {
+          If(thr.greaterThanEqual(0.015), () => {
             const wDir = toWorldDir(dir);
             const bend = wDir.sub(d0World).xy.mul(0.12);
             layer.addAssign(filtered.mul(thr.mul(lookEnv(toWorldPos(pos), wDir, bend))));

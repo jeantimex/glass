@@ -6,7 +6,7 @@ import type { ScreenCamera } from './finish';
 import { sceneFunctions, type SceneInputs } from './scene';
 
 type N = any;
-const { Fn, If, Loop, abs, bool, clamp, cos, dot, exp, float, fract, max, min, mix, normalize, select, sin, sqrt, vec2, vec3, vec4 } = TSL as N;
+const { Fn, If, abs, bool, clamp, dot, exp, float, fract, max, min, mix, normalize, select, sqrt, vec2, vec3, vec4 } = TSL as N;
 
 /**
  * How far a ray travels inside the cone of the spotlight (from the lamp, spot.y
@@ -133,21 +133,31 @@ export function groundNode(cam: ScreenCamera, s: SceneInputs, mirror: N): N {
       const uv = fragCoord.div(res).toVar();
       // The mirror picture's alpha falls with height above the floor: a polished (not
       // mirror) floor shows what touches it clearly, and what is higher up fainter
-      // and more blurred.
-      const m = mirror.sample(uv).level(0).toVar();
-      const px = vec2(mix(9, 1, clamp(m.a.mul(1.3), 0, 1))).div(res).toVar();
-      // Cheap probe: skip the spiral blur on empty floor far from any mirrored object.
-      const probe = m.a
-        .add(mirror.sample(uv.add(vec2(px.x, 0))).level(0).a)
-        .add(mirror.sample(uv.sub(vec2(px.x, 0))).level(0).a)
-        .add(mirror.sample(uv.add(vec2(0, px.y))).level(0).a)
-        .add(mirror.sample(uv.sub(vec2(0, px.y))).level(0).a);
+      // and more blurred. Reuse the 4 probe taps inside the 9-tap disc blur to avoid
+      // redundant texture fetches and trig on every floor pixel.
+      const m0 = mirror.sample(uv).level(0).toVar();
+      const px = vec2(mix(9, 1, clamp(m0.a.mul(1.3), 0, 1))).div(res).toVar();
+      const ax = px.mul(0.7).toVar();
+      const p1 = mirror.sample(uv.add(vec2(ax.x, 0))).level(0).toVar();
+      const p2 = mirror.sample(uv.sub(vec2(ax.x, 0))).level(0).toVar();
+      const p3 = mirror.sample(uv.add(vec2(0, ax.y))).level(0).toVar();
+      const p4 = mirror.sample(uv.sub(vec2(0, ax.y))).level(0).toVar();
+      const probe = m0.a.add(p1.a).add(p2.a).add(p3.a).add(p4.a);
+      const m = m0.toVar();
       If(probe.greaterThan(1e-4), () => {
-        Loop(8, ({ i }: { i: N }) => {
-          const a = float(i).mul(2.3999632);
-          m.addAssign(mirror.sample(uv.add(vec2(cos(a), sin(a)).mul(sqrt(float(i).add(0.5).div(8))).mul(px))).level(0));
-        });
-        m.divAssign(9);
+        const diag = px.mul(0.70710678).toVar();
+        m.assign(
+          m0
+            .add(p1)
+            .add(p2)
+            .add(p3)
+            .add(p4)
+            .add(mirror.sample(uv.add(diag)).level(0))
+            .add(mirror.sample(uv.sub(diag)).level(0))
+            .add(mirror.sample(uv.add(vec2(diag.x, diag.y.negate()))).level(0))
+            .add(mirror.sample(uv.add(vec2(diag.x.negate(), diag.y))).level(0))
+            .div(9),
+        );
       });
       const grazing = float(1).sub(clamp(rd.y.negate(), 0, 1)).toVar();
       // (A black floor shows its reflections the more clearly: twice as strong in the dark studio.)
