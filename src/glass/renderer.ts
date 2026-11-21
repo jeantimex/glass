@@ -40,7 +40,7 @@ import { KIND, MAX_OBJECTS, type GlassObjects } from './objects';
 import { createPassTimer } from './timing';
 import { causticNode, photonNode as photonRayNode } from './tsl/caustics';
 import { CMY_FACE_ORDERS, type CmyFaceOrder } from './tsl/cmy';
-import { blurNode, contactShadeNode, lensNode } from './tsl/finish';
+import { bloomPrefilterNode, blurNode, contactShadeNode, lensNode } from './tsl/finish';
 import { glassNode } from './tsl/glass';
 import { groundNode } from './tsl/ground';
 
@@ -87,6 +87,10 @@ export interface InstancedLighting {
   sunE: [number, number, number];
   /** Unit vector toward the main lamp. */
   sunDir: [number, number, number];
+  /** Optional equirectangular HDRI environment texture (overrides procedural studio env). */
+  envMap?: THREE.Texture | null;
+  /** Intensity multiplier for `envMap` (default 1). */
+  envMapIntensity?: number;
 }
 
 const CAUSTIC_MAP_SIZE = 1024;
@@ -243,6 +247,7 @@ export function createInstancedGlass(
   const uFinish = uniform(new THREE.Vector4(1, 0, 0.001, 0.001)); // exposure, aoActive (0/1), 1/aoW, 1/aoH
   const uBlurCut = uniform(0);
   const uBlurReach = uniform(6);
+  const uGlowStep = uniform(new THREE.Vector2(0.001, 0.001)); // 1 / fullRes for 4x4 bilinear bloom prefilter
   const uTint = uniform(new THREE.Vector4(1, 1, 1, 1)); // the colour of all the glass (linear rgb), and how strongly it applies
   const uCmy = uniform(0); // above 0: boxes are CMY cubes, with filters this strong
   const uCmyOrder = uniform(new THREE.Vector3(0, 1, 2)); // CMY face color permutation (X, Y, Z -> 0=C, 1=Y, 2=M)
@@ -255,6 +260,15 @@ export function createInstancedGlass(
   const uGridColor = uniform(new THREE.Vector4(0.033, 0.033, 0.033, 1)); // floor grid linear rgb + alpha
   const uBlurDir = uniform(new THREE.Vector2());
   const uMirrorCam = uniform(new THREE.Vector3()); // the camera, mirrored in the floor
+  const uEnvP = uniform(new THREE.Vector2(0, 1)); // x: envMap enabled, y: intensity
+  const fallbackEnvTex = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+  fallbackEnvTex.wrapS = THREE.RepeatWrapping;
+  fallbackEnvTex.wrapT = THREE.ClampToEdgeWrapping;
+  fallbackEnvTex.minFilter = THREE.LinearMipmapLinearFilter;
+  fallbackEnvTex.magFilter = THREE.LinearFilter;
+  fallbackEnvTex.generateMipmaps = true;
+  fallbackEnvTex.needsUpdate = true;
+  const envTexNode = texture(fallbackEnvTex);
 
   const lightNode = texture(causticMap.texture);
   const behindNode = texture(background.texture);
@@ -355,6 +369,8 @@ export function createInstancedGlass(
     lamp: uSunDir,
     lightTex: lightNode,
     lightTexSize: causticMapSize,
+    envTex: envTexNode,
+    envP: uEnvP,
   };
   /** The camera as the passes over the whole picture see it. */
   const screenCamera = {
@@ -573,6 +589,10 @@ export function createInstancedGlass(
   shadeMaterial.blending = THREE.NoBlending;
   shadeMaterial.depthTest = shadeMaterial.depthWrite = false;
   const shadeQuad = new THREE.QuadMesh(shadeMaterial);
+  const glowPrefilterMaterial = new THREE.NodeMaterial();
+  glowPrefilterMaterial.fragmentNode = bloomPrefilterNode(uv(), uGlowStep, uBlurCut, float(6), shadeSource);
+  glowPrefilterMaterial.depthTest = glowPrefilterMaterial.depthWrite = false;
+  const glowPrefilterQuad = new THREE.QuadMesh(glowPrefilterMaterial);
   const aoNode = texture(aoLayer.texture);
   const glowNode = texture(glowLayer.texture);
   // (A basic material, so that three.js converts its colour for the screen.)
@@ -801,6 +821,7 @@ export function createInstancedGlass(
     mirrorLayer.setSize(halfW, halfH);
     uRes.value.set(width, height);
     uAoRes.value.set(halfW, halfH);
+    uGlowStep.value.set(1 / Math.max(1, width), 1 / Math.max(1, height));
   }
 
   /** `moved`: some object changed since the last frame (redraws the caustic map). */
@@ -881,6 +902,8 @@ export function createInstancedGlass(
     uSunE.value.fromArray(light.sunE);
     uAlbedo.value.fromArray(light.groundColor);
     sunDir.fromArray(light.sunDir);
+    envTexNode.value = light.envMap ?? fallbackEnvTex;
+    uEnvP.value.set(light.envMap ? 1 : 0, light.envMapIntensity ?? 1);
     const sunKey =
       light.sunDir.join() +
       light.shadowSoftness +
@@ -1086,21 +1109,23 @@ export function createInstancedGlass(
       renderer.setRenderTarget(aoLayer);
       shadeQuad.render(renderer);
     }
-    // ... the glow of whatever is brighter than white, blurred wide (cut = 1/exposure, scaled by exposure in lensNode) ...
+    // ... the glow of whatever is brighter than white, prefiltered to quarter-res (4x4 box + soft HDR cap) then blurred wide ...
     if (light.glow > 0) {
       const aspect = uRes.value.x / uRes.value.y;
-      const cut = 1 / Math.max(light.exposure, 1e-4);
+      uBlurCut.value = 1 / Math.max(light.exposure, 1e-4);
+      renderer.setRenderTarget(glowLayer);
+      glowPrefilterQuad.render(renderer);
       blur(
-        nearLayer.texture,
+        glowLayer.texture,
         glowLayer,
         isMobile ? 0.022 : 0.014,
         (isMobile ? 0.022 : 0.014) * aspect,
         glowScratch,
-        cut,
+        0,
         1,
       );
       if (!isMobile) {
-        blur(glowLayer.texture, glowLayer, 0.032, 0.032 * aspect, glowScratch, 0, 1);
+        blur(glowLayer.texture, glowLayer, 0.032, 0.032 * aspect, glowScratch, 0, 2);
       }
     }
     // ... and the camera: bilateral contact shadow composite, exposure, depth of field, glow and tones, onto the screen.

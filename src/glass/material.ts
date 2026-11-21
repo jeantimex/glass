@@ -114,13 +114,29 @@ export interface GlassMaterialParameters {
   lampDirection?: THREE.Vector3 | [number, number, number];
   /** Exposure multiplier (default 1.0). */
   exposure?: number;
-  /** Apply Khronos neutral filmic tone mapping (default true). */
+  /** Apply Khronos neutral filmic tone mapping inside the material (default false so `renderer.toneMapping` handles it). */
   filmic?: boolean;
+  /** Optional equirectangular HDRI / environment texture (overrides the built-in procedural studio). */
+  envMap?: THREE.Texture | null;
+  /** Intensity multiplier for `envMap` (default 1.0). */
+  envMapIntensity?: number;
   /** Optional screen-space background texture to refract through the glass. */
   backgroundTexture?: THREE.Texture | null;
   /** Optional blurred background texture for frosted transmission. */
   backgroundBlurTexture?: THREE.Texture | null;
 }
+
+/** Shared 1x1 white fallback texture so optional texture nodes bind cleanly without per-instance leaks. */
+const FALLBACK_TEXTURE = (() => {
+  const tex = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.generateMipmaps = true;
+  tex.needsUpdate = true;
+  return tex;
+})();
 
 /**
  * Standalone physical glass material for Three.js WebGPU & WebGL 2.
@@ -138,6 +154,7 @@ export class GlassMaterial extends THREE.MeshBasicNodeMaterial {
   readonly shape: GlassShape;
   private _diamondCut: DiamondCut;
   private _cmyOrder: CmyFaceOrder;
+  private _envMap: THREE.Texture | null = null;
 
   private readonly uIor = uniform(1.52);
   private readonly uDispersion = uniform(0.5);
@@ -152,12 +169,15 @@ export class GlassMaterial extends THREE.MeshBasicNodeMaterial {
   private readonly uDark = uniform(0);
   private readonly uGround = uniform(1);
   private readonly uExposure = uniform(1);
-  private readonly uFilmic = uniform(1);
+  private readonly uFilmic = uniform(0);
+  private readonly uHasEnvMap = uniform(0);
+  private readonly uEnvMapIntensity = uniform(1);
   private readonly uGroundColor: N;
   private readonly uLampDir: N;
   private readonly uShapeSize: N;
   private readonly uHasBg = uniform(0);
   private readonly uHasBgBlur = uniform(0);
+  private readonly envTexNode: N;
   private readonly bgTexNode: N;
   private readonly bgBlurTexNode: N;
 
@@ -182,7 +202,8 @@ export class GlassMaterial extends THREE.MeshBasicNodeMaterial {
     this.uDark.value = params.dark ? 1 : 0;
     this.uGround.value = (params.ground ?? true) ? 1 : 0;
     this.uExposure.value = params.exposure ?? 1;
-    this.uFilmic.value = (params.filmic ?? true) ? 1 : 0;
+    this.uFilmic.value = (params.filmic ?? false) ? 1 : 0;
+    this.uEnvMapIntensity.value = params.envMapIntensity ?? 1;
 
     const gCol = new THREE.Color(params.groundColor ?? 0xeeeeee);
     this.uGroundColor = uniform(gCol);
@@ -202,11 +223,12 @@ export class GlassMaterial extends THREE.MeshBasicNodeMaterial {
         : new THREE.Vector3(1, 1, 1);
     this.uShapeSize = uniform(sz);
 
-    // 1x1 fallback white texture so texture nodes always bind cleanly even without backgroundTexture.
-    const fallbackTex = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
-    fallbackTex.needsUpdate = true;
-    this.bgTexNode = texture(params.backgroundTexture ?? fallbackTex);
-    this.bgBlurTexNode = texture(params.backgroundBlurTexture ?? params.backgroundTexture ?? fallbackTex);
+    this._envMap = params.envMap ?? null;
+    this.envTexNode = texture(this._envMap ?? FALLBACK_TEXTURE);
+    this.uHasEnvMap.value = this._envMap ? 1 : 0;
+
+    this.bgTexNode = texture(params.backgroundTexture ?? FALLBACK_TEXTURE);
+    this.bgBlurTexNode = texture(params.backgroundBlurTexture ?? params.backgroundTexture ?? FALLBACK_TEXTURE);
     this.uHasBg.value = params.backgroundTexture ? 1 : 0;
     this.uHasBgBlur.value = params.backgroundBlurTexture ? 1 : 0;
 
@@ -347,12 +369,62 @@ export class GlassMaterial extends THREE.MeshBasicNodeMaterial {
     this.uShapeSize.value.copy(v);
   }
 
+  override get envMap(): THREE.Texture | null {
+    return this._envMap;
+  }
+  override set envMap(tex: THREE.Texture | null) {
+    this._envMap = tex;
+    // Guard for `super()` calling `setDefaultValues()` before subclass fields initialize.
+    if (this.envTexNode) {
+      this.envTexNode.value = tex ?? FALLBACK_TEXTURE;
+      this.uHasEnvMap.value = tex ? 1 : 0;
+    }
+  }
+
+  get envMapIntensity(): number {
+    return this.uEnvMapIntensity.value;
+  }
+  set envMapIntensity(v: number) {
+    this.uEnvMapIntensity.value = v;
+  }
+
+  /** Create an independent clone of this `GlassMaterial` with identical optical parameters. */
+  override clone(): this {
+    return new GlassMaterial({
+      ior: this.ior,
+      dispersion: this.dispersion,
+      roughness: this.roughness,
+      frostScale: this.frostScale,
+      color: this.color.clone(),
+      colorAlpha: this.colorAlpha,
+      thickness: this.thickness,
+      bounces: this.bounces,
+      shape: this.shape,
+      shapeSize: this.shapeSize.clone(),
+      diamondCut: this.diamondCut,
+      bevel: this.bevel,
+      cmy: this.cmy,
+      cmyOrder: this.cmyOrder,
+      dark: this.dark,
+      ground: this.ground,
+      groundColor: this.groundColor.clone(),
+      lampDirection: this.lampDirection.clone(),
+      exposure: this.exposure,
+      filmic: this.filmic,
+      envMap: this._envMap,
+      envMapIntensity: this.envMapIntensity,
+      backgroundTexture: this.uHasBg.value > 0.5 ? this.bgTexNode.value : null,
+      backgroundBlurTexture: this.uHasBgBlur.value > 0.5 ? this.bgBlurTexNode.value : null,
+    }) as this;
+  }
+
   /** Attach or update a screen-space background texture (and optional blurred copy for frost). */
   setBackground(sharp: THREE.Texture | null, blurred: THREE.Texture | null = null): void {
     if (sharp) {
       this.bgTexNode.value = sharp;
       this.uHasBg.value = 1;
     } else {
+      this.bgTexNode.value = FALLBACK_TEXTURE;
       this.uHasBg.value = 0;
     }
     if (blurred) {
@@ -362,13 +434,18 @@ export class GlassMaterial extends THREE.MeshBasicNodeMaterial {
       this.bgBlurTexNode.value = sharp;
       this.uHasBgBlur.value = 0;
     } else {
+      this.bgBlurTexNode.value = FALLBACK_TEXTURE;
       this.uHasBgBlur.value = 0;
     }
   }
 
   private buildColorNode(): N {
     const uTint = uniform(this.color);
-    const { sampleScene } = makeStudioEnv(this.uDark, this.uGround, this.uGroundColor, this.uLampDir, this.uRoughness);
+    const { sampleScene } = makeStudioEnv(this.uDark, this.uGround, this.uGroundColor, this.uLampDir, this.uRoughness, {
+      envTexNode: this.envTexNode,
+      uHasEnvMap: this.uHasEnvMap,
+      uEnvMapIntensity: this.uEnvMapIntensity,
+    });
 
     const lookEnv = Fn(([ro, rd, bendOffset]: N[]) => {
       const out = sampleScene(ro, rd).toVar();

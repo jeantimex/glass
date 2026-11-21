@@ -11,6 +11,7 @@ import {
 } from '../glass';
 import { createLoadingScreen, loadBinaryMesh, loadMeshVolumes, showFatalError } from './assets';
 import { CMY_STRENGTH, layoutGrid, restingPose } from './grid';
+import { getCachedHdri, HDRI_PRESET_LABELS, loadHdriPreset } from './hdri';
 import {
   MAX_COUNT,
   SHAPES,
@@ -629,6 +630,22 @@ async function main() {
   }
 
   const lighting = gui.addFolder('Lighting');
+  const hdriCtrl = lighting.add(settings, 'hdri', HDRI_PRESET_LABELS).name('Environment');
+  const hdriIntensityCtrl = lighting.add(settings, 'hdriIntensity', 0.1, 3, 0.05).name('HDRI intensity');
+  const syncHdriControls = () => {
+    const preset = settings.hdri;
+    hdriIntensityCtrl.show(preset !== 'none');
+    instanced.markChanged();
+    markDirty();
+    if (preset !== 'none' && !getCachedHdri(preset)) {
+      void loadHdriPreset(preset, isMobile ? '2k' : '4k').then(() => {
+        instanced.markChanged();
+        markDirty();
+      });
+    }
+  };
+  hdriCtrl.onChange(syncHdriControls);
+  hdriIntensityCtrl.show(settings.hdri !== 'none');
   lighting
     .add(settings, 'dark')
     .name('Dark studio')
@@ -643,7 +660,7 @@ async function main() {
   lighting.add(settings, 'ground').name('Ground');
   lighting.addColor(settings, 'groundColor').name('Ground color');
   lighting.add(settings, 'exposure', 0.1, 4, 0.01).name('Exposure');
-  addReset(lighting);
+  addReset(lighting, syncHdriControls);
   lighting.close();
 
   const cameraFolder = gui.addFolder('Camera');
@@ -798,6 +815,8 @@ async function main() {
         skyE: spot ? [0.02, 0.02, 0.02] : settings.dark ? [0.004, 0.004, 0.004] : [0.26, 0.26, 0.26],
         sunE: scaled(spot ? 0.3 : settings.dark ? 0.022 : 0.55),
         sunDir: [Math.cos(lampUp) * Math.cos(lampRound), Math.sin(lampUp), Math.cos(lampUp) * Math.sin(lampRound)],
+        envMap: getCachedHdri(settings.hdri),
+        envMapIntensity: settings.hdriIntensity,
       },
       // (Nothing moves by itself: a new scene marks itself changed.)
       false,

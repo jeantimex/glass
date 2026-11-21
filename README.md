@@ -140,34 +140,38 @@ Extends `THREE.MeshBasicNodeMaterial`.
 
 #### Constructor Parameters & Live Properties
 
-| Property                | Type                                        | Default            | Description                                                                                                                                 |
-| :---------------------- | :------------------------------------------ | :----------------- | :------------------------------------------------------------------------------------------------------------------------------------------ |
-| `ior`                   | `number`                                    | `1.52`             | Index of refraction (`1.0` – `2.5`). Examples: `1.47` borosilicate, `1.49` acrylic, `1.52` crown glass, `1.62` flint glass, `2.42` diamond. |
-| `dispersion`            | `number`                                    | `0.5`              | Chromatic dispersion strength (`0` disables RGB splitting; `0.4` realistic diamond fire; `1.0+` vivid prism fire).                          |
-| `roughness`             | `number`                                    | `0`                | Frosted glass amount (`0` = crystal clear, `1` = fully frosted 毛玻璃).                                                                     |
-| `frostScale`            | `number`                                    | `4`                | Frosted grain density (`0.5` = coarse etched frost, `4`–`12` = fine sandblasted micro-particles).                                           |
-| `color`                 | `THREE.ColorRepresentation`                 | `0xffffff`         | Volumetric glass tint color (Beer–Lambert transmittance across one characteristic diameter).                                                |
-| `colorAlpha`            | `number`                                    | `1`                | Blend strength of `color` (`0` = clear regardless of `color`, `1` = full tint).                                                             |
-| `thickness`             | `number`                                    | `1`                | Characteristic thickness in world units used for `'mesh'` mode refraction & absorption.                                                     |
-| `bounces`               | `number`                                    | `6`                | Maximum internal reflection/refraction events for analytic shapes.                                                                          |
-| `shape`                 | [`GlassShape`](#glassshape)                 | `'mesh'`           | `'mesh'` for any `THREE.BufferGeometry`, or an analytic shape for exact multi-bounce internal raytracing. _(Read-only after construction.)_ |
-| `shapeSize`             | `[number, number, number] \| THREE.Vector3` | `[1, 1, 1]`        | Local-space size parameters for analytic shapes (radius, half-extents, etc.).                                                               |
-| `diamondCut`            | [`DiamondCut`](#diamondcut)                 | `'round'`          | Facet cut when `shape === 'diamond'`. Updating this property on a diamond material rebuilds the facet shader automatically.                 |
-| `bevel`                 | `number`                                    | `0`                | Edge bevel width in local units when `shape === 'box'`.                                                                                     |
-| `cmy`                   | `number`                                    | `0`                | CMY dichroic face-filter strength (`0`–`1`) when `shape === 'box'`.                                                                         |
-| `dark`                  | `boolean`                                   | `false`            | Switches the procedural studio lighting from bright light-tent (`false`) to dark jeweller’s studio (`true`).                                |
-| `ground`                | `boolean`                                   | `true`             | Includes a procedural ground plane in reflections and refractions.                                                                          |
-| `groundColor`           | `THREE.ColorRepresentation`                 | `0xeeeeee`         | Albedo color of the procedural ground plane.                                                                                                |
-| `lampDirection`         | `THREE.Vector3 \| [number, number, number]` | `[-0.6, 0.7, 0.4]` | Direction vector toward the main studio lamp (automatically normalized).                                                                    |
-| `exposure`              | `number`                                    | `1`                | Linear exposure multiplier before tone mapping.                                                                                             |
-| `filmic`                | `boolean`                                   | `true`             | Applies the Khronos Neutral filmic tone-mapping curve.                                                                                      |
-| `backgroundTexture`     | `THREE.Texture \| null`                     | `null`             | Optional screen-space background texture to refract through the glass.                                                                      |
-| `backgroundBlurTexture` | `THREE.Texture \| null`                     | `null`             | Optional blurred copy of `backgroundTexture` used when `roughness > 0`.                                                                     |
+| Property                | Type                                        | Default            | Description                                                                                                                                         |
+| :---------------------- | :------------------------------------------ | :----------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ior`                   | `number`                                    | `1.52`             | Index of refraction (`1.0` – `2.5`). Examples: `1.47` borosilicate, `1.49` acrylic, `1.52` crown glass, `1.62` flint glass, `2.42` diamond.         |
+| `dispersion`            | `number`                                    | `0.5`              | Chromatic dispersion strength (`0` disables RGB splitting; `0.4` realistic diamond fire; `1.0+` vivid prism fire).                                  |
+| `roughness`             | `number`                                    | `0`                | Frosted glass amount (`0` = crystal clear, `1` = fully frosted 毛玻璃).                                                                             |
+| `frostScale`            | `number`                                    | `4`                | Frosted grain density (`0.5` = coarse etched frost, `4`–`12` = fine sandblasted micro-particles).                                                   |
+| `color`                 | `THREE.ColorRepresentation`                 | `0xffffff`         | Volumetric glass tint color (Beer–Lambert transmittance across one characteristic diameter).                                                        |
+| `colorAlpha`            | `number`                                    | `1`                | Blend strength of `color` (`0` = clear regardless of `color`, `1` = full tint).                                                                     |
+| `thickness`             | `number`                                    | `1`                | Characteristic thickness in world units used for `'mesh'` mode refraction & absorption.                                                             |
+| `bounces`               | `number`                                    | `6`                | Maximum internal reflection/refraction events for analytic shapes.                                                                                  |
+| `shape`                 | [`GlassShape`](#glassshape)                 | `'mesh'`           | `'mesh'` for any `THREE.BufferGeometry`, or an analytic shape for exact multi-bounce internal raytracing. _(Read-only after construction.)_         |
+| `shapeSize`             | `[number, number, number] \| THREE.Vector3` | `[1, 1, 1]`        | Local-space size parameters for analytic shapes (radius, half-extents, etc.).                                                                       |
+| `diamondCut`            | [`DiamondCut`](#diamondcut)                 | `'round'`          | Facet cut when `shape === 'diamond'`. Updating this property on a diamond material rebuilds the facet shader automatically.                         |
+| `bevel`                 | `number`                                    | `0`                | Edge bevel width in local units when `shape === 'box'`.                                                                                             |
+| `cmy`                   | `number`                                    | `0`                | CMY dichroic face-filter strength (`0`–`1`) when `shape === 'box'`.                                                                                 |
+| `dark`                  | `boolean`                                   | `false`            | Switches the procedural studio lighting from bright light-tent (`false`) to dark jeweller’s studio (`true`).                                        |
+| `ground`                | `boolean`                                   | `true`             | Includes a procedural ground plane in reflections and refractions.                                                                                  |
+| `groundColor`           | `THREE.ColorRepresentation`                 | `0xeeeeee`         | Albedo color of the procedural ground plane.                                                                                                        |
+| `lampDirection`         | `THREE.Vector3 \| [number, number, number]` | `[-0.6, 0.7, 0.4]` | Direction vector toward the main studio lamp (automatically normalized).                                                                            |
+| `exposure`              | `number`                                    | `1`                | Linear exposure multiplier before tone mapping.                                                                                                     |
+| `filmic`                | `boolean`                                   | `false`            | Applies Khronos Neutral filmic tone mapping inside the material (default `false` so `renderer.toneMapping` handles it without double tone-mapping). |
+| `envMap`                | `THREE.Texture \| null`                     | `null`             | Optional equirectangular HDRI / environment texture (overrides the built-in procedural studio; mip-blurred automatically by `roughness`).           |
+| `envMapIntensity`       | `number`                                    | `1`                | Intensity multiplier applied to `envMap`.                                                                                                           |
+| `backgroundTexture`     | `THREE.Texture \| null`                     | `null`             | Optional screen-space background texture to refract through the glass.                                                                              |
+| `backgroundBlurTexture` | `THREE.Texture \| null`                     | `null`             | Optional blurred copy of `backgroundTexture` used when `roughness > 0`.                                                                             |
 
 #### Methods
 
 - **`setBackground(sharp: THREE.Texture | null, blurred?: THREE.Texture | null): void`**
   Binds or clears the screen-space refraction textures at runtime.
+- **`clone(): GlassMaterial`**
+  Creates an independent clone with identical optical parameters and texture bindings.
 
 ---
 

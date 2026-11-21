@@ -39,6 +39,26 @@ const {
 } = TSL as N;
 
 /**
+ * Quarter-resolution bloom prefilter: averages a 4×4 block of full-resolution pixels
+ * via 4 hardware-bilinear taps at `(±1, ±1) * texelStep`, extracts HDR excess above
+ * `cut`, and applies a hue-preserving soft firefly shoulder (`e * cap / (cap + peak)`)
+ * so extreme HDRI sun glints (~1000+) produce a smooth halo instead of vertical combing.
+ */
+export function bloomPrefilterNode(uv: N, texelStep: N, cut: N, cap: N, src: N): N {
+  const tap = (dx: number, dy: number) => {
+    const raw = src.sample(uv.add(texelStep.mul(vec2(dx, dy)))).level(0).rgb;
+    const excess = raw.sub(cut).max(0);
+    const peak = max(excess.r, max(excess.g, excess.b));
+    // Soft Reinhard-style shoulder: preserves chromatic dispersion hue while bounding HDR peaks.
+    return excess.mul(cap.div(cap.add(peak)));
+  };
+  return Fn(() => {
+    const sum = tap(-1, -1).add(tap(1, -1)).add(tap(-1, 1)).add(tap(1, 1));
+    return vec4(sum.mul(0.25), 1);
+  })();
+}
+
+/**
  * A Gaussian blur of `src` along `dir` (in texture coordinates, out to its full
  * length), `reach` bilinear-paired samples each side of the middle (covering
  * 2*reach steps with ~half the texture fetches via hardware linear filtering).

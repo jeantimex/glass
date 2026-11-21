@@ -32,7 +32,9 @@ describe('GlassMaterial standalone API', () => {
     expect(mat.bounces).toBe(6);
     expect(mat.dark).toBe(false);
     expect(mat.ground).toBe(true);
-    expect(mat.filmic).toBe(true);
+    expect(mat.filmic).toBe(false);
+    expect(mat.envMap).toBeNull();
+    expect(mat.envMapIntensity).toBe(1);
     expect(mat.colorNode).toBeTruthy();
   });
 
@@ -126,5 +128,31 @@ describe('GlassMaterial standalone API', () => {
     expect(() => mat.setBackground(tex, blur)).not.toThrow();
     expect(() => mat.setBackground(tex)).not.toThrow();
     expect(() => mat.setBackground(null)).not.toThrow();
+  });
+
+  it('supports equirectangular envMap, envMapIntensity, and clone() without recompiling', () => {
+    const hdr = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+    const mat = new GlassMaterial({ ior: 1.66, roughness: 0.25, envMap: hdr, envMapIntensity: 1.4, filmic: true });
+    const originalNode = mat.colorNode;
+    expect(mat.envMap).toBe(hdr);
+    expect(mat.envMapIntensity).toBeCloseTo(1.4);
+    expect(mat.filmic).toBe(true);
+
+    mat.envMap = null;
+    mat.envMapIntensity = 0.8;
+    expect(mat.envMap).toBeNull();
+    expect(mat.envMapIntensity).toBeCloseTo(0.8);
+    expect(mat.colorNode).toBe(originalNode);
+
+    mat.envMap = hdr;
+    const copy = mat.clone();
+    expect(copy).not.toBe(mat);
+    expect(copy.ior).toBeCloseTo(1.66);
+    expect(copy.roughness).toBeCloseTo(0.25);
+    expect(copy.envMap).toBe(hdr);
+    expect(copy.envMapIntensity).toBeCloseTo(0.8);
+    expect(copy.filmic).toBe(true);
+    copy.ior = 2.0;
+    expect(mat.ior).toBeCloseTo(1.66);
   });
 });

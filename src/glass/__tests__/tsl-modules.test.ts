@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { Fn, float, texture, texture3D, uniform, uv, vec2, vec3 } from 'three/tsl';
 import { KIND } from '../objects';
-import { blurNode, contactShadeNode, lensNode, tones } from '../tsl/finish';
+import { bloomPrefilterNode, blurNode, contactShadeNode, lensNode, tones } from '../tsl/finish';
 import { applyFrostVeil, frostNoise3, perturbFrostNormal } from '../tsl/frost';
 import { groundNode } from '../tsl/ground';
 import { sceneFunctions } from '../tsl/scene';
@@ -100,6 +100,8 @@ describe('modular TSL shader units', () => {
       lightTexSize: 1024,
       shadeTex: texture(dummyTex),
       shadeFarTex: texture(dummyTex),
+      envTex: texture(dummyTex),
+      envP: uniform(new THREE.Vector2(1, 1.2)),
     };
     const cam = {
       fragCoord: vec2(10, 10),
@@ -114,6 +116,9 @@ describe('modular TSL shader units', () => {
     expect(backdropScene.scene(vec3(0, 2, 0), vec3(0, -1, 0), float(1), float(0))).toBeTruthy();
     expect(groundNode(cam, sInputs, texture(dummyTex))).toBeTruthy();
 
+    expect(
+      bloomPrefilterNode(uv(), uniform(new THREE.Vector2(0.001, 0.001)), uniform(1), float(6), texture(dummyTex)),
+    ).toBeTruthy();
     expect(blurNode(uv(), uniform(new THREE.Vector2(0.01, 0)), uniform(0), uniform(6), texture(dummyTex))).toBeTruthy();
     expect(contactShadeNode(cam, uniform(new THREE.Vector4(0.7, 0.3, 1, 0)), texture(dummyTex))).toBeTruthy();
     expect(Fn(() => tones(vec3(0.5, 1.2, 2.0)))()).toBeTruthy();

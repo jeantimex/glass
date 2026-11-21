@@ -111,8 +111,11 @@ export function groundNode(cam: ScreenCamera, s: SceneInputs, mirror: N): N {
       camFwd.xyz.add(camRight.xyz.mul(ndc.x.mul(camFwd.w).mul(camRight.w))).add(camUp.mul(ndc.y.mul(camFwd.w))),
     ).toVar();
     const col = scene(camPos, rd, float(1), float(0)).toVar();
+    const hasEnvMap = s.envP ? s.envP.x.greaterThan(0.5) : float(0).greaterThan(0.5);
     // The studio backdrop is lit a little unevenly: brighter up and to the left.
-    col.mulAssign(ndc.y.mul(0.8).sub(ndc.x.mul(0.5)).mul(0.07).add(1));
+    If(hasEnvMap.not(), () => {
+      col.mulAssign(ndc.y.mul(0.8).sub(ndc.x.mul(0.5)).mul(0.07).add(1));
+    });
     const floorAlpha = s.floorColor ? clamp(s.floorColor.a, 0, 1) : float(1);
     const onFloor = groundOn.greaterThan(0.5).and(rd.y.lessThan(-1e-5)).toVar();
     const floorT = camPos.y.negate().div(min(rd.y, -1e-5)).toVar();
@@ -202,9 +205,9 @@ export function groundNode(cam: ScreenCamera, s: SceneInputs, mirror: N): N {
       const inBeam = beam(camPos, rd, select(onFloor, floorT, 1e4));
       col.addAssign(vec3(0.07, 0.07, 0.075).mul(float(1).sub(exp(inBeam.mul(-0.3)))));
     });
-    // Fog: the floor fades into a pale haze with distance, and the haze hangs along
-    // the horizon.
-    If(floorP.w.greaterThan(0), () => {
+    // Fog: in the procedural studio, the floor fades into a pale haze along the horizon.
+    // Disabled when an HDRI envMap is active so photographic sky/buildings stay crisp without vertical smearing.
+    If(floorP.w.greaterThan(0).and(hasEnvMap.not()), () => {
       const haze = env(normalize(vec3(rd.x, 0.03, rd.z)), float(1), float(0))
         .mul(1.07)
         .toVar();

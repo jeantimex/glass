@@ -1,13 +1,16 @@
 // Demo presets, default studio/glass settings, and URL query-string helpers.
 import { KIND, type CmyFaceOrder, type DiamondCut } from '../glass';
 import type { GridLayout } from './grid';
+import type { HdriPreset } from './hdri';
 
 export type RGB = { r: number; g: number; b: number };
 
 /** Return a fresh copy of the default lighting, floor, camera, and glass demo settings. */
 export function createDefaultSettings() {
   return {
-    // Lighting: bright light-tent or dark jeweller's studio.
+    // Lighting: bright light-tent, dark jeweller's studio, or equirectangular HDRI.
+    hdri: 'none' as HdriPreset,
+    hdriIntensity: 1,
     dark: false,
     spotlight: true,
     lamp: 1,
