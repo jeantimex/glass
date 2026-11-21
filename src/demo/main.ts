@@ -307,9 +307,17 @@ async function main() {
   // ------------------------------------------------------------ camera ---
   const camera = new THREE.PerspectiveCamera(28.8, 1, 0.1, 500);
   const orbit = new OrbitControls(camera, canvas);
-  // Inertia: the camera glides on a little after the mouse lets go.
+  // Tight tracking while dragging, smooth inertia glide on release.
+  const DRAG_DAMPING = 0.3;
+  const RELEASE_DAMPING = 0.1;
   orbit.enableDamping = true;
-  orbit.dampingFactor = 0.08;
+  orbit.dampingFactor = RELEASE_DAMPING;
+  orbit.addEventListener('start', () => {
+    orbit.dampingFactor = DRAG_DAMPING;
+  });
+  orbit.addEventListener('end', () => {
+    orbit.dampingFactor = RELEASE_DAMPING;
+  });
   // Zooming goes toward (and away from) whatever is under the pointer, not the
   // middle of the picture.
   orbit.zoomToCursor = true;
