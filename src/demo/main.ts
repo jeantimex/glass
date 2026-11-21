@@ -54,7 +54,7 @@ const settings = {
   /** Darkening where objects meet the floor and each other (0 to 1). */
   contactShadows: 0.7,
   /** The camera: how soft what is out of focus gets (0: all sharp), glow, film-like tones. */
-  depthOfField: 0.05,
+  depthOfField: 0,
   glow: 0.35,
   filmic: true,
 
