@@ -483,15 +483,15 @@ async function main() {
   };
   Object.assign(settings, lookOf());
   placeObjects();
-  /** Put the camera where the whole scene is in view. */
+  /** Put the camera where the whole scene is in view, looking at the center object. */
   const frameScene = () => {
     const start = isSingle() ? current().camera : undefined;
     if (start) {
       camera.position.set(start[0], start[1], start[2]);
-      orbit.target.set(start[3], start[4], start[5]);
+      orbit.target.set(0, glassObjects.center[1], 0);
     } else if (isSingle()) {
       camera.position.set(3.017, 1.9, 4.119); // 30 degrees round to the right of straight on
-      orbit.target.set(0.35, 0.22, 0);
+      orbit.target.set(0, glassObjects.center[1], 0);
     } else {
       // From in front, above, a little to the right: the whole grid in view.
       const r = gridReach;
@@ -499,6 +499,7 @@ async function main() {
       orbit.target.set(0, gridCenterY, 0);
     }
     orbit.update();
+    markDirty();
   };
 
   const isMobile =
@@ -526,8 +527,8 @@ async function main() {
   // Folded to its title bar at first, so the scene is not covered.
   gui.close();
   const status = { fps: '0', triangles: '0' };
-  /** Settings of the page itself, kept whatever the scene (?stats=1 shows the panel). */
-  const ui = { stats: query.get('stats') === '1' };
+  /** Settings of the page itself, kept whatever the scene (shown by default; ?stats=0 hides it). */
+  const ui = { stats: query.get('stats') !== '0' };
 
   /** Keep the address in step, so that reloading or sharing it opens the same scene. */
   const updateAddress = () => {
@@ -572,15 +573,16 @@ async function main() {
     } else {
       updateAddress();
       placeObjects(true);
+      frameScene();
       layoutController.show(view.count > 1);
     }
     wasSingle = nowSingle;
   };
-  // A new shape keeps everything else as it is (the scene, lighting and camera
-  // settings, the camera, the count): only the objects change.
+  // A new shape keeps lighting and count settings, and re-frames the camera on the center object.
   gui.add(view, 'shape', Object.keys(SHAPES)).name('Shape').onChange(() => {
     updateAddress();
     placeObjects();
+    frameScene();
     showPanels();
     resize(); // a shape on its own is drawn larger than the screen
     gui.controllersRecursive().forEach((c) => c.updateDisplay());
