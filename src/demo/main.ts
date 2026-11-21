@@ -288,9 +288,11 @@ async function main() {
   // (They can only be turned on here, before the renderer starts; they cost little.)
   // WebGPU where the browser has it, otherwise WebGL 2 (the shaders are TSL, which
   // three.js compiles for either). ?renderer=webgl uses WebGL 2 even so, to try it.
+  // Canvas antialias is off because geometry AA already runs in nearLayer and the
+  // final pass (lensQuad) is a single full-screen quad — avoiding 4x swapchain MSAA bandwidth.
   loading.stage(0, 'Starting the renderer…');
   const forceWebGL = query.get('renderer') === 'webgl';
-  const renderer = new THREE.WebGPURenderer({ canvas, antialias: true, trackTimestamp: true, forceWebGL });
+  const renderer = new THREE.WebGPURenderer({ canvas, antialias: false, trackTimestamp: true, forceWebGL });
   try {
     await renderer.init();
   } catch {
@@ -407,6 +409,10 @@ async function main() {
     dragonLod: dragonLod.geometry,
     volume: meshVolume,
   });
+  let dirtyFrames = 2;
+  const markDirty = () => {
+    dirtyFrames = Math.max(dirtyFrames, 2);
+  };
   /** The shape chosen. */
   const current = () => SHAPES[view.shape];
   /** One object on its own (one of the mix is a grid of one). */
@@ -433,6 +439,7 @@ async function main() {
       glassObjects.tint.set([colour.r, colour.g, colour.b], i * 3);
     }
     instanced.markChanged();
+    markDirty();
   };
   /** The colour of all the glass on show (linear rgb) and how strongly it applies. */
   const glassColour = (): [number, number, number, number] => {
@@ -472,6 +479,7 @@ async function main() {
     }
     colourObjects(); // (white, unless random colours are on)
     instanced.markChanged();
+    markDirty();
   };
   Object.assign(settings, lookOf());
   placeObjects();
@@ -607,6 +615,7 @@ async function main() {
       c.updateDisplay();
     }
     instanced.markChanged();
+    markDirty();
     after?.();
   };
   const scene = gui.addFolder('Scene').close(); // folded until opened
@@ -763,6 +772,7 @@ async function main() {
               const next = cmyOrderList[(cmyOrderList.indexOf(target.cmyOrder) + 1) % cmyOrderList.length];
               target.cmyOrder = next;
               orderCtrl.updateDisplay();
+              markDirty();
             },
           },
           'rotate',
@@ -886,6 +896,21 @@ async function main() {
   // screen up until the GPU has finished that frame.
   loading.stage(0.94, 'Compiling shaders…');
   let firstFrame = true;
+  let lastFrameSig = '';
+  gui.onChange(markDirty);
+  orbit.addEventListener('change', markDirty);
+  window.addEventListener('resize', markDirty);
+  const frameSignature = () => {
+    const p = camera.position;
+    const q = camera.quaternion;
+    const t = orbit.target;
+    return (
+      `${p.x.toFixed(5)},${p.y.toFixed(5)},${p.z.toFixed(5)}|` +
+      `${q.x.toFixed(5)},${q.y.toFixed(5)},${q.z.toFixed(5)},${q.w.toFixed(5)}|` +
+      `${t.x.toFixed(5)},${t.y.toFixed(5)},${t.z.toFixed(5)}|` +
+      `${window.innerWidth}x${window.innerHeight}`
+    );
+  };
   renderer.setAnimationLoop(() => {
     if (firstFrame) {
       firstFrame = false;
@@ -896,6 +921,17 @@ async function main() {
       });
     }
     orbit.update();
+    const sig = frameSignature();
+    if (sig !== lastFrameSig) {
+      lastFrameSig = sig;
+      dirtyFrames = Math.max(dirtyFrames, 1);
+    }
+    if (dirtyFrames <= 0) {
+      fpsFrames = 0;
+      fpsSince = performance.now();
+      return;
+    }
+    dirtyFrames -= 1;
     // The page knows which studio is on, so what is drawn over it (the link in the
     // corner) can be dark on the white one and light on the dark one.
     if (document.body.classList.contains('dark-studio') !== settings.dark) document.body.classList.toggle('dark-studio', settings.dark);

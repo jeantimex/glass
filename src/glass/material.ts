@@ -472,12 +472,14 @@ export class GlassMaterial extends THREE.MeshBasicNodeMaterial {
       const sigma = log(max(baseTint, vec3(1e-4))).negate().div(max(reach, 1e-4)).toVar();
       const col = vec3(0).toVar();
 
+      const d0DotN0 = dot(d0, n0).toVar();
+      const outerRefl = sampleScene(positionWorld.add(n0.mul(0.003)), reflect(d0, n0)).toVar();
+
       Loop({ start: int(0), end: layers, type: 'int', condition: '<', name: 'lc' }, ({ lc }: { lc: N }) => {
         const bandOffset = select(layers.equal(1), float(0), spectralCauchy(lc));
         const iorIn = max(ior.add(disp.mul(bandOffset)), 1.0001).toVar();
-        const f0 = fresnel(dot(d0, n0), iorIn).toVar();
-        const reflDir = reflect(d0, n0);
-        const layer = f0.mul(sampleScene(positionWorld.add(n0.mul(0.003)), reflDir)).toVar();
+        const f0 = fresnel(d0DotN0, iorIn).toVar();
+        const layer = f0.mul(outerRefl).toVar();
         const thr = float(1).sub(f0).toVar();
         const t1 = refract(d0, n0, float(1).div(iorIn)).toVar();
         If(dot(t1, t1).greaterThan(1e-6), () => {
@@ -592,11 +594,13 @@ export class GlassMaterial extends THREE.MeshBasicNodeMaterial {
         });
 
       const col = vec3(0).toVar();
+      const d0DotN0 = dot(d0, n0).toVar();
+      const outerRefl = sampleScene(positionWorld.add(toWorldDir(n0).mul(0.003)), toWorldDir(reflect(d0, n0))).toVar();
       Loop({ start: int(0), end: layers, type: 'int', condition: '<', name: 'lc' }, ({ lc }: { lc: N }) => {
         const bandOffset = select(layers.equal(1), float(0), spectralCauchy(lc));
         const iorIn = max(ior.add(disp.mul(bandOffset)), 1.0001).toVar();
-        const f0 = fresnel(dot(d0, n0), iorIn).toVar();
-        const layer = f0.mul(sampleScene(positionWorld.add(toWorldDir(n0).mul(0.003)), toWorldDir(reflect(d0, n0)))).toVar();
+        const f0 = fresnel(d0DotN0, iorIn).toVar();
+        const layer = f0.mul(outerRefl).toVar();
         const thr = float(1).sub(f0).toVar();
         const dir = refract(d0, n0, float(1).div(iorIn)).toVar();
         const pos = vec3(p0).toVar();

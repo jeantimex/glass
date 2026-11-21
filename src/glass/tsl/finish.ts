@@ -74,27 +74,28 @@ export function contactShadeNode(cam: ScreenCamera, p: N, src: N): N {
     If(p.x.greaterThan(0).and(dist.lessThan(900)), () => {
       const px = vec2(1).div(res).toVar();
       const at = pointAt(cam, uv, dist).toVar();
-      // The surface's direction, from its neighbours (on each axis, the one nearer in depth).
-      const right = src.sample(uv.add(vec2(px.x, 0))).level(0).a.toVar();
-      const left = src.sample(uv.sub(vec2(px.x, 0))).level(0).a.toVar();
-      const below = src.sample(uv.add(vec2(0, px.y))).level(0).a.toVar();
-      const above = src.sample(uv.sub(vec2(0, px.y))).level(0).a.toVar();
-      const alongX = pointAt(cam, uv.add(vec2(px.x, 0)), right).sub(at).toVar();
-      If(abs(left.sub(dist)).lessThan(abs(right.sub(dist))), () => {
-        alongX.assign(at.sub(pointAt(cam, uv.sub(vec2(px.x, 0)), left)));
-      });
-      const alongY = pointAt(cam, uv.add(vec2(0, px.y)), below).sub(at).toVar();
-      If(abs(above.sub(dist)).lessThan(abs(below.sub(dist))), () => {
-        alongY.assign(at.sub(pointAt(cam, uv.sub(vec2(0, px.y)), above)));
-      });
-      const n = normalize(cross(alongY, alongX)).toVar();
-      If(dot(n, camPos.sub(at)).lessThan(0), () => {
-        n.assign(n.negate());
-      });
       // The floor takes the full shadow; glass, being clear, only a little.
+      // Check onFloor first so floor pixels skip the 4 neighbor depth fetches & cross product.
       const onFloor = abs(at.y).lessThan(dist.mul(0.002).add(0.02)).toVar();
-      If(onFloor, () => {
-        n.assign(vec3(0, 1, 0));
+      const n = vec3(0, 1, 0).toVar();
+      If(onFloor.not(), () => {
+        // The surface's direction, from its neighbours (on each axis, the one nearer in depth).
+        const right = src.sample(uv.add(vec2(px.x, 0))).level(0).a.toVar();
+        const left = src.sample(uv.sub(vec2(px.x, 0))).level(0).a.toVar();
+        const below = src.sample(uv.add(vec2(0, px.y))).level(0).a.toVar();
+        const above = src.sample(uv.sub(vec2(0, px.y))).level(0).a.toVar();
+        const alongX = pointAt(cam, uv.add(vec2(px.x, 0)), right).sub(at).toVar();
+        If(abs(left.sub(dist)).lessThan(abs(right.sub(dist))), () => {
+          alongX.assign(at.sub(pointAt(cam, uv.sub(vec2(px.x, 0)), left)));
+        });
+        const alongY = pointAt(cam, uv.add(vec2(0, px.y)), below).sub(at).toVar();
+        If(abs(above.sub(dist)).lessThan(abs(below.sub(dist))), () => {
+          alongY.assign(at.sub(pointAt(cam, uv.sub(vec2(0, px.y)), above)));
+        });
+        n.assign(normalize(cross(alongY, alongX)));
+        If(dot(n, camPos.sub(at)).lessThan(0), () => {
+          n.assign(n.negate());
+        });
       });
 
       // Points round about, in a spiral turned differently at every pixel.

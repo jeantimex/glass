@@ -290,9 +290,21 @@ export function shapeFunctions(shape: number, g: Pick<GlassInputs, 'bevel'> & Pa
   // Signed distance to a baked mesh: a 128^3 grid covering a cube of half-width 1.1
   // around the mesh, which is scaled to half-width 1. The volumes of the meshes lie
   // one after another along z in the same texture; this mesh's is `layer`.
+  // Fast 1-tap hardware-trilinear SDF sample for coarse sphere-tracing (m0/m1),
+  // saving ~8x 3D texture fetches per march step while m2 bisection & volumeNormal
+  // evaluate the C^2 tricubic surface below.
+  const layer = shape === KIND.dragon ? 1 : 0;
+  const volumeFast = Fn(([p, scale]: N[]) => {
+    const q = p.div(scale).toVar();
+    const inner = 1.1 * (1 - 1 / 128);
+    const c = clamp(q, vec3(-inner), vec3(inner)).toVar();
+    const gp = clamp(c.div(2.2).add(0.5).mul(128), vec3(0.5), vec3(127.5)).toVar();
+    const uvw = vec3(gp.x.mul(1 / 128), gp.y.mul(1 / 128), gp.z.add(128 * layer).mul(1 / 256));
+    return sdfTex.sample(uvw).level(0).r.add(length(q.sub(c))).mul(scale);
+  }).setLayout({ name: 'icVolumeFast', type: 'float', inputs: [{ name: 'p', type: 'vec3' }, { name: 'scale', type: 'float' }] });
+
   // Uses Sigg & Hadwiger's 8-tap hardware-trilinear tricubic B-spline filter so the
   // reconstructed SDF is C^2 smooth (C^1 smooth normals, eliminating voxel-grid creases).
-  const layer = shape === KIND.dragon ? 1 : 0;
   const volume = Fn(([p, scale]: N[]) => {
     const q = p.div(scale).toVar();
     const inner = 1.1 * (1 - 1 / 128);
@@ -564,7 +576,7 @@ export function shapeFunctions(shape: number, g: Pick<GlassInputs, 'bevel'> & Pa
       // is outside it. Step forward until inside, or the exit is found at once, in
       // the wrong place: a dark cut across the glass.
       Loop({ start: int(0), end: int(8), type: 'int', condition: '<', name: 'm0' }, () => {
-        const d = volume(pos.add(dir.mul(t)), s).toVar();
+        const d = volumeFast(pos.add(dir.mul(t)), s).toVar();
         If(d.lessThan(0), () => {
           Break();
         });
@@ -575,15 +587,16 @@ export function shapeFunctions(shape: number, g: Pick<GlassInputs, 'bevel'> & Pa
       // otherwise only creep forward and run out of steps somewhere in the middle.
       const tIn = float(t).toVar(); // the last point known to be inside
       Loop({ start: int(0), end: int(48), type: 'int', condition: '<', name: 'm1' }, () => {
-        const d = volume(pos.add(dir.mul(t)), s).negate().toVar();
+        const d = volumeFast(pos.add(dir.mul(t)), s).negate().toVar();
         If(d.lessThan(s.mul(0.0005)), () => {
           Break();
         });
         tIn.assign(t);
         t.addAssign(max(d, s.mul(0.004)));
       });
-      // ... and the surface pinned down between the last point inside and the first
-      // outside, by halving the gap.
+      // ... and the C^2 tricubic surface pinned down by bisecting across the bracket.
+      tIn.assign(max(tIn.sub(s.mul(0.004)), 0));
+      t.addAssign(s.mul(0.004));
       Loop({ start: int(0), end: int(4), type: 'int', condition: '<', name: 'm2' }, () => {
         const mid = tIn.add(t).mul(0.5).toVar();
         If(volume(pos.add(dir.mul(mid)), s).lessThan(0), () => {
@@ -827,12 +840,16 @@ export function glassNode(shape: number, mirrored: boolean, worldPos: N, nrmW: N
         entryFace.assign(cmyTint(n0, cmy, g.cmyOrder));
       });
 
+    // Hoist wavelength-independent outer reflection outside the spectral loop.
+    const d0DotN0 = dot(d0, n0).toVar();
+    const outerRefl = scene(worldPos.add(toWorld(n0, quat).mul(0.003)), toWorld(reflect(d0, n0), quat), lampLit, reflCone).toVar();
+
     Loop({ start: int(0), end: layers, type: 'int', condition: '<', name: 'lc' }, ({ lc }: { lc: N }) => {
       // One CIE 1931 spectral band with its own Cauchy IOR (or monochrome when disp == 0).
       const bandOffset = select(layers.equal(1), float(0), spectralCauchy(lc));
       const iorIn = max(ior.add(disp.mul(bandOffset)), 1.0001).toVar();
-      const f0 = fresnel(dot(d0, n0), iorIn).toVar();
-      const layer = f0.mul(scene(worldPos.add(toWorld(n0, quat).mul(0.003)), toWorld(reflect(d0, n0), quat), lampLit, reflCone)).toVar();
+      const f0 = fresnel(d0DotN0, iorIn).toVar();
+      const layer = f0.mul(outerRefl).toVar();
       const thr = float(1).sub(f0).toVar(); // light still inside, weighted by Fresnel transmission
       const dir = refract(d0, n0, float(1).div(iorIn)).toVar();
       const pos = vec3(p0).toVar();
