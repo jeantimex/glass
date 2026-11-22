@@ -76,10 +76,12 @@ export function photonNode(
     // This pass's wavelength: the IOR moves by its Cauchy offset times the spread n_F - n_C.
     const bandOffset = band ? band.x : float(0);
     const ior = max(glassP.x.add(vary.x).add(glassP.y.mul(vary.y).div(12).mul(bandOffset)), 1.0001).toVar();
-    // Fade grazing rays that scatter wide into thin streaks to keep the caustic pool clean.
+    // The Fresnel reflection takes most light at grazing angles; only rays meeting the surface
+    // all but edge-on (within ~5 degrees, where the rasterized mesh is least exact) are faded
+    // out. (A wider fade cut away much of the light through steep faces: prisms, cones.)
     const transmitted = float(1)
       .sub(fresnel(dot(rayDir, entryNormal), ior))
-      .mul(smoothstep(0.05, 0.4, dot(rayDir, entryNormal).negate()))
+      .mul(smoothstep(0.02, 0.09, dot(rayDir, entryNormal).negate()))
       .toVar();
     const tint = mix(vec3(1), tintAll.rgb.mul(tintOwn), tintAll.a).toVar();
     if (shape === KIND.box) {

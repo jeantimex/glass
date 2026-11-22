@@ -36,7 +36,8 @@ export function createDefaultSettings() {
     realCaustics: true,
     seeThrough: true,
     causticSoftness: 0.3,
-    causticStrength: 0.3,
+    // 1: all the light the glass lets through reaches the floor (physically right).
+    causticStrength: 1,
 
     // Camera finishing.
     contactShadows: 0.7,

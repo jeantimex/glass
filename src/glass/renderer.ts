@@ -71,10 +71,14 @@ export interface InstancedLighting {
   dark: boolean;
   /** Glass shows other glass through it, along the bent rays (off: only the floor and the studio). */
   seeThrough: boolean;
-  /** Real caustics: the lamp's light traced through the glass onto the floor, and how soft they are (m). */
+  /**
+   * Real caustics: the lamp's light traced through the glass onto the floor, and how soft they
+   * are (m). With real caustics on, shadows and caustics are softened together by the larger of
+   * this and `shadowSoftness` (both stand for the lamp's size), so their edges meet exactly.
+   */
   realCaustics: boolean;
   causticSoftness: number;
-  /** How much of the light gathered by the glass reaches the floor (1: all of it). */
+  /** How much of the light gathered by the glass reaches the floor (1: all of it, physically right). */
   causticStrength: number;
   /** Contact shadows: strength (0 to 1) and how far they reach (m). */
   contactShadows: number;
@@ -705,7 +709,10 @@ export function createInstancedGlass(
   const addSource = texture(gatheredSoft.texture);
   const uAddGain = uniform(1);
   const addMaterial = new THREE.NodeMaterial();
-  addMaterial.fragmentNode = addSource.mul(uAddGain);
+  // Colour only, alpha 1: additive blending multiplies the colour by the source alpha, and
+  // the gathered-light map's alpha counts the splats that touched each texel (4 or more in a
+  // pool), which multiplied the caustics' light several times over.
+  addMaterial.fragmentNode = vec4(addSource.rgb.mul(uAddGain), 1);
   addMaterial.transparent = true;
   addMaterial.blending = THREE.AdditiveBlending;
   addMaterial.depthTest = addMaterial.depthWrite = false;
@@ -1457,12 +1464,9 @@ export function createInstancedGlass(
         // as the shadows are set to be ...
         renderer.setRenderTarget(openMap);
         openQuad.render(renderer);
-        blur(openMap.texture, shadeNear, light.shadowSoftness * perMetre, undefined, shadeScratch, 0, 2);
-        // ... plus the light that came through the glass, gathered where it lands
-        // and blurred as much as the lamp is wide: a small lamp throws sharp
-        // caustics, a large soft one smooth pools of light. Each wavelength band is
-        // traced and gathered in turn and added up, so dispersion fans the caustics
-        // out into their colours.
+        // ... plus the light that came through the glass, gathered where it lands. Each
+        // wavelength band is traced and gathered in turn and added up, so dispersion fans
+        // the caustics out into their colours.
         renderer.setClearColor(0x000000, 1);
         renderer.setRenderTarget(landedMap);
         renderer.render(landScene, lightCamera);
@@ -1477,11 +1481,20 @@ export function createInstancedGlass(
           renderer.autoClear = true;
         }
         renderer.setClearColor(previousClear, previousAlpha);
-        blur(landedMap.texture, gatheredSoft, light.causticSoftness * perMetre, undefined, shadeScratch, 0, 2);
-        renderer.setRenderTarget(shadeNear);
-        renderer.autoClear = false;
+        // The two added up, then blurred together as much as the lamp is wide: a small lamp
+        // throws sharp shadows and caustics, a large soft one soft shadows and smooth pools.
+        // (Blurred apart by different amounts, the shadow's edge faded out faster than the
+        // light refracted across it faded in, leaving a dark ring round every silhouette.)
+        copySource.value = openMap.texture;
+        renderer.setRenderTarget(gatheredSoft);
+        copyQuad.render(renderer);
+        addSource.value = landedMap.texture;
         uAddGain.value = light.causticStrength;
+        renderer.autoClear = false;
         addQuad.render(renderer);
+        renderer.autoClear = true;
+        const lampWidth = Math.max(light.shadowSoftness, light.causticSoftness);
+        blur(gatheredSoft.texture, shadeNear, lampWidth * perMetre, undefined, shadeScratch, 0, 2);
         renderer.autoClear = true;
       }
     }
