@@ -34,7 +34,8 @@ const {
 
 /**
  * Real caustics, first pass: objects are rendered from the main lamp's direction so each
- * fragment traces one lamp ray through the glass down to y = 0.
+ * fragment traces one lamp ray through the glass down to y = 0 (at one wavelength: the
+ * renderer draws a pass per wavelength band, so caustics carry dispersion's colours).
  * Outputs `vec4(offsetX, offsetY, lightCarried, 1)`: where the ray lands relative to where
  * it set out (in the lamp map's clip units), how much light it carries (0 if it never
  * reaches the floor), and 1 in alpha to mark that glass was in the way. How widely each
@@ -50,6 +51,11 @@ export function photonNode(
   lightRight: N,
   lightUp: N,
   diamondPlanes?: number[],
+  /**
+   * This pass's wavelength band (see renderer.ts: one pass per band): x its Cauchy IOR
+   * offset, yzw its linear-sRGB share of white light (to filter it by the glass's colour).
+   */
+  band?: N,
 ): N {
   const { center, quat, size, vary, tintOwn, tintAll, cmyAll, glassP } = g;
   const { declare, entry, exit } = shapeFunctions(shape, g, diamondPlanes);
@@ -67,7 +73,9 @@ export function photonNode(
       entryNormal.assign(entryNormal.negate());
     });
 
-    const ior = max(glassP.x.add(vary.x), 1.0001).toVar();
+    // This pass's wavelength: the IOR moves by its Cauchy offset times the spread n_F - n_C.
+    const bandOffset = band ? band.x : float(0);
+    const ior = max(glassP.x.add(vary.x).add(glassP.y.mul(vary.y).div(12).mul(bandOffset)), 1.0001).toVar();
     // Fade grazing rays that scatter wide into thin streaks to keep the caustic pool clean.
     const transmitted = float(1)
       .sub(fresnel(dot(rayDir, entryNormal), ior))
@@ -115,7 +123,10 @@ export function photonNode(
           .sub(worldPos)
           .toVar();
         landingOffset.assign(vec2(dot(delta, lightRight), dot(delta, lightUp)));
-        lightEnergy.assign(transmitted.mul(dot(tint, vec3(1 / 3))));
+        // The share of this band's light the glass lets through: its colour filter weighed
+        // by the band's place in the spectrum (the plain average for white light).
+        const share = band ? band.yzw : vec3(1 / 3);
+        lightEnergy.assign(transmitted.mul(dot(tint, share).div(max(dot(share, vec3(1)), 1e-4))));
       });
     });
 

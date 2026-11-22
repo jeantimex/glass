@@ -59,9 +59,11 @@ export function bloomPrefilterNode(uv: N, texelStep: N, cut: N, cap: N, src: N):
 }
 
 /**
- * A Gaussian blur of `src` along `dir` (in texture coordinates, out to its full
- * length), `reach` bilinear-paired samples each side of the middle (covering
- * 2*reach steps with ~half the texture fetches via hardware linear filtering).
+ * A Gaussian blur of `src` along `dir` (in texture coordinates: its length is 2 sigma),
+ * `reach` bilinear-paired samples each side of the middle (covering 2*reach steps with
+ * ~half the texture fetches via hardware linear filtering). The kernel runs out to 3 sigma:
+ * cut at 2 sigma (still 13.5% of its peak there) each pass was nearly a box, and two passes
+ * turned a bright spot (a focused caustic) into a rounded square.
  * Only what is brighter than `cut` is kept (0 keeps everything).
  */
 export function blurNode(uv: N, dir: N, cut: N, reach: N, src: N): N {
@@ -73,12 +75,12 @@ export function blurNode(uv: N, dir: N, cut: N, reach: N, src: N): N {
     Loop({ start: int(1), end: n, type: 'int', condition: '<=', name: 'bi' }, ({ bi }: { bi: N }) => {
       const i1 = float(bi).mul(2).sub(1).toVar();
       const i2 = i1.add(1).toVar();
-      const x1 = i1.mul(2).div(maxI);
-      const x2 = i2.mul(2).div(maxI);
+      const x1 = i1.mul(3).div(maxI);
+      const x2 = i2.mul(3).div(maxI);
       const w1 = exp(x1.mul(x1).mul(-0.5)).toVar();
       const w2 = exp(x2.mul(x2).mul(-0.5)).toVar();
       const w = w1.add(w2).toVar();
-      const delta = dir.mul(i1.mul(w1).add(i2.mul(w2)).div(w.mul(maxI))).toVar();
+      const delta = dir.mul(i1.mul(w1).add(i2.mul(w2)).div(w.mul(maxI)).mul(1.5)).toVar();
       const sPos = src.sample(uv.add(delta)).level(0).sub(cut).max(0);
       const sNeg = src.sample(uv.sub(delta)).level(0).sub(cut).max(0);
       sum.addAssign(sPos.add(sNeg).mul(w));

@@ -9,7 +9,7 @@
 import * as TSL from 'three/tsl';
 import { KIND } from '../objects';
 import { cmyTint } from './cmy';
-import { applyFrostVeil, perturbFrostNormal } from './frost';
+import { applyFrostVeil, perturbFrostNormal, perturbImperfections } from './frost';
 import { fresnel, rotateToLocal, rotateToWorld, spectralJitter, spectralSample, spectralSampleCount } from './optics';
 import { sceneFunctions, type SceneInputs } from './scene';
 import { isBakedMesh, isCurvedShape, shapeFunctions } from './shapes';
@@ -26,7 +26,7 @@ export {
   spectralSample,
   spectralSampleCount,
 } from './optics';
-export { applyFrostVeil, frostNoise3, perturbFrostNormal } from './frost';
+export { applyFrostVeil, frostNoise3, perturbFrostNormal, perturbImperfections } from './frost';
 export { isBakedMesh, isCurvedShape, shapeFunctions } from './shapes';
 export { causticNode, photonNode } from './caustics';
 
@@ -88,6 +88,8 @@ export interface GlassInputs {
   roughness: N;
   /** Frosted glass micro-particle grain density. */
   frostScale: N;
+  /** Faint surface waviness (0: perfect glass, 1: clearly hand-made; see perturbImperfections). */
+  imperfection?: N;
 }
 
 /** Camera, backdrop, and shadow-depth textures read by the glass shading pass. */
@@ -269,8 +271,10 @@ export function glassNode(
 
     // Organic 3-octave frosted surface normal perturbation (skipped on blurred mirror reflections).
     const frostGrain = float(0.5).toVar();
+    const imperfection = g.imperfection ?? float(0);
     if (!mirrored) {
       perturbFrostNormal(entryNormal, viewDirLocal, entryPos, reach, roughness, frostScale, frostGrain);
+      perturbImperfections(entryNormal, entryPos, reach, imperfection);
     }
 
     const baseIor = max(glassP.x.add(vary.x), 1.0001).toVar();
@@ -304,11 +308,14 @@ export function glassNode(
       });
     }
 
-    // Hoist wavelength-independent outer reflection outside the spectral loop.
+    // Hoist wavelength-independent outer reflection outside the spectral loop. It is looked
+    // up like refracted light: other glass in the layer behind (when glass-through-glass is
+    // on), then the rendered floor, then the studio, so neighbours show in the surface.
     const viewDotNormal = dot(viewDirLocal, entryNormal).toVar();
-    const outerReflection = scene(
+    const outerReflection = lookThrough(
       worldPos.add(rotateToWorld(entryNormal, quat).mul(0.003)),
       rotateToWorld(reflect(viewDirLocal, entryNormal), quat),
+      reach,
       lampLit,
       reflCone,
     ).toVar();
@@ -333,6 +340,7 @@ export function glassNode(
             const hit = exit(rayPos, rayDir, size);
             rayPos.assign(hit.pos);
             const hitNormal = hit.nrm.toVar();
+            if (!mirrored) perturbImperfections(hitNormal, hit.pos, reach, imperfection);
 
             if (isBakedMesh(shape)) {
               rayCone.assign(

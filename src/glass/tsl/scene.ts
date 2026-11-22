@@ -24,6 +24,7 @@ const {
   select,
   sin,
   smoothstep,
+  step,
   vec2,
   vec3,
 } = TSL as N;
@@ -62,6 +63,11 @@ export interface SceneInputs {
   envTex?: N;
   /** vec2(hasEnvMap, envMapIntensity). */
   envP?: N;
+  /**
+   * How far above the open floor's light gathered (real) caustic light may rise, as extra
+   * multiples of it, before being eased off (default 2: three times the open floor).
+   */
+  causticHeadroom?: N;
 }
 
 /**
@@ -284,25 +290,30 @@ export function sceneFunctions(s: SceneInputs, backdrop: boolean) {
       return floorAlbedo.mul(s.skyE.mul(direct.mul(0.45).add(0.55)).add(s.sunE.mul(direct).mul(pool)));
     }
     const uv = lightUv(g).toVar();
-    // x a little blurred (the shadow of the lamp), y far wider (the room's light kept off).
-    const shade = vec2(s.shadeTex.sample(uv).level(0).g, s.shadeFarTex.sample(uv).level(0).g).toVar();
+    // The lamp's light arriving, in colour (the shadow a little blurred, plus the caustics'
+    // colours from dispersion and tinted glass), and the room's light kept off (far wider).
+    const lampLight = s.shadeTex.sample(uv).level(0).rgb.toVar();
+    const roomKept = s.shadeFarTex.sample(uv).level(0).g.toVar();
     // floorP.y is how dark the shadows are; negative when the near map holds real
     // caustics (the light that actually arrives), which are used as they are.
     const darkness = abs(s.floorP.y).toVar();
-    const lamp = min(max(shade.x, 0), 1.7).toVar();
+    const lamp = min(max(lampLight, vec3(0)), vec3(1.7)).toVar();
     If(s.floorP.y.lessThan(0), () => {
-      // Gathered light is eased off above the level of the open floor, toward three
-      // times it at most. Only the top layer of a pile is followed, as if nothing lay
-      // beneath it, so taken at face value a pile would light its floor far too much.
-      const over = max(shade.x.sub(1), 0).toVar();
-      lamp.assign(min(shade.x, 1).add(over.div(over.mul(0.5).add(1))));
+      // Gathered light is eased off above the level of the open floor, toward
+      // 1 + headroom times it at most. Only the top layer of a pile is followed, as if
+      // nothing lay beneath it, so taken at face value a pile would light its floor far too
+      // much: piles get little headroom. A few objects get plenty, so a lens's focused spot
+      // keeps its true falloff (brightest at the focus) instead of clipping to a flat
+      // plateau, and the camera's glow and tones roll its bright core off.
+      const headroom = s.causticHeadroom ?? float(2);
+      const over = max(lampLight.sub(1), vec3(0)).toVar();
+      lamp.assign(min(lampLight, vec3(1)).add(over.div(over.div(headroom).add(1))));
     });
     // How dark the shadows are: the share of the lamp's light they hold back (0: none,
     // 1: all of it). Light gathered above the open floor's is left as it is.
-    If(lamp.lessThan(1), () => {
-      lamp.assign(float(1).sub(darkness.mul(float(1).sub(lamp))));
-    });
-    const ambient = float(1).sub(darkness.mul(0.8).mul(float(1).sub(min(shade.y, 1))));
+    const held = vec3(1).sub(vec3(1).sub(lamp).mul(darkness));
+    lamp.assign(mix(lamp, held, step(lamp, vec3(1))));
+    const ambient = float(1).sub(darkness.mul(0.8).mul(float(1).sub(min(roomKept, 1))));
     return floorAlbedo.mul(s.skyE.mul(ambient).add(s.sunE.mul(lamp).mul(pool)));
   }).setLayout({ name: 'icGroundColor', type: 'vec3', inputs: [{ name: 'g', type: 'vec3' }] });
 

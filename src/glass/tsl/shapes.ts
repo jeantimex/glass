@@ -3,6 +3,7 @@
 //
 // Shape table (see objects.ts):
 //   0 box         half-extents size.xyz (bevelled into 18 planes when bevel > 0)
+//                 (the octahedron, prism and hex prism carry a bevel plane per edge too)
 //   1 sphere      radius size.x
 //   2 cylinder    radius size.x, half-height size.y, axis Y
 //   3 capsule     radius size.x, half-length of middle section size.y, axis Y
@@ -61,8 +62,24 @@ const boxExitAlongAxis = (d: N, half: N, p: N) =>
   select(abs(d).greaterThan(1e-7), sign(d).mul(half).sub(p).div(d), 1e9);
 
 /**
- * Outward face planes (xyz = unit normal, w = offset) for analytic polyhedra,
- * or null for diamonds whose facet planes are stored in a constant TSL array.
+ * Bevel planes for the edges between pairs of faces of a convex polyhedron: for faces
+ * (n_i, d_i) and (n_j, d_j), the plane along `n_i + n_j` that cuts `bevel` off the edge
+ * (as for the box: offset `(d_i + d_j - bevel) / |n_i + n_j|`). Real glass is never cut to a
+ * mathematically sharp edge, and these narrow facets are what catch the light along it.
+ */
+function bevelPlanes(faces: { n: [number, number, number]; d: N }[], edges: [number, number][], bevel: N): N[] {
+  return edges.map(([i, j]) => {
+    const [a, b] = [faces[i], faces[j]];
+    const sum = [a.n[0] + b.n[0], a.n[1] + b.n[1], a.n[2] + b.n[2]];
+    const len = Math.hypot(sum[0], sum[1], sum[2]);
+    return vec4(sum[0] / len, sum[1] / len, sum[2] / len, a.d.add(b.d).sub(bevel).div(len));
+  });
+}
+
+/**
+ * Outward face planes (xyz = unit normal, w = offset) for analytic polyhedra, plus a bevel
+ * plane for every edge, or null for diamonds whose facet planes are stored in a constant
+ * TSL array.
  */
 function polyhedronPlanes(shape: number, size: N, bevel: N): N[] | null {
   if (shape === KIND.box) {
@@ -83,28 +100,54 @@ function polyhedronPlanes(shape: number, size: N, bevel: N): N[] | null {
     });
     return [...faces, ...bevelEdges];
   }
+  // A face as its unit normal and offset, and the planes for a list of them plus bevels.
+  type Face = { n: [number, number, number]; d: N };
+  const withBevels = (faces: Face[], edges: [number, number][]) => [
+    ...faces.map((f) => vec4(f.n[0], f.n[1], f.n[2], f.d)),
+    ...bevelPlanes(faces, edges, bevel),
+  ];
   if (shape === KIND.octahedron) {
     const invSqrt3 = 1 / Math.sqrt(3);
-    return Array.from({ length: 8 }, (_, k) =>
-      vec4(signBit(k) * invSqrt3, (k & 2 ? 1 : -1) * invSqrt3, (k & 4 ? 1 : -1) * invSqrt3, size.x.mul(invSqrt3)),
-    );
+    const faces: Face[] = Array.from({ length: 8 }, (_, k) => ({
+      n: [signBit(k) * invSqrt3, (k & 2 ? 1 : -1) * invSqrt3, (k & 4 ? 1 : -1) * invSqrt3],
+      d: size.x.mul(invSqrt3),
+    }));
+    // Two faces share an edge where their normals differ in exactly one sign (12 edges).
+    const edges: [number, number][] = [];
+    for (let i = 0; i < 8; i++) for (const bit of [1, 2, 4]) if (!(i & bit)) edges.push([i, i | bit]);
+    return withBevels(faces, edges);
   }
   if (shape === KIND.prism) {
     const half = size.x.mul(0.5);
-    return [
-      vec4(0, -1, 0, half),
-      vec4(0.8660254, 0.5, 0, half),
-      vec4(-0.8660254, 0.5, 0, half),
-      vec4(0, 0, 1, size.z),
-      vec4(0, 0, -1, size.z),
+    const faces: Face[] = [
+      { n: [0, -1, 0], d: half },
+      { n: [0.8660254, 0.5, 0], d: half },
+      { n: [-0.8660254, 0.5, 0], d: half },
+      { n: [0, 0, 1], d: size.z },
+      { n: [0, 0, -1], d: size.z },
     ];
+    // The three long edges, and each of the three sides against both ends (9 edges).
+    const edges: [number, number][] = [
+      [0, 1],
+      [0, 2],
+      [1, 2],
+      ...[0, 1, 2].flatMap((side): [number, number][] => [
+        [side, 3],
+        [side, 4],
+      ]),
+    ];
+    return withBevels(faces, edges);
   }
   if (shape === KIND.hexprism) {
-    const sides = Array.from({ length: 6 }, (_, k) => {
+    const faces: Face[] = Array.from({ length: 6 }, (_, k) => {
       const angle = ((30 + 60 * k) * Math.PI) / 180;
-      return vec4(Math.cos(angle), 0, Math.sin(angle), size.x);
+      return { n: [Math.cos(angle), 0, Math.sin(angle)] as [number, number, number], d: size.x };
     });
-    return [...sides, vec4(0, 1, 0, size.y), vec4(0, -1, 0, size.y)];
+    faces.push({ n: [0, 1, 0], d: size.y }, { n: [0, -1, 0], d: size.y });
+    // Neighbouring sides, and every side against the top and the bottom (18 edges).
+    const edges: [number, number][] = [];
+    for (let k = 0; k < 6; k++) edges.push([k, (k + 1) % 6], [k, 6], [k, 7]);
+    return withBevels(faces, edges);
   }
   return null;
 }

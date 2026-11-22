@@ -31,6 +31,8 @@ const view = parseInitialView(query);
 const loading = createLoadingScreen();
 
 const singleKind = (name: string): number => SHAPES[name].kinds?.[0] ?? KIND.box;
+/** Shapes cut with flat faces, whose edges are bevelled (see bevelPlanes in tsl/shapes.ts). */
+const FACETED_KINDS: number[] = [KIND.box, KIND.octahedron, KIND.prism, KIND.hexprism];
 /** Resolves on the next animation frame. */
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
@@ -126,8 +128,9 @@ async function main() {
       dispersion: demo.dispersion ?? 1,
       roughness: 0,
       frostScale: 4,
-      // A CMY cube gets fine bevels: its edges catch the light, as cut glass does.
-      bevel: demo.cmy ? 0.008 : 0,
+      // Faceted glass gets fine bevels: its edges catch the light, as cut glass does
+      // (a little more on the CMY cube).
+      bevel: demo.cmy ? 0.008 : FACETED_KINDS.includes(singleKind(name)) ? 0.006 : 0,
       colour: CMY_STRENGTH,
       cmyOrder: 'cym',
       glassColor: { r: 1, g: 1, b: 1 },
@@ -511,6 +514,7 @@ async function main() {
       roughCtrl.onChange((v: number) => frostGrainCtrl.show(v > 0));
       frostGrainCtrl.show(settings.roughness > 0);
     }
+    glass.add(settings, 'imperfections', 0, 1, 0.01).name('Imperfections');
     glass.add(settings, 'seeThrough').name('Glass through glass');
     glass.add(settings, 'realCaustics').name('Real caustics');
     glass.add(settings, 'causticSoftness', 0.005, 0.3, 0.005).name('Caustic softness');
@@ -554,7 +558,7 @@ async function main() {
       .name('Reset');
 
     /* Shape-specific settings */
-    const hasBoxes = !demo.kinds || demo.kinds.includes(KIND.box);
+    const hasBoxes = !demo.kinds || demo.kinds.some((kind) => FACETED_KINDS.includes(kind));
     const hasDiamonds = !demo.kinds || demo.kinds.includes(KIND.diamond);
     if (!single && !hasBoxes && !hasDiamonds) return;
     const folder = gui.addFolder(single ? `${name} shape` : `${name} grid shape`);
@@ -593,7 +597,7 @@ async function main() {
         .name('Rotate faces');
     };
     if (!single) {
-      if (hasBoxes) folder.add(settings, 'bevel', 0, 0.05, 0.001).name('Box bevel');
+      if (hasBoxes) folder.add(settings, 'bevel', 0, 0.05, 0.001).name('Edge bevel');
       if (demo.cmy) addCmyFaceControls(settings);
       if (hasDiamonds)
         folder
@@ -615,7 +619,7 @@ async function main() {
         .name('Cut')
         .onChange(() => placeObjects(true));
     }
-    if (singleKind(name) === KIND.box) folder.add(single, 'bevel', 0, 0.15, 0.001).name('Bevel');
+    if (FACETED_KINDS.includes(singleKind(name))) folder.add(single, 'bevel', 0, 0.15, 0.001).name('Edge bevel');
     if (demo.cmy) {
       folder.add(single, 'colour', 0, 1, 0.01).name('Colour strength');
       addCmyFaceControls(single);
@@ -784,6 +788,7 @@ async function main() {
         diamondCut: settings.diamondCut,
         bevel: boxBevel(),
         colorAlpha: ga,
+        imperfections: settings.imperfections,
         ground: settings.ground,
         dark: settings.dark,
         seeThrough: settings.seeThrough,

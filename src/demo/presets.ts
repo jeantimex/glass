@@ -49,7 +49,10 @@ export function createDefaultSettings() {
     dispersion: 1,
     roughness: 0,
     frostScale: 4,
-    bevel: 0,
+    // Faint waviness of the glass surfaces, as in cast glass (0: perfect, optical glass).
+    imperfections: 0,
+    // Edge bevel of faceted shapes in grids (m): their objects are about a third the size.
+    bevel: 0.003,
     diamondCut: 'round' as DiamondCut,
     cmyOrder: 'cym' as CmyFaceOrder,
     glassColor: { r: 1, g: 1, b: 1 } as RGB,

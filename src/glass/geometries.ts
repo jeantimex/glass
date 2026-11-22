@@ -93,7 +93,7 @@ export function createShapeGeometries(meshes: BakedMeshGeometries): {
   fineBases[KIND.torus] = new THREE.TorusGeometry(1, UNIT_TUBE, 40, 144).rotateX(Math.PI / 2);
   fineBases[KIND.dragon] = meshes.dragon;
   // Suzanne's low-poly cage, subdivided into her smooth surface for close-ups.
-  fineBases[KIND.suzanne] = subdividedGeometry(meshes.suzanne, 2);
+  fineBases[KIND.suzanne] = subdividedGeometry(meshes.suzanne, 1);
   fineBases[KIND.torusknot] = buildUnitTorusKnot(220, 36);
 
   return { bases, fineBases };

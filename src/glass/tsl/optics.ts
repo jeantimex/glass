@@ -194,6 +194,24 @@ export const spectralJitter = (): N =>
  */
 export const SPECTRAL_FRAME_OFFSET = uniform(0);
 
+/**
+ * `count` wavelength bands spread evenly across `SPECTRUM_NM`, each with its Cauchy IOR offset
+ * and its share of white light in linear sRGB (the shares of each channel add up to 1, so the
+ * bands together are exactly white). One band is plain white light at the d line.
+ */
+export function spectralBands(count: number): { nm: number; cauchy: number; rgb: [number, number, number] }[] {
+  if (count <= 1) return [{ nm: FRAUNHOFER_D, cauchy: 0, rgb: [1, 1, 1] }];
+  const [lo, hi] = SPECTRUM_NM;
+  const nm = Array.from({ length: count }, (_, k) => lo + ((k + 0.5) / count) * (hi - lo));
+  const rgb = nm.map(spectralRgb);
+  const total = [0, 1, 2].map((c) => rgb.reduce((sum, w) => sum + w[c], 0));
+  return nm.map((wl, k) => ({
+    nm: wl,
+    cauchy: cauchyAt(wl),
+    rgb: [rgb[k][0] / total[0], rgb[k][1] / total[1], rgb[k][2] / total[2]],
+  }));
+}
+
 /** Fewest and most wavelengths traced per pixel, at full quality and in the fast mode. */
 export const SPECTRAL_SAMPLES = { min: 6, max: 12, fastMin: 3, fastMax: 6 } as const;
 /**

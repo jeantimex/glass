@@ -10,6 +10,7 @@ import {
   SPECTRUM_NM,
   spectralRgb,
   spectralSample,
+  spectralBands,
   spectralSampleCount,
 } from '../tsl/optics';
 import { causticNode, glassNode, photonNode } from '../tsl/glass';
@@ -120,6 +121,17 @@ describe('optical physics invariants', () => {
         const spread = (Math.max(...sums) - Math.min(...sums)) / mean;
         expect(spread).toBeLessThan(count >= 12 ? 0.1 : 0.4);
       }
+    }
+  });
+
+  it('splits white light into caustic wavelength bands that add back up to white', () => {
+    expect(spectralBands(1)).toEqual([{ nm: 587.6, cauchy: 0, rgb: [1, 1, 1] }]);
+    for (const count of [4, 6, 10]) {
+      const bands = spectralBands(count);
+      expect(bands).toHaveLength(count);
+      for (let c = 0; c < 3; c++) expect(bands.reduce((sum, b) => sum + b.rgb[c], 0)).toBeCloseTo(1, 10);
+      // Ordered blue to red: the IOR offset falls as the wavelength grows.
+      for (let k = 1; k < count; k++) expect(bands[k].cauchy).toBeLessThan(bands[k - 1].cauchy);
     }
   });
 

@@ -81,6 +81,29 @@ export function perturbFrostNormal(
 }
 
 /**
+ * Tilt surface normal `normalVar` by the glass's faint imperfections at `localPos`: slow,
+ * organic waviness (as in cast or hand-finished glass, far broader and gentler than frost),
+ * up to about 0.03 rad at `amount` 1 (cast glass bends light by a few milliradians). A function of position only, so the same surface
+ * bends every ray that meets it the same way, inside or out.
+ */
+export function perturbImperfections(normalVar: N, localPos: N, objectReach: N, amount: N): void {
+  If(amount.greaterThan(0.001), () => {
+    // A few undulations across the object (frostNoise3's octaves at 36, 14 and 5.5 times this).
+    const p = localPos.div(max(objectReach, 0.05)).mul(0.07).toVar();
+    const centre = frostNoise3(p).toVar();
+    const eps = float(0.004);
+    const gradient = vec3(
+      frostNoise3(p.add(vec3(eps, 0, 0))).sub(centre),
+      frostNoise3(p.add(vec3(0, eps, 0))).sub(centre),
+      frostNoise3(p.add(vec3(0, 0, eps))).sub(centre),
+    ).div(eps);
+    // Only the part across the surface tilts it.
+    const across = gradient.sub(normalVar.mul(dot(gradient, normalVar)));
+    normalVar.assign(normalize(normalVar.add(across.mul(amount.mul(0.0012)))));
+  });
+}
+
+/**
  * Apply the creamy translucent frost veil and grazing cubic Fresnel rim `(1 - N·V)³`
  * onto `colorVar` when `roughness > 0`.
  */

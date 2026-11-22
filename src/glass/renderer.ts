@@ -56,7 +56,7 @@ import {
 } from 'three/tsl';
 import { KIND, MAX_OBJECTS, type GlassObjects } from './objects';
 import { createPassTimer } from './timing';
-import { SPECTRAL_FRAME_OFFSET } from './tsl/optics';
+import { SPECTRAL_FRAME_OFFSET, spectralBands } from './tsl/optics';
 import { causticNode, photonNode as photonRayNode } from './tsl/caustics';
 import { CMY_FACE_ORDERS, type CmyFaceOrder } from './tsl/cmy';
 import { bloomPrefilterNode, blurNode, contactShadeNode, lensNode } from './tsl/finish';
@@ -116,10 +116,12 @@ export interface InstancedLighting {
   cmyOrder?: CmyFaceOrder;
   /** Diamond cut used for diamond instances (default `'round'`). */
   diamondCut?: DiamondCut;
-  /** Edge bevel for box instances in local units (default `0`). */
+  /** Edge bevel of faceted shapes (box, octahedron, prism, hex prism), in metres (default `0`). */
   bevel?: number;
   /** Blend strength for `MeshGlassMaterial.color` (0 = clear, 1 = full tint; default `1`). */
   colorAlpha?: number;
+  /** Faint waviness of the glass surfaces (0: perfect glass, the default; 1: clearly hand-made). */
+  imperfections?: number;
 }
 
 const CAUSTIC_MAP_SIZE = 1024;
@@ -322,6 +324,7 @@ export function createInstancedGlass(
   const uBevel = uniform(0); // how much is cut off the edges of boxes (m)
   const uRoughness = uniform(0); // frosted glass roughness (0: clear, 1: frosted)
   const uFrostScale = uniform(4); // frosted glass grain density (higher = smaller particles)
+  const uImperfection = uniform(0); // faint surface waviness (0: perfect glass)
   const uSpot = uniform(new THREE.Vector4()); // stage spotlight: beam radius at the floor (0: off), distance of the lamp
   const uFloor = uniform(new THREE.Vector4()); // x: how reflective the floor is; y: how dark its shadows are
   const uFloorColor = uniform(new THREE.Vector4(0.85, 0.85, 0.85, 1)); // floor linear rgb + alpha
@@ -370,6 +373,7 @@ export function createInstancedGlass(
     sdfTex: volumeNode,
     roughness: uRoughness,
     frostScale: uFrostScale,
+    imperfection: uImperfection,
   };
   // v rotated by the instance quaternion: v + 2 q.xyz x (q.xyz x v + q.w v)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TSL node types are too loose to spell out here
@@ -422,7 +426,10 @@ export function createInstancedGlass(
   };
 
   const groundMaterial = new THREE.NodeMaterial();
+  // Headroom for gathered caustic light above the open floor's (see causticHeadroom in tsl/scene.ts).
+  const uCausticHeadroom = uniform(2);
   const sceneInputs = {
+    causticHeadroom: uCausticHeadroom,
     room: uRoom,
     skyE: uSkyE,
     sunE: uSunE,
@@ -479,11 +486,13 @@ export function createInstancedGlass(
     cut = 0,
     maxPasses = 4,
   ) => {
-    // Each bilinear-paired tap covers 2 texels (up to 6 pairs = 13 fetches per pass).
+    // Each bilinear-paired tap covers 2 texels (up to 12 pairs = 25 fetches per pass).
     const texels = Math.max(radiusX * scratch.width, radiusY * scratch.height);
     const passes = Math.min(Math.max(Math.ceil((texels / 22) ** 2), 1), maxPasses);
     const share = 1 / Math.sqrt(passes);
-    uBlurReach.value = Math.min(Math.max(Math.ceil((texels * share) / 2.2), 2), 6);
+    // Taps cover the kernel out to 3 sigma (1.5 times `radius`, which is 2 sigma), about a
+    // texel apart: farther apart, sharp content (caustic splats) breaks up into a grid.
+    uBlurReach.value = Math.min(Math.max(Math.ceil((texels * share * 1.5) / 2.2), 2), 12);
     for (let pass = 0; pass < passes; pass++) {
       blurSource.value = pass === 0 ? from : to.texture;
       uBlurCut.value = pass === 0 ? cut : 0;
@@ -498,6 +507,9 @@ export function createInstancedGlass(
     }
   };
 
+  // Real caustics are traced once per wavelength band: x its Cauchy IOR offset, yzw the
+  // linear-sRGB share of the light it carries (the bands' shares add up to white).
+  const uPhotonBand = uniform(new THREE.Vector4(0, 1, 1, 1));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const makePhotonMaterial = (kind: number, position: any, normal: any, diamondPlanes?: number[]) => {
     // Its output is data (which way each ray is thrown, negative as often as not, and
@@ -516,6 +528,7 @@ export function createInstancedGlass(
       uLightR,
       uLightU,
       diamondPlanes,
+      uPhotonBand,
     );
     return material;
   };
@@ -567,20 +580,35 @@ export function createInstancedGlass(
   };
   const edgeX = footprintEdge([1, 0]).toVar();
   const edgeY = footprintEdge([0, 1]).toVar();
-  // Area in lamp-map texels (one clip unit is photonMapSize / 2 texels).
+  // One clip unit of the lamp map is photonMapSize / 2 texels.
   const texelsPerUnit = photonMapSize / 2;
-  const area = abs(edgeX.x.mul(edgeY.y).sub(edgeX.y.mul(edgeY.x))).mul(texelsPerUnit * texelsPerUnit);
-  // Light focused into a few texels or less is shared among the 4 texels nearest where
-  // it lands, by bilinear (tent) weights that always add up to 1. Drawn as a small
-  // square instead, it would snap to whole texels, and the rays of a bright, focused
-  // pool would beat against the texel grid in a moire of squares the blur cannot hide.
-  const focused = area.lessThan(4);
+  // Each ray's light is spread by a bilinear "hat" over its own footprint: twice as wide
+  // along each footprint edge and falling linearly to 0, so the hats of neighbouring rays
+  // (one footprint apart) add up to a perfectly smooth spread, whether the footprint is
+  // small, large, or long and thin. (Hard-edged shapes snapped to whole texels, leaving a
+  // grid of squares; one square per ray turned long, thin footprints into blocks.) Edges
+  // shorter than a texel are stretched to one, so no light falls between texel centres.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const atLeastOneTexel = (edge: any, fallback: any) => {
+    const texels = length(edge).mul(texelsPerUnit);
+    return select(texels.lessThan(1e-4), fallback, edge.mul(max(float(1).div(max(texels, 1e-4)), 1)));
+  };
+  /* eslint-disable @typescript-eslint/no-explicit-any -- select() loses the vector types */
+  const hatX: any = atLeastOneTexel(edgeX, vec2(2 * texelStep, 0)).toVar();
+  const hatY: any = atLeastOneTexel(edgeY, vec2(0, -2 * texelStep)).toVar();
+  const hatArea = abs(hatX.x.mul(hatY.y).sub(hatX.y.mul(hatY.x))).mul(texelsPerUnit * texelsPerUnit);
+  // Edges (nearly) along one line, where a fold of the caustic squeezes the footprint flat:
+  // a one-texel hat instead.
+  const flat = hatArea.lessThan(0.5);
   const corner = vec2(positionGeometry.x, positionGeometry.y);
-  const tentSquare = corner.mul(2 * 2 * texelStep); // 2 texels across
-  const landPos = self.pos.add(select(focused, tentSquare, edgeX.mul(corner.x).add(edgeY.mul(corner.y))));
-  const landLight = self.light.div(select(focused, float(1), area));
-  // Texels from where the ray lands (-1 to 1 across the tent), or 0 for a full footprint.
-  const tentAt = varying(select(focused, corner.mul(2), vec2(0)));
+  const spanX: any = select(flat, vec2(2 * texelStep, 0), hatX);
+  const spanY: any = select(flat, vec2(0, -2 * texelStep), hatY);
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+  const landPos = self.pos.add(spanX.mul(corner.x.mul(2)).add(spanY.mul(corner.y.mul(2))));
+  // The hat over (-1..1)^2 of the footprint integrates to the footprint's area.
+  const landLight = self.light.div(select(flat, float(1), hatArea));
+  // Where in the hat this corner is (-1 to 1 along each edge).
+  const tentAt = varying(corner.mul(2));
   const tentWeight = float(1)
     .sub(abs(tentAt.x))
     .mul(float(1).sub(abs(tentAt.y)))
@@ -588,7 +616,10 @@ export function createInstancedGlass(
   const landMaterial = new THREE.NodeMaterial();
   // Cull empty photon rays (no glass hit or zero carried light) offscreen before rasterization.
   landMaterial.vertexNode = vec4(select(self.lands, landPos.x, 2), select(self.lands, landPos.y, 2), 0, 1);
-  landMaterial.fragmentNode = vec4(vec3(varying(landLight).mul(tentWeight)), 1);
+  landMaterial.fragmentNode = vec4(uPhotonBand.yzw.mul(varying(landLight).mul(tentWeight)), 1);
+  // A footprint's edges can wind either way (the lamp map's rows run down, clip space up,
+  // and a caustic can fold the light over): draw both sides, or many would be culled.
+  landMaterial.side = THREE.DoubleSide;
   landMaterial.transparent = true;
   landMaterial.blending = THREE.AdditiveBlending;
   landMaterial.depthTest = landMaterial.depthWrite = false;
@@ -1060,6 +1091,26 @@ export function createInstancedGlass(
     }
   };
 
+  /**
+   * The wavelength bands real caustics are traced in for glass of dispersion `dispersion`:
+   * one (white, no offset) without dispersion, else more the stronger it is, evenly across
+   * the spectrum, each with its Cauchy offset and linear-sRGB share (the shares add up to
+   * white, so clear glass still throws white light where the colours overlap).
+   */
+  const causticBandCache = new Map<number, THREE.Vector4[]>();
+  const causticBands = (dispersion: number, coloured: boolean): THREE.Vector4[] => {
+    // Coloured glass (tinted, CMY) needs at least three bands to carry its colour, even
+    // without dispersion: each band is filtered by how much of its light the glass passes.
+    const fewest = coloured ? 3 : 1;
+    const count = dispersion > 0 ? Math.min(Math.max(Math.ceil((dispersion / 12) * 64), 4), isMobile ? 4 : 10) : fewest;
+    let bands = causticBandCache.get(count);
+    if (!bands) {
+      bands = spectralBands(count).map((b) => new THREE.Vector4(b.cauchy, b.rgb[0], b.rgb[1], b.rgb[2]));
+      causticBandCache.set(count, bands);
+    }
+    return bands;
+  };
+
   /* Layer-sorting state */
   let lightDirty = true;
   let lastSun = '';
@@ -1274,6 +1325,7 @@ export function createInstancedGlass(
     uBevel.value = bevel;
     uRoughness.value = roughness;
     uFrostScale.value = frostScale;
+    uImperfection.value = Math.min(Math.max(light.imperfections ?? 0, 0), 1);
     if (uCmy.value !== cmy) lightDirty = true; // its shadow is coloured too
     uCmy.value = cmy;
     const [ox, oy, oz] = CMY_FACE_ORDERS[cmyOrder];
@@ -1314,6 +1366,8 @@ export function createInstancedGlass(
       cmy +
       cmyOrder +
       bevel +
+      '/' +
+      dispersion +
       color.join() +
       String(light.realCaustics) +
       String(light.objectShadows);
@@ -1392,6 +1446,10 @@ export function createInstancedGlass(
         );
         uGlass.value.set(glass.ior, glass.dispersion, 6, 0);
         mark('Caustics');
+        let coloured = cmy > 0 || (color[3] > 0 && Math.min(color[0], color[1], color[2]) < 0.999);
+        for (let i = 0; i < objects.count * 3 && !coloured; i++) coloured = objects.tint[i] < 0.999;
+        const bands = causticBands(dispersion, coloured);
+        uPhotonBand.value.copy(bands[0]);
         renderer.setClearColor(0x000000, 0);
         renderer.setRenderTarget(photonMap);
         renderer.render(photonScene, lightCamera);
@@ -1402,10 +1460,22 @@ export function createInstancedGlass(
         blur(openMap.texture, shadeNear, light.shadowSoftness * perMetre, undefined, shadeScratch, 0, 2);
         // ... plus the light that came through the glass, gathered where it lands
         // and blurred as much as the lamp is wide: a small lamp throws sharp
-        // caustics, a large soft one smooth pools of light.
+        // caustics, a large soft one smooth pools of light. Each wavelength band is
+        // traced and gathered in turn and added up, so dispersion fans the caustics
+        // out into their colours.
         renderer.setClearColor(0x000000, 1);
         renderer.setRenderTarget(landedMap);
         renderer.render(landScene, lightCamera);
+        for (let b = 1; b < bands.length; b++) {
+          uPhotonBand.value.copy(bands[b]);
+          renderer.setClearColor(0x000000, 0);
+          renderer.setRenderTarget(photonMap);
+          renderer.render(photonScene, lightCamera);
+          renderer.setRenderTarget(landedMap);
+          renderer.autoClear = false;
+          renderer.render(landScene, lightCamera);
+          renderer.autoClear = true;
+        }
         renderer.setClearColor(previousClear, previousAlpha);
         blur(landedMap.texture, gatheredSoft, light.causticSoftness * perMetre, undefined, shadeScratch, 0, 2);
         renderer.setRenderTarget(shadeNear);
@@ -1426,6 +1496,10 @@ export function createInstancedGlass(
     uGlass.value.set(ior, 0, 2, 0);
     uFloor.value.x = light.ground ? light.floorReflection : 0;
     uFloor.value.y = light.realCaustics ? -light.shadowDarkness : light.shadowDarkness; // (negative: see icGroundColor)
+    // One object: its real focused caustic (up to ~25x the open floor). More: pools from
+    // objects above one another add up (only the top layer is traced), so the headroom
+    // falls quickly toward the pile's ~3x (12 objects: under 4x).
+    uCausticHeadroom.value = 2 + 22 / Math.max(objects.count, 1);
     uFloor.value.z = light.floorGrid ? 1 : 0;
     uFloor.value.w = light.fog;
     if (light.floorColor) uFloorColor.value.fromArray(light.floorColor);
@@ -1504,7 +1578,15 @@ export function createInstancedGlass(
     const aoActive = light.contactShadows > 0.001;
     mark('Finishing');
     if (aoActive) {
-      uShade.value.set(light.contactShadows, light.contactRadius, light.exposure, 0);
+      // Glass lets most of the light it blocks through (and focuses it nearby), so the
+      // darkening where it meets the floor is only as strong as the glass is opaque: about
+      // a third for clear glass, the full setting as its tint gets dark.
+      const tintR = 1 + (color[0] - 1) * color[3];
+      const tintG = 1 + (color[1] - 1) * color[3];
+      const tintB = 1 + (color[2] - 1) * color[3];
+      const transmitted = 0.2126 * tintR + 0.7152 * tintG + 0.0722 * tintB;
+      const glassOpacity = 1 - 0.65 * Math.min(Math.max(transmitted, 0), 1);
+      uShade.value.set(light.contactShadows * glassOpacity, light.contactRadius, light.exposure, 0);
       renderer.setRenderTarget(aoLayer);
       shadeQuad.render(renderer);
     }
