@@ -286,6 +286,8 @@ Metadata for each cut: `{ label, planes, planeCount, rest, lean }`, where `rest`
 npm install          # Install dependencies
 npm run dev          # Start Vite dev server (open ?shape=diamond or ?shape=torus-knot&count=27&layout=grid)
 npm test             # Run Vitest unit test suite
+npm run test:screenshots         # Playwright screenshot tests (shapes, camera angles, glass settings, mesh page)
+npm run test:screenshots:update  # Regenerate the screenshot baselines after an intended visual change
 npm run lint         # Run oxlint static analysis
 npm run format       # Format codebase with Prettier
 npm run format:check # Verify Prettier formatting
@@ -297,6 +299,8 @@ node scripts/bake-suzanne-sdf.ts    # Re-bake public/suzanne_sdf_128.bin (subdiv
 ```
 
 ---
+
+See [ROADMAP.md](ROADMAP.md) for what is planned next.
 
 ## Credits
 

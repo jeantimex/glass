@@ -866,6 +866,17 @@ async function main() {
       dark?: boolean;
       hdri?: typeof settings.hdri;
       ground?: boolean;
+      /** Turn the shape round the upright to this many degrees (0: its faces along the world axes). */
+      turn?: number;
+      /**
+       * Look from this direction (degrees) at the usual distance: azimuth 0 from +z (in
+       * front), 90 from +x (the right), 180 from behind; elevation above the floor.
+       */
+      view?: { azimuth: number; elevation: number };
+      /** The shape's own glass (as its panel sets it): IOR, dispersion, frost, colour (sRGB 0-1) and its strength. */
+      glass?: Partial<Pick<Single, 'ior' | 'dispersion' | 'roughness' | 'frostScale' | 'glassColor' | 'glassAlpha'>>;
+      /** Scene and renderer settings to change (real caustics, imperfections, ...). */
+      settings?: Partial<typeof settings>;
     }): Promise<void> {
       view.shape = opts.shape;
       view.count = 1;
@@ -879,8 +890,22 @@ async function main() {
       if (hdriPreset !== 'none') {
         await loadHdriPreset(hdriPreset, '2k');
       }
+      if (opts.turn !== undefined) singleFor(opts.shape).turn = opts.turn;
+      if (opts.glass) Object.assign(singleFor(opts.shape), opts.glass);
       placeObjects();
+      if (opts.settings) Object.assign(settings, opts.settings);
       frameScene();
+      if (opts.view) {
+        const distance = camera.position.distanceTo(orbit.target);
+        const azimuth = THREE.MathUtils.degToRad(opts.view.azimuth);
+        const elevation = THREE.MathUtils.degToRad(opts.view.elevation);
+        camera.position.set(
+          orbit.target.x + distance * Math.cos(elevation) * Math.sin(azimuth),
+          orbit.target.y + distance * Math.sin(elevation),
+          orbit.target.z + distance * Math.cos(elevation) * Math.cos(azimuth),
+        );
+        orbit.update();
+      }
       instanced.markChanged();
       instanced.resetHistory();
       dirtyFrames = 3;
