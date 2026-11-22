@@ -4,14 +4,28 @@ import { float, texture, texture3D, uniform, vec3, vec4 } from 'three/tsl';
 import { DIAMOND_CUTS, type DiamondCut } from '../diamond';
 import { KIND } from '../objects';
 import {
-  causticNode,
-  glassNode,
-  photonNode,
-  SPECTRAL_BANDS,
-  SPECTRAL_BANDS_FAST,
-  SPECTRAL_COUNT,
-  SPECTRAL_FAST_COUNT,
-} from '../tsl/glass';
+  cauchyAt,
+  cmfXyz,
+  SPECTRAL_SAMPLES,
+  SPECTRUM_NM,
+  spectralRgb,
+  spectralSample,
+  spectralSampleCount,
+} from '../tsl/optics';
+import { causticNode, glassNode, photonNode } from '../tsl/glass';
+
+/** Wavelength (nm, 380-780) where colour-matching function `k` (0 x̄, 1 ȳ, 2 z̄) peaks. */
+function cmfPeak(k: number): number {
+  let best = 380;
+  for (let nm = 380; nm <= 780; nm++) if (cmfXyz(nm)[k] > cmfXyz(best)[k]) best = nm;
+  return best;
+}
+
+/** Which linear-sRGB channel (0 r, 1 g, 2 b) light of wavelength `nm` shows most in. */
+function dominantChannel(nm: number): number {
+  const rgb = spectralRgb(nm);
+  return rgb.indexOf(Math.max(...rgb));
+}
 
 /** Reference CPU implementation of our exact Cook-Torrance dielectric Fresnel formula (glass.ts). */
 function dielectricFresnel(cosI: number, eta: number): number {
@@ -64,51 +78,58 @@ describe('optical physics invariants', () => {
     expect(blueWeight - redWeight).toBeCloseTo(1, 5);
   });
 
-  it('has energy-conserving, non-negative 6-band CIE 1931 spectral weights matching Cauchy law', () => {
-    expect(SPECTRAL_BANDS.length).toBe(SPECTRAL_COUNT);
-    expect(SPECTRAL_COUNT).toBe(6);
-    const invC2 = 1 / 656.3 ** 2;
-    const invD2 = 1 / 587.6 ** 2;
-    const invF2 = 1 / 486.1 ** 2;
-    let sumR = 0;
-    let sumG = 0;
-    let sumB = 0;
-    for (let i = 0; i < SPECTRAL_BANDS.length; i++) {
-      const band = SPECTRAL_BANDS[i];
-      const expectedCauchy = (1 / band.wavelength ** 2 - invD2) / (invF2 - invC2);
-      expect(band.cauchy).toBeCloseTo(expectedCauchy, 3);
-      if (i > 0) expect(band.cauchy).toBeLessThan(SPECTRAL_BANDS[i - 1].cauchy);
-      expect(band.rgb[0]).toBeGreaterThanOrEqual(0);
-      expect(band.rgb[1]).toBeGreaterThanOrEqual(0);
-      expect(band.rgb[2]).toBeGreaterThanOrEqual(0);
-      sumR += band.rgb[0];
-      sumG += band.rgb[1];
-      sumB += band.rgb[2];
-    }
-    expect(sumR).toBeCloseTo(1, 4);
-    expect(sumG).toBeCloseTo(1, 4);
-    expect(sumB).toBeCloseTo(1, 4);
+  it('follows Cauchy dispersion: shorter wavelengths bend more, zero at the d line', () => {
+    expect(cauchyAt(587.6)).toBeCloseTo(0, 10);
+    expect(cauchyAt(486.1) - cauchyAt(656.3)).toBeCloseTo(1, 10);
+    const [lo, hi] = SPECTRUM_NM;
+    for (let nm = lo; nm < hi; nm += 10) expect(cauchyAt(nm)).toBeGreaterThan(cauchyAt(nm + 10));
   });
 
-  it('has energy-conserving, non-negative 3-band CIE 1931 fast spectral weights', () => {
-    expect(SPECTRAL_BANDS_FAST.length).toBe(SPECTRAL_FAST_COUNT);
-    expect(SPECTRAL_FAST_COUNT).toBe(3);
-    let sumR = 0;
-    let sumG = 0;
-    let sumB = 0;
-    for (let i = 0; i < SPECTRAL_BANDS_FAST.length; i++) {
-      const band = SPECTRAL_BANDS_FAST[i];
-      if (i > 0) expect(band.cauchy).toBeLessThan(SPECTRAL_BANDS_FAST[i - 1].cauchy);
-      expect(band.rgb[0]).toBeGreaterThanOrEqual(0);
-      expect(band.rgb[1]).toBeGreaterThanOrEqual(0);
-      expect(band.rgb[2]).toBeGreaterThanOrEqual(0);
-      sumR += band.rgb[0];
-      sumG += band.rgb[1];
-      sumB += band.rgb[2];
+  it('fits the CIE 1931 colour-matching functions (Wyman et al. 2013)', () => {
+    // Luminosity peaks at ~555 nm with value ~1; x̄ peaks near 600 nm, z̄ near 445 nm.
+    expect(Math.abs(cmfPeak(1) - 555)).toBeLessThan(10);
+    expect(cmfXyz(555)[1]).toBeCloseTo(1, 1);
+    expect(Math.abs(cmfPeak(0) - 600)).toBeLessThan(10);
+    expect(Math.abs(cmfPeak(2) - 445)).toBeLessThan(10);
+  });
+
+  it('weights wavelengths by their non-negative sRGB colour, in spectral order', () => {
+    const [lo, hi] = SPECTRUM_NM;
+    for (let nm = lo; nm <= hi; nm += 5) for (const c of spectralRgb(nm)) expect(c).toBeGreaterThanOrEqual(0);
+    expect(dominantChannel(450)).toBe(2); // blue
+    expect(dominantChannel(530)).toBe(1); // green
+    expect(dominantChannel(620)).toBe(0); // red
+  });
+
+  it('samples the spectrum evenly enough that jitter only adds faint grain', () => {
+    // Per pixel the shader sums the weights of `count` evenly spaced wavelengths, offset by
+    // a jitter. How much that sum changes with the jitter is how strong the grain can get.
+    const [lo, hi] = SPECTRUM_NM;
+    const sum = (count: number, jitter: number) => {
+      const out = [0, 0, 0];
+      for (let i = 0; i < count; i++) {
+        const rgb = spectralRgb(lo + ((i + jitter) / count) * (hi - lo));
+        for (let c = 0; c < 3; c++) out[c] += rgb[c];
+      }
+      return out;
+    };
+    for (const count of [SPECTRAL_SAMPLES.min, 12, SPECTRAL_SAMPLES.max]) {
+      for (let c = 0; c < 3; c++) {
+        const sums = Array.from({ length: 16 }, (_, k) => sum(count, k / 16)[c]);
+        const mean = sums.reduce((a, b) => a + b) / sums.length;
+        const spread = (Math.max(...sums) - Math.min(...sums)) / mean;
+        expect(spread).toBeLessThan(count >= 12 ? 0.1 : 0.4);
+      }
     }
-    expect(sumR).toBeCloseTo(1, 4);
-    expect(sumG).toBeCloseTo(1, 4);
-    expect(sumB).toBeCloseTo(1, 4);
+  });
+
+  it('builds the spectral sample count and samples as shader nodes', () => {
+    expect(SPECTRAL_SAMPLES.min).toBeLessThan(SPECTRAL_SAMPLES.max);
+    expect(spectralSampleCount(float(0.2), false)).toBeTruthy();
+    expect(spectralSampleCount(float(0.2), true)).toBeTruthy();
+    const sample = spectralSample(float(2), float(8), float(0.5));
+    expect(sample.cauchy).toBeTruthy();
+    expect(sample.weight).toBeTruthy();
   });
 
   it('satisfies Beer-Lambert volumetric absorption invariants', () => {

@@ -10,34 +10,21 @@ import * as TSL from 'three/tsl';
 import { KIND } from '../objects';
 import { cmyTint } from './cmy';
 import { applyFrostVeil, perturbFrostNormal } from './frost';
-import {
-  fresnel,
-  rotateToLocal,
-  rotateToWorld,
-  SPECTRAL_COUNT,
-  SPECTRAL_FAST_COUNT,
-  spectralCauchy,
-  spectralCauchyFast,
-  spectralWeight,
-  spectralWeightFast,
-} from './optics';
+import { fresnel, rotateToLocal, rotateToWorld, spectralJitter, spectralSample, spectralSampleCount } from './optics';
 import { sceneFunctions, type SceneInputs } from './scene';
 import { isBakedMesh, isCurvedShape, shapeFunctions } from './shapes';
 
 // Re-export modular optical, CMY, frost, shape, and caustic primitives for backwards compatibility.
 export { CMY_FACE_ORDERS, cmyChannelColor, cmyTint, type CmyFaceOrder } from './cmy';
 export {
+  cauchyAt,
   fresnel,
   iorOffset,
-  SPECTRAL_BANDS,
-  SPECTRAL_BANDS_FAST,
-  SPECTRAL_COUNT,
-  SPECTRAL_FAST_COUNT,
-  spectralCauchy,
-  spectralCauchyFast,
-  spectralWeight,
-  spectralWeightFast,
-  type SpectralBand,
+  SPECTRAL_SAMPLES,
+  SPECTRUM_NM,
+  spectralRgb,
+  spectralSample,
+  spectralSampleCount,
 } from './optics';
 export { applyFrostVeil, frostNoise3, perturbFrostNormal } from './frost';
 export { isBakedMesh, isCurvedShape, shapeFunctions } from './shapes';
@@ -291,14 +278,15 @@ export function glassNode(
     // Same bounce budget for every shape (the renderer lowers it for big piles and the floor mirror).
     const maxEvents = glassP.z.toInt();
 
-    // Heavily frosted glass blurs out chromatic splitting; mobile & far layers use 3-band CIE (s.spot.w > 0.5).
+    // As many wavelengths as the dispersion needs (heavily frosted glass blurs the colours
+    // out: one); mobile & far layers trace half as many (s.spot.w > 0.5).
     const useFastSpectral = s.spot.w.greaterThan(0.5).toVar();
     const wantDispersion = dispersionSpread.greaterThan(0).and(roughness.lessThan(0.35));
-    const bandCount = select(
-      wantDispersion,
-      select(useFastSpectral, int(SPECTRAL_FAST_COUNT), int(SPECTRAL_COUNT)),
-      int(1),
-    ).toVar();
+    const bandCount = select(wantDispersion, spectralSampleCount(dispersionSpread, useFastSpectral), int(1)).toVar();
+    // Where between evenly spaced wavelengths this pixel samples (continuous rainbow fringes).
+    const spectralU = spectralJitter().toVar();
+    // Sum of the spectral weights used, to divide by (keeps white light exactly white).
+    const weightSum = vec3(0).toVar();
 
     // Beer-Lambert absorption coefficient across one characteristic diameter (2 * reach).
     const baseTint = mix(vec3(1), tintAll.rgb.mul(tintOwn), tintAll.a).toVar();
@@ -326,11 +314,8 @@ export function glassNode(
 
     const tracePerBand = () => {
       Loop({ start: int(0), end: bandCount, type: 'int', condition: '<', name: 'lc' }, ({ lc }: { lc: N }) => {
-        const bandOffset = select(
-          bandCount.equal(1),
-          float(0),
-          select(useFastSpectral, spectralCauchyFast(lc), spectralCauchy(lc)),
-        );
+        const sample = spectralSample(lc, bandCount, spectralU);
+        const bandOffset = select(bandCount.equal(1), float(0), sample.cauchy);
         const bandIor = max(baseIor.add(dispersionSpread.mul(bandOffset)), 1.0001).toVar();
         const entryFresnel = fresnel(viewDotNormal, bandIor).toVar();
         const bandRadiance = entryFresnel.mul(outerReflection).toVar();
@@ -412,12 +397,9 @@ export function glassNode(
           });
         });
 
-        const bandWeight = select(
-          bandCount.equal(1),
-          vec3(1),
-          select(useFastSpectral, spectralWeightFast(lc), spectralWeight(lc)),
-        );
+        const bandWeight = select(bandCount.equal(1), vec3(1), sample.weight).toVar();
         color.addAssign(bandRadiance.mul(bandWeight));
+        weightSum.addAssign(bandWeight);
       });
     };
 
@@ -462,7 +444,8 @@ export function glassNode(
         });
 
         Loop({ start: int(0), end: bandCount, type: 'int', condition: '<', name: 'lc' }, ({ lc }: { lc: N }) => {
-          const bandOffset = select(useFastSpectral, spectralCauchyFast(lc), spectralCauchy(lc));
+          const sample = spectralSample(lc, bandCount, spectralU);
+          const bandOffset = sample.cauchy;
           const bandIor = max(baseIor.add(dispersionSpread.mul(bandOffset)), 1.0001).toVar();
           const entryFresnel = fresnel(viewDotNormal, bandIor).toVar();
           const bandRadiance = entryFresnel.mul(outerReflection).toVar();
@@ -513,13 +496,15 @@ export function glassNode(
               );
             });
           });
-          const bandWeight = select(useFastSpectral, spectralWeightFast(lc), spectralWeight(lc));
+          const bandWeight = sample.weight.toVar();
           color.addAssign(bandRadiance.mul(bandWeight));
+          weightSum.addAssign(bandWeight);
         });
       }).Else(tracePerBand);
     } else {
       tracePerBand();
     }
+    color.divAssign(max(weightSum, vec3(1e-6)));
 
     // Creamy frosted veil + crisp Fresnel rim when roughness > 0.
     const studioLight = s.skyE.add(s.sunE.mul(mix(0.25, 0.45, lampLit))).toVar();

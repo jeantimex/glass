@@ -7,7 +7,7 @@ import { DIAMOND_CUTS, diamondGeometry, type DiamondCut } from './diamond';
 import { FALLBACK_ENV_TEXTURE } from './material';
 import { KIND } from './objects';
 import { applyFrostVeil, perturbFrostNormal } from './tsl/frost';
-import { fresnel, SPECTRAL_COUNT, spectralCauchy, spectralWeight } from './tsl/optics';
+import { fresnel, spectralJitter, spectralSample, spectralSampleCount } from './tsl/optics';
 import { shapeFunctions } from './tsl/shapes';
 import { makeStudioEnv } from './tsl/studioEnv';
 
@@ -275,7 +275,13 @@ export class DiamondMesh extends THREE.Mesh {
       const ior = max(uIor, 1.0001).toVar();
       const disp = uDispersion.div(12).toVar();
       const maxEvents = uBounces.toInt();
-      const layers = select(disp.greaterThan(0).and(uRoughness.lessThan(0.35)), int(SPECTRAL_COUNT), int(1)).toVar();
+      const layers = select(
+        disp.greaterThan(0).and(uRoughness.lessThan(0.35)),
+        spectralSampleCount(disp, false),
+        int(1),
+      ).toVar();
+      const spectralU = spectralJitter().toVar();
+      const weightSum = vec3(0).toVar();
       const sigma = log(max(uTint, vec3(1e-4)))
         .negate()
         .div(2)
@@ -286,7 +292,8 @@ export class DiamondMesh extends THREE.Mesh {
       const outerRefl = env(toWorldDir(reflect(d0, n0))).toVar();
 
       Loop({ start: int(0), end: layers, type: 'int', condition: '<', name: 'lc' }, ({ lc }: { lc: N }) => {
-        const bandOffset = select(layers.equal(1), float(0), spectralCauchy(lc));
+        const sample = spectralSample(lc, layers, spectralU);
+        const bandOffset = select(layers.equal(1), float(0), sample.cauchy);
         const iorIn = max(ior.add(disp.mul(bandOffset)), 1.0001).toVar();
         const f0 = fresnel(d0DotN0, iorIn).toVar();
         const layer = f0.mul(outerRefl).toVar();
@@ -323,9 +330,11 @@ export class DiamondMesh extends THREE.Mesh {
             layer.addAssign(filtered.mul(thr.mul(lookEnv(wDir, bend))));
           });
         });
-        const weight = select(layers.equal(1), vec3(1), spectralWeight(lc));
+        const weight = select(layers.equal(1), vec3(1), sample.weight).toVar();
+        weightSum.addAssign(weight);
         col.addAssign(layer.mul(weight));
       });
+      col.divAssign(max(weightSum, vec3(1e-6)));
 
       applyFrostVeil(col, d0, n0, uTint, vec3(0.75), uRoughness, frostGrain);
       return vec4(col, 1);

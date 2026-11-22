@@ -1,11 +1,29 @@
 // Physical optical primitives in TSL: quaternion space transforms, exact unpolarized
-// dielectric Fresnel, and Cauchy dispersion (Fraunhofer C/d/F & 6-band / 3-band CIE 1931
-// equal-energy spectral integration).
+// dielectric Fresnel, and Cauchy dispersion with continuous, stratified CIE 1931 spectral
+// sampling (as many wavelengths as the dispersion strength needs).
 /* eslint-disable @typescript-eslint/no-explicit-any -- TSL node types are too loose to spell out */
 import * as TSL from 'three/tsl';
 
 type N = any;
-const { Fn, If, abs, cross, float, select, sqrt, vec3 } = TSL as N;
+const {
+  Fn,
+  If,
+  abs,
+  ceil,
+  clamp,
+  cross,
+  dot,
+  exp,
+  float,
+  fract,
+  int,
+  max,
+  screenCoordinate,
+  select,
+  sqrt,
+  vec2,
+  vec3,
+} = TSL as N;
 
 /* Quaternion transforms */
 
@@ -58,7 +76,7 @@ export const fresnel = Fn(([cosThetaI, eta]: N[]) => {
   ],
 });
 
-/* Cauchy dispersion & CIE 1931 spectral bands */
+/* Cauchy dispersion */
 
 /**
  * Legacy 3-channel Fraunhofer C/d/F IOR offset relative to yellow (587.6 nm, k = 1),
@@ -70,87 +88,144 @@ export function iorOffset(spread: N, channel: number | N): N {
   return select(channel.equal(0), spread.mul(-0.301), select(channel.equal(2), spread.mul(0.699), 0));
 }
 
-export interface SpectralBand {
-  /** Effective wavelength (nm) of this equal-energy CIE 1931 band. */
-  wavelength: number;
-  /** Cauchy IOR offset relative to Fraunhofer d (587.6 nm), normalized by (n_F - n_C). */
-  cauchy: number;
-  /** Normalized linear-sRGB spectral sensitivity weight (sums to [1, 1, 1] across all bands). */
-  rgb: readonly [number, number, number];
+const FRAUNHOFER_D = 587.6;
+const FRAUNHOFER_F = 486.1;
+const FRAUNHOFER_C = 656.3;
+const CAUCHY_D = 1 / (FRAUNHOFER_D * FRAUNHOFER_D);
+const CAUCHY_SCALE = 1 / (1 / (FRAUNHOFER_F * FRAUNHOFER_F) - 1 / (FRAUNHOFER_C * FRAUNHOFER_C));
+
+/**
+ * Cauchy's two-term dispersion `n(λ) = A + B / λ²`, as an IOR offset from the Fraunhofer d
+ * line normalized by the spread `n_F - n_C`:
+ *   cauchy(λ) = (1/λ² - 1/λ_d²) / (1/λ_F² - 1/λ_C²),   n(λ) = n_d + cauchy(λ) * (n_F - n_C)
+ * (C = 656.3 nm red, d = 587.6 nm yellow, F = 486.1 nm blue).
+ */
+export function cauchyAt(nm: number): number {
+  return (1 / (nm * nm) - CAUCHY_D) * CAUCHY_SCALE;
+}
+
+/* Continuous CIE 1931 spectral sampling */
+
+/** The span of wavelengths sampled (nm): where the eye sees nearly all of the light. */
+export const SPECTRUM_NM = [400, 700] as const;
+
+/**
+ * Wyman, Sloan & Shirley (2013) multi-lobe piecewise-Gaussian fit to the CIE 1931 2°
+ * colour-matching functions: `[weight, mean, sigma below mean, sigma above mean]` lobes.
+ */
+const CMF_LOBES: Record<'x' | 'y' | 'z', ReadonlyArray<readonly [number, number, number, number]>> = {
+  x: [
+    [1.056, 599.8, 37.9, 31.0],
+    [0.362, 442.0, 16.0, 26.7],
+    [-0.065, 501.1, 20.4, 26.2],
+  ],
+  y: [
+    [0.821, 568.8, 46.9, 40.5],
+    [0.286, 530.9, 16.3, 31.1],
+  ],
+  z: [
+    [1.217, 437.0, 11.8, 36.0],
+    [0.681, 459.0, 26.0, 13.8],
+  ],
+};
+
+/** CIE XYZ -> linear sRGB (D65). */
+const XYZ_TO_RGB = [
+  [3.2406, -1.5372, -0.4986],
+  [-0.9689, 1.8758, 0.0415],
+  [0.0557, -0.204, 1.057],
+] as const;
+
+/** CIE 1931 colour-matching functions (x̄, ȳ, z̄) at wavelength `nm`. */
+export function cmfXyz(nm: number): [number, number, number] {
+  const lobe = ([w, mu, below, above]: readonly [number, number, number, number]) => {
+    const t = (nm - mu) / (nm < mu ? below : above);
+    return w * Math.exp(-0.5 * t * t);
+  };
+  const sum = (lobes: (typeof CMF_LOBES)['x']) => lobes.reduce((acc, l) => acc + lobe(l), 0);
+  return [sum(CMF_LOBES.x), sum(CMF_LOBES.y), sum(CMF_LOBES.z)];
 }
 
 /**
- * Six equal-energy stratified spectral bands across the visible spectrum (380–720 nm),
- * derived from the CIE 1931 2° standard observer color-matching functions (D65 linear sRGB)
- * and Cauchy's two-term dispersion equation `n(λ) = A + B / λ²`:
- *   cauchy(λ) = (1/λ² - 1/λ_d²) / (1/λ_F² - 1/λ_C²)
- *   n(λ)      = n_d + cauchy(λ) * (n_F - n_C)
- * where Fraunhofer lines are C = 656.3 nm (red), d = 587.6 nm (yellow), F = 486.1 nm (blue).
- *
- * Each band's linear-sRGB weights are non-negative and normalized so Σ rgb = (1, 1, 1),
- * guaranteeing exact energy and white-balance conservation as dispersion → 0.
+ * How strongly light of wavelength `nm` shows in each linear-sRGB channel: the
+ * colour-matching functions in sRGB, with the parts outside the sRGB gamut (negative)
+ * dropped. Unnormalized: the shader divides by the sum of the weights it used.
  */
-export const SPECTRAL_BANDS: readonly SpectralBand[] = [
-  { wavelength: 432.3, cauchy: 1.2845, rgb: [0.0388, 0.0, 0.4409] }, // Violet (380–447 nm)
-  { wavelength: 459.9, cauchy: 0.9586, rgb: [0.0, 0.0, 0.4313] }, // Blue (447–475 nm)
-  { wavelength: 507.6, cauchy: 0.5155, rgb: [0.0, 0.4643, 0.1278] }, // Cyan-Green (475–538 nm)
-  { wavelength: 556.5, cauchy: 0.1739, rgb: [0.0438, 0.4024, 0.0] }, // Yellow-Green (538–573 nm)
-  { wavelength: 588.1, cauchy: -0.0025, rgb: [0.3587, 0.1333, 0.0] }, // Amber-Yellow (573–603.5 nm)
-  { wavelength: 626.5, cauchy: -0.1826, rgb: [0.5587, 0.0, 0.0] }, // Red (603.5–720 nm)
-] as const;
-
-export const SPECTRAL_COUNT = SPECTRAL_BANDS.length;
-
-/** Cauchy IOR offset multiplier for 6-band spectral index `bandIndex` (0..5). */
-export function spectralCauchy(bandIndex: N): N {
-  let out: N = float(SPECTRAL_BANDS[SPECTRAL_COUNT - 1].cauchy);
-  for (let i = SPECTRAL_COUNT - 2; i >= 0; i--) {
-    out = select(bandIndex.equal(i), float(SPECTRAL_BANDS[i].cauchy), out);
-  }
-  return out;
+export function spectralRgb(nm: number): [number, number, number] {
+  const xyz = cmfXyz(nm);
+  return XYZ_TO_RGB.map((row) => Math.max(row[0] * xyz[0] + row[1] * xyz[1] + row[2] * xyz[2], 0)) as [
+    number,
+    number,
+    number,
+  ];
 }
 
-/** Normalized linear-sRGB spectral sensitivity weight for 6-band index `bandIndex` (0..5). */
-export function spectralWeight(bandIndex: N): N {
-  const last = SPECTRAL_BANDS[SPECTRAL_COUNT - 1].rgb;
-  let out: N = vec3(last[0], last[1], last[2]);
-  for (let i = SPECTRAL_COUNT - 2; i >= 0; i--) {
-    const c = SPECTRAL_BANDS[i].rgb;
-    out = select(bandIndex.equal(i), vec3(c[0], c[1], c[2]), out);
-  }
-  return out;
+/** The same weights as `spectralRgb`, as a shader node of wavelength `nm`. */
+function spectralRgbNode(nm: N): N {
+  const lobe = ([w, mu, below, above]: readonly [number, number, number, number]) => {
+    const t = nm.sub(mu).div(select(nm.lessThan(mu), float(below), float(above)));
+    return exp(t.mul(t).mul(-0.5)).mul(w);
+  };
+  const sum = (lobes: (typeof CMF_LOBES)['x']) =>
+    lobes.slice(1).reduce((acc: N, l) => acc.add(lobe(l)), lobe(lobes[0]));
+  const xyz = vec3(sum(CMF_LOBES.x), sum(CMF_LOBES.y), sum(CMF_LOBES.z));
+  const row = (r: readonly [number, number, number]) => dot(xyz, vec3(r[0], r[1], r[2]));
+  return max(vec3(row(XYZ_TO_RGB[0]), row(XYZ_TO_RGB[1]), row(XYZ_TO_RGB[2])), vec3(0));
 }
 
 /**
- * Three energy-conserving overlapping CIE 1931 spectral bands (paired from SPECTRAL_BANDS),
- * used for mobile GPUs and secondary glass layers (~2x faster than 6-band while avoiding
- * non-overlapping RGB delta-spike confetti).
+ * A per-pixel jitter in [0, 1) (Jimenez' interleaved gradient noise) for spectral sampling.
+ * Each pixel takes its wavelengths evenly spaced across the spectrum, but offset by this
+ * much of a step, so neighbouring pixels fill in the wavelengths between each other's and
+ * fringes blend into a continuous rainbow rather than separate sharp copies.
  */
-export const SPECTRAL_BANDS_FAST: readonly SpectralBand[] = [
-  { wavelength: 445.9, cauchy: 1.122, rgb: [0.0388, 0.0, 0.8722] }, // Violet-Blue (B0 + B1)
-  { wavelength: 530.7, cauchy: 0.345, rgb: [0.0438, 0.8667, 0.1278] }, // Cyan-Green (B2 + B3)
-  { wavelength: 610.6, cauchy: -0.111, rgb: [0.9174, 0.1333, 0.0] }, // Amber-Red (B4 + B5)
-] as const;
+export const spectralJitter = (): N =>
+  fract(float(52.9829189).mul(fract(dot(screenCoordinate.xy, vec2(0.06711056, 0.00583715)))));
 
-export const SPECTRAL_FAST_COUNT = SPECTRAL_BANDS_FAST.length;
+/** Fewest and most wavelengths traced per pixel, at full quality and in the fast mode. */
+export const SPECTRAL_SAMPLES = { min: 6, max: 24, fastMin: 3, fastMax: 12 } as const;
+/**
+ * Wavelengths per unit of IOR spread (n_F - n_C). Across 400-700 nm the Cauchy offset
+ * spans about 2.2, so neighbouring samples differ in IOR by about 2.2 * spread / count:
+ * this keeps that step near 0.023, small enough for the jitter to blend into a smooth
+ * rainbow (6 samples for real glass and diamond, 8 at the demo's default, 24 at most).
+ */
+const SAMPLES_PER_SPREAD = 96;
 
-/** Cauchy IOR offset multiplier for fast 3-band spectral index `bandIndex` (0..2). */
-export function spectralCauchyFast(bandIndex: N): N {
-  return select(
-    bandIndex.equal(0),
-    float(SPECTRAL_BANDS_FAST[0].cauchy),
-    select(bandIndex.equal(1), float(SPECTRAL_BANDS_FAST[1].cauchy), float(SPECTRAL_BANDS_FAST[2].cauchy)),
-  );
+/**
+ * How many wavelengths to trace for IOR spread `spread` (n_F - n_C): more the stronger the
+ * dispersion, as many as it takes to keep neighbouring wavelengths close. `fast` (a bool
+ * node) halves the budget, for mobile GPUs and passes seen only indirectly.
+ */
+export function spectralSampleCount(spread: N, fast: N | boolean): N {
+  const wanted = ceil(max(spread, 0).mul(SAMPLES_PER_SPREAD));
+  if (typeof fast === 'boolean') {
+    const [fewest, most] = fast
+      ? [SPECTRAL_SAMPLES.fastMin, SPECTRAL_SAMPLES.fastMax]
+      : [SPECTRAL_SAMPLES.min, SPECTRAL_SAMPLES.max];
+    return int(clamp(fast ? wanted.mul(0.5).ceil() : wanted, float(fewest), float(most)));
+  }
+  const fewest = select(fast, float(SPECTRAL_SAMPLES.fastMin), float(SPECTRAL_SAMPLES.min));
+  const most = select(fast, float(SPECTRAL_SAMPLES.fastMax), float(SPECTRAL_SAMPLES.max));
+  return int(clamp(select(fast, wanted.mul(0.5).ceil(), wanted), fewest, most));
 }
 
-/** Normalized linear-sRGB spectral sensitivity weight for fast 3-band index `bandIndex` (0..2). */
-export function spectralWeightFast(bandIndex: N): N {
-  const c0 = SPECTRAL_BANDS_FAST[0].rgb;
-  const c1 = SPECTRAL_BANDS_FAST[1].rgb;
-  const c2 = SPECTRAL_BANDS_FAST[2].rgb;
-  return select(
-    bandIndex.equal(0),
-    vec3(c0[0], c0[1], c0[2]),
-    select(bandIndex.equal(1), vec3(c1[0], c1[1], c1[2]), vec3(c2[0], c2[1], c2[2])),
-  );
+/**
+ * Wavelength sample `index` of `count` (stratified across `SPECTRUM_NM`, offset by
+ * `jitter` in [0, 1)): its Cauchy IOR offset and its unnormalized linear-sRGB weight.
+ * Accumulate `radiance * weight` and `weight`, then divide: white light stays exactly
+ * white whatever the count or jitter.
+ */
+export function spectralSample(index: N, count: N, jitter: N): { cauchy: N; weight: N } {
+  const [lo, hi] = SPECTRUM_NM;
+  const nm = float(index)
+    .add(jitter)
+    .div(float(count))
+    .mul(hi - lo)
+    .add(lo)
+    .toVar();
+  return {
+    cauchy: float(1).div(nm.mul(nm)).sub(CAUCHY_D).mul(CAUCHY_SCALE),
+    weight: spectralRgbNode(nm),
+  };
 }

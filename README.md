@@ -2,7 +2,7 @@
   <img src="showcase.png" alt="Glass Material Showcase" />
 </p>
 
-Real-time physical glass rendering in the browser with **Three.js** and **TSL** (compiles to **WebGPU / WGSL**, with automatic fallback to **WebGL 2 / GLSL**): exact dielectric Fresnel, 6-band CIE 1931 spectral dispersion, Beer–Lambert volumetric absorption, HDRI environments (`envMap`), frosted glass (毛玻璃), 6 diamond cuts, CMY dichroic cubes, photon-traced caustics, and instanced rendering of thousands of glass objects.
+Real-time physical glass rendering in the browser with **Three.js** and **TSL** (compiles to **WebGPU / WGSL**, with automatic fallback to **WebGL 2 / GLSL**): exact dielectric Fresnel, continuous CIE 1931 spectral dispersion, Beer–Lambert volumetric absorption, HDRI environments (`envMap`), frosted glass (毛玻璃), 6 diamond cuts, CMY dichroic cubes, photon-traced caustics, and instanced rendering of thousands of glass objects.
 
 ---
 
@@ -10,7 +10,7 @@ Real-time physical glass rendering in the browser with **Three.js** and **TSL** 
 
 - **Standalone [`MeshGlassMaterial`](src/glass/material.ts)** (`extends THREE.MeshBasicNodeMaterial`) — 100% geometry-agnostic physical glass matching `MeshPhysicalMaterial` ergonomics (`ior`, `dispersion`, `roughness`, `thickness`, `transmission`, `envMap`, `envMapIntensity`, `clone()`).
 - **Standalone [`DiamondMesh`](src/glass/diamondMesh.ts)** (`extends THREE.Mesh`) — self-contained multi-bounce ray-traced diamond across all 6 cuts (`round`, `princess`, `emerald`, `asscher`, `cushion`, `radiant`) with automatic geometry + facet-shader switching and `restOnFloor()`.
-- **Exact Optical Math** — unpolarized Cook–Torrance dielectric Fresnel, 6-band CIE 1931 spectral dispersion (Fraunhofer C/d/F Cauchy curve), Beer–Lambert volumetric absorption, ray-cone analytic filtering, and Total Internal Reflection (TIR).
+- **Exact Optical Math** — unpolarized Cook–Torrance dielectric Fresnel, continuous CIE 1931 spectral dispersion (Fraunhofer C/d/F Cauchy curve; 6–24 jittered wavelengths per pixel, more the stronger the dispersion), Beer–Lambert volumetric absorption, ray-cone analytic filtering, and Total Internal Reflection (TIR).
 - **HDRI Environments & Firefly-Free Bloom** — equirectangular HDRI `envMap` support with roughness-driven mipmap LOD (with automatic procedural studio fallback), 4K/2K Poly Haven CC0 HDRI presets in the interactive `lil-gui` demo, and a quarter-res 4×4 prefiltered bloom pass with a hue-preserving soft firefly shoulder.
 - **Frosted Glass (毛玻璃)** — noise-free analytic environment softening, 3-octave organic micro-particle grain (`frostScale`), creamy translucent frost veil, and crisp Fresnel rim.
 - **Instanced Studio Renderer** — [`createInstancedGlass`](src/glass/renderer.ts) for rendering up to 20,000 glass objects (including 8-tap tricubic SDF meshes for Suzanne, the Stanford Dragon, and an exactly baked torus knot) with glass-through-glass depth layering, real photon-traced caustics, floor reflections, half-res bilateral contact shadows, CMY dichroic face filters, depth of field, and bloom.
