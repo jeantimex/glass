@@ -97,12 +97,13 @@ export interface MeshGlassMaterialParameters {
 }
 
 /**
- * A baked 128^3 signed-distance volume (HalfFloat, red channel), as written by the bake
- * scripts in `scripts/`: distances in units of the mesh's half-width, negative inside, covering
- * +-1.1 half-widths around the origin of the mesh's local coordinates. Several volumes can be
- * stacked along z in one texture (`layer` of `layerCount`). The mesh's local coordinates must
- * be the volume's (half-width 1, as the meshes in `public/` are); scale it with the object.
- * Supported on plain meshes with uniform scale (not instanced meshes).
+ * A baked 128^3 signed-distance volume (HalfFloat, red channel), as `bakeGlassVolume`
+ * (src/glass/bake.ts) and the scripts in `scripts/` write it: distances in volume units,
+ * negative inside, covering +-1.1 volume units. Volume units are the mesh's local coordinates
+ * moved by -`center` and divided by `halfWidth`. Several volumes can be stacked along z in one
+ * texture (`layer` of `layerCount`). `createGlassVolume` / `bakeGlassVolumeAsync`
+ * (src/glass/volume.ts) bake one for any geometry. Supported on plain meshes with uniform
+ * scale (not instanced meshes).
  */
 export interface GlassVolume {
   texture: THREE.Data3DTexture;
@@ -110,6 +111,10 @@ export interface GlassVolume {
   layer?: number;
   /** How many layers are stacked in `texture` (default: its depth / 128). */
   layerCount?: number;
+  /** Mesh-local point at the volume's centre (default the origin). */
+  center?: [number, number, number];
+  /** Mesh-local units per volume unit (default 1: the mesh is already unit size). */
+  halfWidth?: number;
 }
 
 /** Shared 1x1 white fallback texture so optional texture nodes bind cleanly without per-instance leaks. */
@@ -424,18 +429,22 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
       const lastNormal = vec3(n0).toVar();
       let exit: (pos: N, dir: N, ev: N) => GlassHit;
       if (volume) {
-        // Exact exits through the baked volume, in the mesh's local (volume) coordinates.
+        // Exact exits through the baked volume: world -> mesh-local -> volume units and back.
         const layerCount = volume.layerCount ?? Math.max(1, Math.round(volume.texture.image.depth / 128));
         const sdf = createSdfVolume(texture3D(volume.texture), volume.layer ?? 0, layerCount);
+        const [cx, cy, cz] = volume.center ?? [0, 0, 0];
+        const volumeCenter = vec3(cx, cy, cz);
+        const halfWidth = float(volume.halfWidth ?? 1);
         const worldScale = length(modelWorldMatrix[0].xyz).toVar();
         exit = (pos: N, dir: N) => {
           const localPos = modelWorldMatrixInverse.mul(vec4(pos, 1)).xyz;
           const localDir = normalize(modelWorldMatrixInverse.mul(vec4(dir, 0)).xyz);
-          const hit = sdf.exit(localPos, localDir, float(1));
+          const hit = sdf.exit(localPos.sub(volumeCenter).div(halfWidth), localDir, float(1));
+          const hitLocal = hit.pos.mul(halfWidth).add(volumeCenter);
           return {
-            pos: modelWorldMatrix.mul(vec4(hit.pos, 1)).xyz.toVar(),
+            pos: modelWorldMatrix.mul(vec4(hitLocal, 1)).xyz.toVar(),
             nrm: normalize(modelWorldMatrix.mul(vec4(hit.nrm, 0)).xyz),
-            t: hit.t.mul(worldScale),
+            t: hit.t.mul(halfWidth).mul(worldScale),
           };
         };
       } else {

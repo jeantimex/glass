@@ -195,7 +195,8 @@ export function createSdfVolume(sdfTex: N, sdfLayer: number, layerCount = SDF_LA
         t.assign(mid);
       });
     });
-    return { pos: pos.add(dir.mul(t)).toVar(), nrm: volumeFastNormal(pos.add(dir.mul(t)), scale), t };
+    const hitPos = pos.add(dir.mul(t)).toVar();
+    return { pos: hitPos, nrm: volumeFastNormal(hitPos, scale).toVar(), t };
   };
 
   return { volumeFast, volumeFastNormal, volumeSmooth, volumeSmoothNormal, exit };

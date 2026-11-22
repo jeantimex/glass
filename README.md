@@ -142,13 +142,28 @@ const cmyCube = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), [cyan, cyan, yell
 scene.add(cmyCube);
 ```
 
-For exact multi-bounce subtractive dichroic filtering and colored floor caustics, use `KIND.box` with `cmy` / `cmyOrder` in [`createInstancedGlass`](#7-high-scale-studio-caustics-renderer-createinstancedglass):
+For exact multi-bounce subtractive dichroic filtering and colored floor caustics, use `KIND.box` with `cmy` / `cmyOrder` in [`createInstancedGlass`](#8-high-scale-studio-caustics-renderer-createinstancedglass):
 
 ```ts
 instanced.render(glass, { ...lighting, cmy: 1, cmyOrder: 'cym', bevel: 0.02 }, false);
 ```
 
-### 6. Standard Three.js `InstancedMesh` (with Per-Instance Colors)
+### 6. Any Mesh as Solid Glass (`bakeGlassVolumeAsync`)
+
+Bake any `BufferGeometry` into a signed-distance volume in a Web Worker, and `MeshGlassMaterial` follows the light through it exactly on every internal bounce. Real-world meshes are rarely clean solids, so the bake makes them solid first: it welds duplicate vertices, splits the mesh into pieces, caps every hole, and merges the pieces (optionally Loop-subdivided, optionally with a fillet where they meet):
+
+```ts
+import { TeapotGeometry } from 'three/addons/geometries/TeapotGeometry.js';
+import { MeshGlassMaterial, bakeGlassVolumeAsync } from './src/glass';
+
+const geometry = new TeapotGeometry(1, 10); // open, unwelded patches; separate lid, spout, handle
+const volume = await bakeGlassVolumeAsync(geometry); // ~4 s in a worker
+scene.add(new THREE.Mesh(geometry, new MeshGlassMaterial({ ior: 1.52, dispersion: 1, transmission: 1, volume })));
+```
+
+`bakeGlassVolume(positions, indices, options)` (`src/glass/bake.ts`) is the same pipeline as a plain function, dependency-free, for build scripts in Node (`scripts/bake-suzanne-sdf.ts` uses it).
+
+### 7. Standard Three.js `InstancedMesh` (with Per-Instance Colors)
 
 `MeshGlassMaterial` works natively with `THREE.InstancedMesh` and `THREE.BatchedMesh`. Per-instance colors from `setColorAt()` are routed directly into Beer–Lambert volumetric absorption so outer Fresnel highlights stay crisp white:
 
@@ -160,7 +175,7 @@ spheres.setColorAt(1, new THREE.Color('#66ccff'));
 scene.add(spheres);
 ```
 
-### 7. High-Scale Studio Caustics Renderer (`createInstancedGlass`)
+### 8. High-Scale Studio Caustics Renderer (`createInstancedGlass`)
 
 For scenes with hundreds or thousands of glass objects, real caustics, floor reflections, and contact shadows, pass a `MeshGlassMaterial` directly to `instanced.render()`:
 
@@ -217,7 +232,7 @@ Extends `THREE.MeshBasicNodeMaterial`.
 
 `MeshGlassMaterial` shades with the same tracer as the instanced renderer (`src/glass/tsl/trace.ts`): every internal event with exact Fresnel and total internal reflection, continuous spectral dispersion and Beer–Lambert absorption. Where a ray leaves the glass comes from the best source available:
 
-1. **`volume`** — a baked signed-distance volume: exact exits for every bounce (best for any closed mesh).
+1. **`volume`** — a baked signed-distance volume: exact exits for every bounce (bake one for any mesh with `bakeGlassVolumeAsync`).
 2. **`backfaceMap`** — the `GlassBackfacePass` map: the exact first exit along the view ray, then estimates.
 3. **`thickness`** only — a smooth local-sphere estimate.
 

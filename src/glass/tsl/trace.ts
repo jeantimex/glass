@@ -95,13 +95,18 @@ export function traceGlass(p: GlassTraceInputs): { color: N; weightSum: N } {
 
     If(throughput.greaterThan(0.012).and(dot(rayDir, rayDir).greaterThan(1e-6)), () => {
       Loop({ start: int(1), end: maxEvents, type: 'int', condition: '<', name: 'ev' }, ({ ev }: { ev: N }) => {
-        const hit = exit(rayPos, rayDir, ev);
-        rayPos.assign(hit.pos);
-        const hitNormal = hit.nrm.toVar();
-        p.perturbNormal?.(hitNormal, hit.pos);
-        if (p.growCone) rayCone.assign(p.growCone(rayCone, { ...hit, nrm: hitNormal }));
+        // Read everything about the hit before the ray moves: an exit may hand back
+        // expressions of the ray's position, which would be evaluated at the new one.
+        const exitHit = exit(rayPos, rayDir, ev);
+        const hitPos = vec3(exitHit.pos).toVar();
+        const hitNormal = vec3(exitHit.nrm).toVar();
+        const hitT = float(exitHit.t).toVar();
+        rayPos.assign(hitPos);
+        const hit = { pos: hitPos, nrm: hitNormal, t: hitT };
+        p.perturbNormal?.(hitNormal, hitPos);
+        if (p.growCone) rayCone.assign(p.growCone(rayCone, hit));
 
-        attenuation.mulAssign(exp(absorptionSigma.mul(hit.t.negate())));
+        attenuation.mulAssign(exp(absorptionSigma.mul(hitT.negate())));
         const faceFilter = p.surfaceFilter ? vec3(p.surfaceFilter(hitNormal)).toVar() : null;
 
         const exitRefracted = refract(rayDir, hitNormal.negate(), bandIor).toVar();

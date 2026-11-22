@@ -5,7 +5,8 @@
 //   ?transmission=0  environment only (no scene refraction)
 import * as THREE from 'three/webgpu';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { GlassBackfacePass, MeshGlassMaterial } from '../glass';
+import { TeapotGeometry } from 'three/addons/geometries/TeapotGeometry.js';
+import { bakeGlassVolumeAsync, GlassBackfacePass, MeshGlassMaterial } from '../glass';
 
 const query = new URLSearchParams(location.search);
 
@@ -83,14 +84,18 @@ async function main() {
     scene.add(bar);
   });
 
-  /* Glass: one material setup, four ways of finding exits. */
+  /* Glass: one material setup, each way of finding exits. */
   const transmission = query.has('transmission') ? Number(query.get('transmission')) : 1;
   const base = { ior: 1.52, dispersion: 1, transmission };
-  const [suzanneGeometry, dragonGeometry, suzanneVolume, dragonVolume] = await Promise.all([
+  // The Utah teapot as three.js builds it (open, unwelded patches; a separate lid, spout and
+  // handle) baked into a solid glass volume right here, in a worker.
+  const teapotGeometry = new TeapotGeometry(1, 10);
+  const [suzanneGeometry, dragonGeometry, suzanneVolume, dragonVolume, teapotVolume] = await Promise.all([
     loadMesh('suzanne_mesh.bin'),
     loadMesh('dragon_mesh.bin'),
     loadVolume('suzanne_sdf_128.bin'),
     loadVolume('dragon_sdf_128.bin'),
+    bakeGlassVolumeAsync(teapotGeometry),
   ]);
   suzanneGeometry.computeVertexNormals();
   const pieces: { mesh: THREE.Mesh; spin: number }[] = [];
@@ -128,6 +133,18 @@ async function main() {
     0.62,
     0.7,
   ).rotation.y = -0.6;
+  // Exact exits through the volume baked at load time (bakeGlassVolumeAsync), in front.
+  teapotGeometry.computeBoundingBox();
+  const teapotScale = 0.36;
+  const teapot = place(
+    teapotGeometry,
+    new MeshGlassMaterial({ ...base, thickness: 0.6, volume: teapotVolume }),
+    0,
+    -teapotGeometry.boundingBox!.min.y * teapotScale,
+    teapotScale,
+  );
+  teapot.position.z = 1.4;
+  teapot.rotation.y = -0.5;
 
   const resize = () => {
     renderer.setSize(window.innerWidth, window.innerHeight, false);

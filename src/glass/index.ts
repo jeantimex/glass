@@ -8,3 +8,5 @@ export { DIAMOND_CUTS, DIAMOND_LEAN, DIAMOND_REST, diamondGeometry, type Diamond
 export { DiamondMesh, type DiamondMeshParameters } from './diamondMesh';
 export { MeshGlassMaterial, type GlassVolume, type MeshGlassMaterialParameters } from './material';
 export { CMY_FACE_ORDERS, type CmyFaceOrder } from './tsl/cmy';
+export { bakeGlassVolume, type BakeOptions, type BakeResult } from './bake.ts';
+export { bakeGlassVolumeAsync, createGlassVolume, createVolumeTexture, toGlassVolume } from './volume';
