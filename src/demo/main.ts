@@ -700,9 +700,11 @@ async function main() {
     readPassTimes: instanced.passTimes,
   });
 
-  // The first frame compiles the shaders, which can take a moment: keep the loading
-  // screen up until the GPU has finished that frame.
+  // Build the programs of the shapes on show first (without freezing the page: the
+  // loading screen stays up), then the first frame; keep the loading screen up until the
+  // GPU has finished that frame.
   loading.stage(0.94, 'Compiling shaders…');
+  await instanced.compileObjects();
   let firstFrame = true;
   let lastFrameSig = '';
   gui.onChange(markDirty);
@@ -725,6 +727,10 @@ async function main() {
       const finishLoading = () => {
         loading.done();
         document.documentElement.dataset.glassReady = 'true';
+        // Then build every other shape's programs in the background, so switching shapes
+        // is instant. WebGPU only: WebGL compiles far more slowly (minutes for all of them),
+        // so there each shape is built when first chosen (still without freezing).
+        if (device) void instanced.precompileAll();
       };
       requestAnimationFrame(() => {
         // (WebGL cannot say when the GPU is done: by the next frame is close enough.)

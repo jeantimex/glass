@@ -913,6 +913,8 @@ export function createInstancedGlass(
   const diamondMirrorMeshes: THREE.Mesh[] = [];
   const diamondPhotonMeshes: THREE.Mesh[] = [];
   let currentDiamondCut: DiamondCut = 'round';
+  /** Each shape's meshes (all passes, coarse and fine), with the scene each is drawn in. */
+  const kindMeshes: { mesh: THREE.Mesh; scene: THREE.Scene }[][] = Array.from({ length: KIND_COUNT }, () => []);
   for (let kind = 0; kind < KIND_COUNT; kind++) {
     const position = kind === KIND.capsule ? capsulePosition : kind === KIND.torus ? torusPosition : scaledPosition;
     const normal = kind === KIND.capsule || kind === KIND.torus ? plainNormal : scaledNormal;
@@ -943,6 +945,8 @@ export function createInstancedGlass(
         m.frustumCulled = false;
         m.visible = false;
         target.add(m);
+        // (Wireframe lines are cheap and rarely shown: compiled when first drawn.)
+        if (material !== wire) kindMeshes[kind].push({ mesh: m, scene: target });
         drawn.push({
           mesh: m,
           batch,
@@ -987,6 +991,74 @@ export function createInstancedGlass(
     lightDirty = true;
   };
   let lastTriangles = 0;
+
+  /* Shader compilation */
+  // Each shape's programs are built the first time it is needed. Building them in the
+  // middle of a frame froze the page (a third of a second here, seconds on slower GPUs
+  // and Windows), so they are built with compileAsync instead (WebGPU's asynchronous
+  // pipeline creation): until a shape is ready, the last picture stays up.
+  /** Which programs are built: one per shape, and per cut for the diamond. */
+  const compiledKeys = new Set<string>();
+  const compiling = new Map<string, Promise<void>>();
+  const programKey = (kind: number) => (kind === KIND.diamond ? `${kind}:${currentDiamondCut}` : String(kind));
+  /** Shapes on show this frame are not compiled yet (the last picture is kept meanwhile). */
+  let waitingForPrograms = false;
+  /**
+   * Build the programs of shape `kind` (as it is now: the diamond in its current cut)
+   * without blocking, pass by pass, each into the target and with the camera it is drawn
+   * with, so they are found again when the shape is drawn.
+   */
+  const compileKind = (kind: number): Promise<void> => {
+    const key = programKey(kind);
+    if (compiledKeys.has(key)) return Promise.resolve();
+    const pending = compiling.get(key);
+    if (pending) return pending;
+    const passes: [THREE.Scene, THREE.Camera, THREE.RenderTarget][] = [
+      [farScene, camera, farLayer],
+      [nearScene, camera, nearLayer],
+      [mirrorScene, camera, mirrorLayer],
+      [lightScene, lightCamera, causticMap],
+      [lampDepthScene, lightCamera, lampDepth],
+      [photonScene, lightCamera, photonMap],
+    ];
+    const job = (async () => {
+      for (const [scene, passCamera, target] of passes) {
+        const passMeshes = kindMeshes[kind].filter((entry) => entry.scene === scene).map((entry) => entry.mesh);
+        if (passMeshes.length === 0) continue;
+        // compileAsync gathers what to build synchronously, from what is visible: show the
+        // shape's meshes just for that, then put everything back before anything is drawn.
+        const previousTarget = renderer.getRenderTarget();
+        renderer.setRenderTarget(target);
+        for (const mesh of passMeshes) mesh.visible = true;
+        let built: Promise<unknown>;
+        try {
+          built = renderer.compileAsync(scene, passCamera);
+        } finally {
+          updateVisibility();
+          renderer.setRenderTarget(previousTarget);
+        }
+        await built;
+      }
+      compiledKeys.add(key);
+      compiling.delete(key);
+    })();
+    compiling.set(key, job);
+    return job;
+  };
+  /** Build the programs of every shape among `objects` (and wait for them). */
+  const compileObjects = async (): Promise<void> => {
+    const kinds = new Set<number>();
+    for (let i = 0; i < objects.count; i++) kinds.add(objects.kind[i]);
+    for (const kind of kinds) await compileKind(kind);
+  };
+  /** Build the programs of every shape in the background, one after another. */
+  const precompileAll = async (): Promise<void> => {
+    for (let kind = 0; kind < KIND_COUNT; kind++) {
+      await compileKind(kind);
+      // Leave the GPU and the page a moment between shapes.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  };
 
   /* Layer-sorting state */
   let lightDirty = true;
@@ -1133,6 +1205,20 @@ export function createInstancedGlass(
     const wantWire = glass.wireframe ?? false;
     const wireColor = wireColorOverride ?? (!isMat ? glass.wireColor : undefined) ?? [0.01, 0.01, 0.01, 1];
     setDiamondCut(diamondCut);
+
+    // A shape whose programs are not built yet: build them in the background and keep the
+    // last picture up meanwhile, instead of freezing on building them in this frame.
+    waitingForPrograms = false;
+    for (let i = 0; i < objects.count; i++) {
+      const kind = objects.kind[i];
+      if (compiledKeys.has(programKey(kind))) continue;
+      waitingForPrograms = true;
+      void compileKind(kind);
+    }
+    if (waitingForPrograms) {
+      if (historyValid) present();
+      return;
+    }
 
     // Temporal AA: anything that changes the picture (the camera, the size, any setting,
     // objects moving) counts as motion; a still view is averaged until it settles.
@@ -1480,7 +1566,11 @@ export function createInstancedGlass(
       lastStateKey = '';
     },
     /** Whether the view is still settling (keep calling `render` until false). */
-    accumulating: () => !historyValid || stillCount < ACCUMULATION_SAMPLES,
+    accumulating: () => waitingForPrograms || !historyValid || stillCount < ACCUMULATION_SAMPLES,
+    /** Build the programs of the shapes now among the objects, without blocking (await it). */
+    compileObjects,
+    /** Build every shape's programs in the background, one shape after another. */
+    precompileAll,
     triangles: () => lastTriangles,
     passTimes: timer.passTimes,
   };
