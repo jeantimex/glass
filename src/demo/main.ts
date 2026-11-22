@@ -31,6 +31,8 @@ const view = parseInitialView(query);
 const loading = createLoadingScreen();
 
 const singleKind = (name: string): number => SHAPES[name].kinds?.[0] ?? KIND.box;
+/** Resolves on the next animation frame. */
+const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
 async function main() {
   const canvas = document.getElementById('view') as HTMLCanvasElement;
@@ -838,10 +840,16 @@ async function main() {
       ],
     );
     status.triangles = instanced.triangles().toLocaleString('en-US');
+    // While the view is still, the renderer averages frames to settle aliasing: keep drawing until it is done.
+    if (instanced.accumulating()) dirtyFrames = Math.max(dirtyFrames, 1);
   });
 
   /* Test automation hook for deterministic visual screenshot regression tests */
   (window as unknown as Record<string, unknown>).__glassTest = {
+    /** GPU time (ms) per pass of the most recent timed frame (null without GPU timestamps). */
+    gpuTimes: () => instanced.passTimes(),
+    /** Whether the temporal anti-aliasing has settled on the current still view. */
+    isSettled: () => !instanced.accumulating(),
     async setScene(opts: {
       shape: string;
       dark?: boolean;
@@ -863,11 +871,12 @@ async function main() {
       placeObjects();
       frameScene();
       instanced.markChanged();
+      instanced.resetHistory();
       dirtyFrames = 3;
-      // Wait for at least 3 rendered animation frames and GPU completion.
-      await new Promise<void>((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
-      );
+      // Wait for at least 3 rendered animation frames, then until the frame average has
+      // settled (deterministic screenshots), and GPU completion.
+      for (let i = 0; i < 3; i++) await nextFrame();
+      while (instanced.accumulating()) await nextFrame();
       if (device) await device.queue.onSubmittedWorkDone();
     },
   };

@@ -13,6 +13,12 @@ import {
 const ALL_CUTS = Object.keys(DIAMOND_CUTS) as DiamondCut[];
 
 describe('diamond cuts & convex polyhedron geometry', () => {
+  it('builds the round brilliant from exactly 110 triangles', () => {
+    const geometry = diamondGeometry('round');
+    const count = (geometry.index ? geometry.index.count : geometry.getAttribute('position').count) / 3;
+    expect(count).toBe(110);
+  });
+
   it('exposes all 6 cuts with valid outward unit normals and positive offsets', () => {
     expect(ALL_CUTS).toEqual(['round', 'princess', 'emerald', 'asscher', 'cushion', 'radiant']);
     for (const cut of ALL_CUTS) {

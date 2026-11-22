@@ -9,6 +9,13 @@
 //   3. far glass     the farther half of the objects, over the background
 //   4. near glass    the nearer half, which sees the far half refracted
 //   5. finishing     contact shadows, then depth of field, glow and tones
+//   6. temporal AA   every frame is drawn with the camera nudged by a fraction of a
+//                    pixel (and the wavelengths moved on) and merged into a history:
+//                    while anything moves, the history is reprojected to where each
+//                    surface was and clipped to the new frame's neighbourhood; once the
+//                    view is still it becomes an exact running average, up to
+//                    `ACCUMULATION_SAMPLES` frames. This settles the per-pixel aliasing
+//                    of light bouncing inside the glass, the dispersion grain and edges.
 //
 // The layers carry each pixel's distance from the camera in their alpha, which is
 // what the finishing passes work from.
@@ -18,8 +25,17 @@ import { DIAMOND_CUTS, diamondGeometry, type DiamondCut } from './diamond';
 import { createShapeGeometries, triangleCount, UNIT_TUBE } from './geometries';
 import { MeshGlassMaterial } from './material';
 import {
+  Fn,
   abs,
   attribute,
+  clamp,
+  dot,
+  floor,
+  length,
+  max,
+  normalize,
+  smoothstep,
+  sqrt,
   cross,
   normalLocal,
   positionGeometry,
@@ -32,6 +48,7 @@ import {
   vec2,
   vec3,
   float,
+  mix,
   uv,
   vec4,
   varying,
@@ -39,6 +56,7 @@ import {
 } from 'three/tsl';
 import { KIND, MAX_OBJECTS, type GlassObjects } from './objects';
 import { createPassTimer } from './timing';
+import { SPECTRAL_FRAME_OFFSET } from './tsl/optics';
 import { causticNode, photonNode as photonRayNode } from './tsl/caustics';
 import { CMY_FACE_ORDERS, type CmyFaceOrder } from './tsl/cmy';
 import { bloomPrefilterNode, blurNode, contactShadeNode, lensNode } from './tsl/finish';
@@ -116,6 +134,41 @@ const PHOTON_MAP_SIZE = 768;
 const FINE_UP_TO = 64;
 /** Above this many objects, the less visible passes are drawn more cheaply. */
 const MANY_OBJECTS = 3000;
+/** Frames the still view is averaged over before it is considered settled. */
+const ACCUMULATION_SAMPLES = 32;
+/** How many still frames the (reprojected) history counts for when motion stops. */
+const TAA_HISTORY_WEIGHT = 8;
+/** Length of the sub-pixel jitter cycle (Halton 2, 3). */
+const JITTER_CYCLE = 16;
+
+/** A full-size HDR target for frame accumulation (resized with the picture). */
+function makeAccumTarget(): THREE.RenderTarget {
+  return new THREE.RenderTarget(4, 4, {
+    type: THREE.HalfFloatType,
+    format: THREE.RGBAFormat,
+    depthBuffer: false,
+    // The history is read at reprojected, sub-pixel positions.
+    minFilter: THREE.LinearFilter,
+    magFilter: THREE.LinearFilter,
+  });
+}
+
+/** Whether texture coordinates `q` (a vec2 node) lie on the screen. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function onScreen(q: any) {
+  return q.x.greaterThanEqual(0).and(q.x.lessThanEqual(1)).and(q.y.greaterThanEqual(0)).and(q.y.lessThanEqual(1));
+}
+
+/** The radical inverse of `index` in `base` (Halton sequence): a well-spread value in [0, 1). */
+function halton(index: number, base: number): number {
+  let f = 1;
+  let r = 0;
+  for (let i = index; i > 0; i = Math.floor(i / base)) {
+    f /= base;
+    r += f * (i % base);
+  }
+  return r;
+}
 
 /**
  * Create the multi-pass instanced studio glass renderer supporting up to `MAX_OBJECTS` shapes,
@@ -244,6 +297,9 @@ export function createInstancedGlass(
   const uCamUp = uniform(new THREE.Vector3());
   const uCamFwd = uniform(new THREE.Vector4());
   const uViewProj = uniform(new THREE.Matrix4());
+  // This frame's sub-pixel camera jitter in texture coordinates (y down), for the passes
+  // that rebuild a pixel's ray from its screen position.
+  const uJitterUv = uniform(new THREE.Vector2());
   const uRoom = uniform(1); // 1 if there is a floor, plus 2 for the dark studio
   const uSkyE = uniform(new THREE.Vector3());
   const uSunE = uniform(new THREE.Vector3());
@@ -392,6 +448,7 @@ export function createInstancedGlass(
     camRight: uCamRight,
     camUp: uCamUp,
     camFwd: uCamFwd,
+    jitterUv: uJitterUv,
   };
   groundMaterial.fragmentNode = groundNode(
     screenCamera,
@@ -632,6 +689,7 @@ export function createInstancedGlass(
     camRight: uCamRight,
     camUp: uCamUp,
     camFwd: uCamFwd,
+    jitterUv: uJitterUv,
   };
   const shadeMaterial = new THREE.NodeMaterial();
   shadeMaterial.fragmentNode = contactShadeNode(aoCamera, uShade, shadeSource, isMobile ? 6 : 8);
@@ -654,6 +712,168 @@ export function createInstancedGlass(
   ).rgb;
   lensMaterial.depthTest = lensMaterial.depthWrite = false;
   const lensQuad = new THREE.QuadMesh(lensMaterial);
+
+  // Temporal AA: the finished frame (linear, before the screen's conversion), the history
+  // (two, written in turn), and the copy of it to the screen.
+  const frameTarget = makeAccumTarget();
+  const historyTargets = [makeAccumTarget(), makeAccumTarget()];
+  let historyRead = 0;
+  /** Whether the history holds a picture of this scene at this size. */
+  let historyValid = false;
+  /** Still frames the history amounts to (motion leaves it at TAA_HISTORY_WEIGHT). */
+  let stillCount = 0;
+  let frameCounter = 0;
+  let lastStateKey = '';
+  const viewProjNow = new THREE.Matrix4();
+  const viewProjLast = new THREE.Matrix4();
+  const probeNow = new THREE.Vector3();
+  const probeLast = new THREE.Vector3();
+  /**
+   * Largest on-screen movement (px) since the last frame of a few points of the scene: the
+   * first objects' centres and a point straight ahead of the camera.
+   */
+  const screenMotionPx = () => {
+    let most = 0;
+    const measure = (x: number, y: number, z: number) => {
+      probeNow.set(x, y, z).applyMatrix4(viewProjNow);
+      probeLast.set(x, y, z).applyMatrix4(viewProjLast);
+      const dx = (probeNow.x - probeLast.x) * 0.5 * uRes.value.x;
+      const dy = (probeNow.y - probeLast.y) * 0.5 * uRes.value.y;
+      most = Math.max(most, Math.hypot(dx, dy));
+    };
+    const step = Math.max(1, Math.floor(objects.count / 16));
+    for (let i = 0; i < objects.count; i += step) {
+      measure(objects.center[i * 3], objects.center[i * 3 + 1], objects.center[i * 3 + 2]);
+    }
+    const ahead = camera.getWorldDirection(probeNow).multiplyScalar(3).add(camera.position);
+    measure(ahead.x, ahead.y, ahead.z);
+    return most;
+  };
+  const taaHistory = texture(historyTargets[0].texture);
+  const taaFrame = texture(frameTarget.texture);
+  const taaSurface = texture(nearLayer.texture); // alpha: distance to what the pixel shows
+  const taaBehind = texture(background.texture); // alpha: distance to the floor / backdrop behind it
+  const uPrevViewProj = uniform(new THREE.Matrix4());
+  const uTaaStillWeight = uniform(1); // 1 / (n + 1) while still
+  const uTaaMoving = uniform(0); // 1: reproject, clip and blend for motion
+  const taaMaterial = new THREE.NodeMaterial();
+  /** One bilinear history read (for the Catmull-Rom filter below). */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tap = (x: any, y: any) => taaHistory.sample(vec2(x, y)).level(float(0)).rgb;
+  taaMaterial.fragmentNode = Fn(() => {
+    const uvHere = screenCoordinate.xy.div(uRes).toVar();
+    const texel = vec2(1).div(uRes).toVar();
+    const current = taaFrame.sample(uvHere).level(float(0)).rgb.toVar();
+
+    // The history lives on the unjittered pixel grid: follow the ray through this pixel's
+    // centre (not the jittered sample, which would read the history up to half a pixel off
+    // and soften it a little more every frame) to where a point at distance d along it was
+    // on the previous frame's screen.
+    const ndc = uvHere.mul(2).sub(1).mul(vec2(1, -1)).toVar();
+    const ray = normalize(
+      uCamFwd.xyz.add(uCamRight.xyz.mul(ndc.x.mul(uCamFwd.w).mul(uCamRight.w))).add(uCamUp.mul(ndc.y.mul(uCamFwd.w))),
+    ).toVar();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const previousUv = (dist: any) => {
+      const clip = uPrevViewProj.mul(vec4(uCamPos.add(ray.mul(dist)), 1)).toVar();
+      const prevNdc = clip.xy.div(max(clip.w, 1e-6));
+      return vec2(prevNdc.x.mul(0.5).add(0.5), float(0.5).sub(prevNdc.y.mul(0.5))).toVar();
+    };
+    /**
+     * Catmull-Rom history read in 5 bilinear taps: the history is resampled at a sub-pixel
+     * offset every moving frame, and plain bilinear reads would soften it each time.
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const historyAt = (q: any) => {
+      const samplePos = q.mul(uRes);
+      const tex1 = floor(samplePos.sub(0.5)).add(0.5);
+      const f = samplePos.sub(tex1);
+      const w0 = f.mul(f.mul(f.mul(-0.5).add(1)).sub(0.5));
+      const w1 = f.mul(f).mul(f.mul(1.5).sub(2.5)).add(1);
+      const w2 = f.mul(f.mul(f.mul(-1.5).add(2)).add(0.5));
+      const w3 = f.mul(f).mul(f.mul(0.5).sub(0.5));
+      const w12 = w1.add(w2);
+      const tex0 = tex1.sub(1).mul(texel);
+      const tex3 = tex1.add(2).mul(texel);
+      const tex12 = tex1.add(w2.div(w12)).mul(texel);
+      const c0 = w12.x.mul(w0.y);
+      const c1 = w0.x.mul(w12.y);
+      const c2 = w12.x.mul(w12.y);
+      const c3 = w3.x.mul(w12.y);
+      const c4 = w12.x.mul(w3.y);
+      return max(
+        tap(tex12.x, tex0.y)
+          .mul(c0)
+          .add(tap(tex0.x, tex12.y).mul(c1))
+          .add(tap(tex12.x, tex12.y).mul(c2))
+          .add(tap(tex3.x, tex12.y).mul(c3))
+          .add(tap(tex12.x, tex3.y).mul(c4))
+          .div(c0.add(c1).add(c2).add(c3).add(c4)),
+        vec3(0),
+      ).toVar();
+    };
+
+    const surfaceDist = taaSurface.sample(uvHere).level(float(0)).a.toVar();
+    const behindDist = taaBehind.sample(uvHere).level(float(0)).a.toVar();
+    const prevSurface = previousUv(surfaceDist);
+    const historySurface = historyAt(prevSurface);
+    // Glass: what is seen through it moves like the world behind it, not like its surface.
+    const isGlass = surfaceDist.lessThan(behindDist.sub(1e-3)).toVar();
+    const prevBehind = previousUv(behindDist);
+    const historyBehind = historyAt(prevBehind);
+
+    // The current 3x3 neighbourhood's colour range, to clip stale history to.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let m1: any = vec3(0);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let m2: any = vec3(0);
+    for (let y = -1; y <= 1; y++) {
+      for (let x = -1; x <= 1; x++) {
+        const c = taaFrame.sample(uvHere.add(texel.mul(vec2(x, y)))).level(float(0)).rgb;
+        m1 = m1.add(c);
+        m2 = m2.add(c.mul(c));
+      }
+    }
+    const mean = m1.div(9).toVar();
+    const sigma = sqrt(max(m2.div(9).sub(mean.mul(mean)), vec3(0))).toVar();
+    const luma = vec3(0.2126, 0.7152, 0.0722);
+    const useBehind = isGlass
+      .and(dot(historyBehind.sub(current).abs(), luma).lessThan(dot(historySurface.sub(current).abs(), luma)))
+      .and(onScreen(prevBehind));
+    const history = select(useBehind, historyBehind, historySurface).toVar();
+    const prevUv = select(useBehind, prevBehind, prevSurface);
+    // On-screen speed (px per frame). The glide after letting go moves well under a pixel a
+    // frame, where the history is still nearly exact: glass only turns strict as speed builds.
+    const motionPx = length(prevSurface.sub(uvHere).mul(uRes)).toVar();
+    const strict = smoothstep(0.25, 2.0, motionPx).toVar();
+    const gamma = select(isGlass, mix(1.25, 0.75, strict), float(1.25));
+    const clipped = clamp(history, mean.sub(sigma.mul(gamma)), mean.add(sigma.mul(gamma)));
+    // Slow motion keeps more history (less noise), fast motion takes more of the new frame.
+    const speedAlpha = mix(0.08, 0.25, clamp(motionPx.div(16), 0, 1)).toVar();
+    const glassAlpha = mix(speedAlpha, max(speedAlpha, 0.3), strict);
+    const moving = uTaaMoving.greaterThan(0.5);
+    const blend = select(
+      onScreen(prevUv),
+      select(moving, select(isGlass, glassAlpha, speedAlpha), uTaaStillWeight),
+      float(1),
+    );
+    return vec4(mix(select(moving, clipped, history), current, blend), 1);
+  })();
+  taaMaterial.transparent = true;
+  taaMaterial.blending = THREE.NoBlending;
+  taaMaterial.depthTest = taaMaterial.depthWrite = false;
+  const taaQuad = new THREE.QuadMesh(taaMaterial);
+  const presentSource = texture(historyTargets[0].texture);
+  // (A basic material, as the lens pass was, so three.js converts its colour for the screen.)
+  const presentMaterial = new THREE.MeshBasicNodeMaterial();
+  presentMaterial.colorNode = presentSource.rgb as unknown as THREE.MeshBasicNodeMaterial['colorNode'];
+  presentMaterial.depthTest = presentMaterial.depthWrite = false;
+  const presentQuad = new THREE.QuadMesh(presentMaterial);
+  const present = () => {
+    presentSource.value = historyTargets[historyRead].texture;
+    renderer.setRenderTarget(null);
+    presentQuad.render(renderer);
+  };
 
   /* Instanced scenes */
   const { bases, fineBases } = createShapeGeometries(meshes);
@@ -869,6 +1089,9 @@ export function createInstancedGlass(
     glowLayer.setSize(Math.max(1, width >> 2), Math.max(1, height >> 2));
     frostLayer.setSize(Math.max(1, width >> 2), Math.max(1, height >> 2));
     mirrorLayer.setSize(halfW, halfH);
+    frameTarget.setSize(width, height);
+    for (const t of historyTargets) t.setSize(width, height);
+    historyValid = false;
     uRes.value.set(width, height);
     uAoRes.value.set(halfW, halfH);
     uGlowStep.value.set(1 / Math.max(1, width), 1 / Math.max(1, height));
@@ -910,6 +1133,47 @@ export function createInstancedGlass(
     const wantWire = glass.wireframe ?? false;
     const wireColor = wireColorOverride ?? (!isMat ? glass.wireColor : undefined) ?? [0.01, 0.01, 0.01, 1];
     setDiamondCut(diamondCut);
+
+    // Temporal AA: anything that changes the picture (the camera, the size, any setting,
+    // objects moving) counts as motion; a still view is averaged until it settles.
+    camera.updateMatrixWorld();
+    viewProjNow.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    const stateKey = JSON.stringify([
+      uRes.value.x,
+      uRes.value.y,
+      objects.count,
+      [ior, dispersion, roughness, frostScale, diamondCut, cmy, cmyOrder, bevel, color, wantWire, wireColor],
+      JSON.stringify(light, (k, v) => {
+        if (k === 'envMap') return (v as THREE.Texture | null)?.uuid ?? null;
+        // The focus distance only matters with depth of field (it follows the orbiting camera).
+        if (k === 'focus' && light.depthOfField <= 0) return 0;
+        // Ignore float noise in the last digits (values recomputed every frame).
+        return typeof v === 'number' ? Math.round(v * 1e5) / 1e5 : v;
+      }),
+    ]);
+    const contentChanged = stateKey !== lastStateKey;
+    lastStateKey = stateKey;
+    const viewChanged = !viewProjNow.equals(viewProjLast);
+    // The camera counts as moving only while the picture moves by a noticeable fraction of a
+    // pixel: the long, ever slower glide of the orbit damping after letting go is averaged
+    // like a still view (the history is reprojected either way, so it follows the drift).
+    const moving = moved || contentChanged || (historyValid && viewChanged && screenMotionPx() > 0.25);
+    if (moving) stillCount = TAA_HISTORY_WEIGHT;
+    else if (historyValid && !viewChanged && stillCount >= ACCUMULATION_SAMPLES) {
+      present(); // settled and unchanged: show the stored result again
+      return;
+    }
+    // A Halton (2, 3) sub-pixel jitter every frame (TAA needs it while moving too).
+    frameCounter += 1;
+    const cycle = ((frameCounter - 1) % JITTER_CYCLE) + 1;
+    const jitterX = halton(cycle, 2) - 0.5;
+    const jitterY = halton(cycle, 3) - 0.5;
+    const frameW = uRes.value.x;
+    const frameH = uRes.value.y;
+    camera.setViewOffset(frameW, frameH, jitterX, jitterY, frameW, frameH);
+    uJitterUv.value.set(jitterX / frameW, jitterY / frameH);
+    // Each frame moves every pixel's wavelengths on by the golden ratio of a step.
+    SPECTRAL_FRAME_OFFSET.value = (frameCounter * 0.6180339887) % 1;
     timer.beginFrame();
     // Wireframe only: the edges in place of the glass, and nothing mirrored in the floor.
     if (wantWire !== wireOn) {
@@ -974,16 +1238,15 @@ export function createInstancedGlass(
     if (moved) lightDirty = true;
 
     sortIntoLayers(moved || lightDirty);
-    // Triangles drawn this frame: every object once, again for its mirror image,
-    // and again when the shadow map is redrawn.
-    let drawnTriangles = 0;
+    // Triangles of the objects on show (each object's mesh once: a round diamond is 110),
+    // not counting the extra passes that draw them again (floor mirror, shadow map).
+    let sceneTriangles = 0;
     for (let kind = 0; kind < KIND_COUNT; kind++) {
-      drawnTriangles +=
+      sceneTriangles +=
         trianglesOf[kind] * (far[kind].count + near[kind].count) +
         fineTrianglesOf[kind] * (fineFar[kind].count + fineNear[kind].count);
     }
-    const passes = 1 + (light.ground && light.floorReflection > 0 ? 1 : 0) + (lightDirty ? 1 : 0);
-    lastTriangles = drawnTriangles * passes + 2 * 4; // plus the full-screen passes
+    lastTriangles = sceneTriangles;
 
     // 1. Caustic map, from the main lamp's direction, covering everything.
     if (lightDirty) {
@@ -1181,8 +1444,23 @@ export function createInstancedGlass(
     // ... and the camera: bilateral contact shadow composite, exposure, depth of field, glow and tones, onto the screen.
     uFinish.value.set(light.exposure, aoActive ? 1 : 0, 1 / uAoRes.value.x, 1 / uAoRes.value.y);
     uLens.value.set(light.focus, light.depthOfField, light.glow, light.filmic ? 1 : 0);
-    renderer.setRenderTarget(null);
+    renderer.setRenderTarget(frameTarget);
     lensQuad.render(renderer);
+    camera.clearViewOffset();
+
+    // 7. Merge it into the history, and show that.
+    uTaaMoving.value = moving && historyValid ? 1 : 0;
+    uTaaStillWeight.value = historyValid ? 1 / (Math.min(stillCount, ACCUMULATION_SAMPLES) + 1) : 1;
+    if (!moving) stillCount = Math.min(stillCount + 1, ACCUMULATION_SAMPLES);
+    uPrevViewProj.value.copy(historyValid ? viewProjLast : viewProjNow);
+    taaHistory.value = historyTargets[historyRead].texture;
+    const write = 1 - historyRead;
+    renderer.setRenderTarget(historyTargets[write]);
+    taaQuad.render(renderer);
+    historyRead = write;
+    historyValid = true;
+    viewProjLast.copy(viewProjNow);
+    present();
     timer.endFrame();
   }
 
@@ -1192,7 +1470,17 @@ export function createInstancedGlass(
   return {
     render,
     resize,
-    markChanged: () => (lightDirty = true),
+    markChanged: () => {
+      lightDirty = true;
+      lastStateKey = ''; // next frame counts as motion
+    },
+    /** Forget the history (a new scene): the next frame starts it afresh. */
+    resetHistory: () => {
+      historyValid = false;
+      lastStateKey = '';
+    },
+    /** Whether the view is still settling (keep calling `render` until false). */
+    accumulating: () => !historyValid || stillCount < ACCUMULATION_SAMPLES,
     triangles: () => lastTriangles,
     passTimes: timer.passTimes,
   };

@@ -21,6 +21,7 @@ const {
   screenCoordinate,
   select,
   sqrt,
+  uniform,
   vec2,
   vec3,
 } = TSL as N;
@@ -180,17 +181,30 @@ function spectralRgbNode(nm: N): N {
  * fringes blend into a continuous rainbow rather than separate sharp copies.
  */
 export const spectralJitter = (): N =>
-  fract(float(52.9829189).mul(fract(dot(screenCoordinate.xy, vec2(0.06711056, 0.00583715)))));
+  fract(
+    float(52.9829189)
+      .mul(fract(dot(screenCoordinate.xy, vec2(0.06711056, 0.00583715))))
+      .add(SPECTRAL_FRAME_OFFSET),
+  );
+
+/**
+ * Added to every pixel's spectral jitter: a renderer that averages frames (see
+ * `createInstancedGlass`) moves it on each frame, so each pixel's wavelengths fill in
+ * the whole spectrum over time. 0 (the default) gives a single frame's pattern.
+ */
+export const SPECTRAL_FRAME_OFFSET = uniform(0);
 
 /** Fewest and most wavelengths traced per pixel, at full quality and in the fast mode. */
-export const SPECTRAL_SAMPLES = { min: 6, max: 24, fastMin: 3, fastMax: 12 } as const;
+export const SPECTRAL_SAMPLES = { min: 6, max: 12, fastMin: 3, fastMax: 6 } as const;
 /**
- * Wavelengths per unit of IOR spread (n_F - n_C). Across 400-700 nm the Cauchy offset
- * spans about 2.2, so neighbouring samples differ in IOR by about 2.2 * spread / count:
- * this keeps that step near 0.023, small enough for the jitter to blend into a smooth
- * rainbow (6 samples for real glass and diamond, 8 at the demo's default, 24 at most).
+ * Wavelengths per unit of IOR spread (n_F - n_C) in one frame. Across 400-700 nm the Cauchy
+ * offset spans about 2.2, so neighbouring samples differ in IOR by about 2.2 * spread / count;
+ * this keeps that step near 0.045 per frame. The renderer moves the wavelengths on every
+ * frame and averages frames (temporal AA), which fills in the steps between them, so a frame
+ * needs only half the samples a single still image would (6 for real glass, diamond and the
+ * demo's default, 12 at most).
  */
-const SAMPLES_PER_SPREAD = 96;
+const SAMPLES_PER_SPREAD = 48;
 
 /**
  * How many wavelengths to trace for IOR spread `spread` (n_F - n_C): more the stronger the

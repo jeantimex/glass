@@ -106,7 +106,13 @@ export function groundNode(cam: ScreenCamera, s: SceneInputs, mirror: N): N {
   const { dark, groundOn, env, scene } = sceneFunctions(s, true);
   const beam = beamFn(spot, s.lamp);
   return Fn(() => {
-    const ndc = fragCoord.div(res).mul(2).sub(1).mul(vec2(1, -1)).toVar();
+    const ndc = fragCoord
+      .div(res)
+      .add(cam.jitterUv ?? vec2(0))
+      .mul(2)
+      .sub(1)
+      .mul(vec2(1, -1))
+      .toVar();
     const rd = normalize(
       camFwd.xyz.add(camRight.xyz.mul(ndc.x.mul(camFwd.w).mul(camRight.w))).add(camUp.mul(ndc.y.mul(camFwd.w))),
     ).toVar();

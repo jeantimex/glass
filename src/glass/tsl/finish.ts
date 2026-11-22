@@ -98,6 +98,12 @@ export interface ScreenCamera {
   camUp: N;
   /** xyz: forward; w: tan(half the vertical field of view). */
   camFwd: N;
+  /**
+   * Sub-pixel camera jitter of this frame, in texture coordinates (y down): where a
+   * pixel's ray really points, for passes that rebuild rays from screen positions.
+   * Textures rendered in the same (jittered) frame are still read at plain `uv`.
+   */
+  jitterUv?: N;
 }
 
 /** A turn (radians) that differs from pixel to pixel, to spread the samples of a spiral. */
@@ -122,8 +128,9 @@ export function contactShadeNode(cam: ScreenCamera, p: N, src: N, taps = 8): N {
       If(reach.mul(res.y).greaterThan(0.75), () => {
         const rightScaled = cam.camRight.xyz.mul(cam.camFwd.w.mul(cam.camRight.w)).toVar();
         const upScaled = cam.camUp.mul(cam.camFwd.w).toVar();
+        const jitterUv = cam.jitterUv ?? vec2(0);
         const fastPointAt = (u: N, d: N) => {
-          const ndc = u.mul(2).sub(1).mul(vec2(1, -1));
+          const ndc = u.add(jitterUv).mul(2).sub(1).mul(vec2(1, -1));
           return camPos.add(normalize(cam.camFwd.xyz.add(rightScaled.mul(ndc.x)).add(upScaled.mul(ndc.y))).mul(d));
         };
         const px = vec2(1).div(res).toVar();

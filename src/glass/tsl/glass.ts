@@ -275,8 +275,11 @@ export function glassNode(
 
     const baseIor = max(glassP.x.add(vary.x), 1.0001).toVar();
     const dispersionSpread = glassP.y.mul(vary.y).div(12).toVar();
-    // Same bounce budget for every shape (the renderer lowers it for big piles and the floor mirror).
-    const maxEvents = glassP.z.toInt();
+    // The renderer's bounce budget (lowered for big piles and the floor mirror), capped at 4 for
+    // the baked meshes: every event there is a long sphere trace through the volume, and past the
+    // third internal reflection their folded surfaces scatter rays chaotically from pixel to
+    // pixel (costly, carrying little light, and mostly sparkle noise).
+    const maxEvents = isBakedMesh(shape) ? min(glassP.z.toInt(), int(4)) : glassP.z.toInt();
 
     // As many wavelengths as the dispersion needs (heavily frosted glass blurs the colours
     // out: one); mobile & far layers trace half as many (s.spot.w > 0.5).
