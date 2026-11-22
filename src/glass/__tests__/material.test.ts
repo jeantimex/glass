@@ -135,3 +135,30 @@ describe('MeshGlassMaterial standalone API', () => {
     expect(mat.colorNode).toBe(originalNode);
   });
 });
+
+describe('MeshGlassMaterial exits and options', () => {
+  it('defaults to 6 events, or 4 with a baked volume, and clamps bounces and imperfections', () => {
+    expect(new MeshGlassMaterial().bounces).toBe(6);
+    const volume = { texture: new THREE.Data3DTexture(new Uint16Array(8), 2, 2, 2) };
+    const withVolume = new MeshGlassMaterial({ volume });
+    expect(withVolume.bounces).toBe(4);
+    expect(withVolume.volume).toBe(volume);
+    withVolume.bounces = 0;
+    expect(withVolume.bounces).toBe(1);
+    withVolume.imperfections = 3;
+    expect(withVolume.imperfections).toBe(1);
+  });
+
+  it('rebuilds its shader when a volume is attached or removed, and clones it', () => {
+    const mat = new MeshGlassMaterial();
+    const before = mat.colorNode;
+    const volume = { texture: new THREE.Data3DTexture(new Uint16Array(8), 2, 2, 2), layer: 0, layerCount: 1 };
+    mat.volume = volume;
+    expect(mat.colorNode).not.toBe(before);
+    const copy = mat.clone();
+    expect(copy.volume).toBe(volume);
+    expect(copy.bounces).toBe(mat.bounces);
+    mat.volume = null;
+    expect(mat.volume).toBeNull();
+  });
+});

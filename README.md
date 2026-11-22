@@ -190,18 +190,21 @@ Extends `THREE.MeshBasicNodeMaterial`.
 
 #### Constructor Parameters & Live Properties
 
-| Property          | Type                        | Default    | Description                                                                                                                                 |
-| :---------------- | :-------------------------- | :--------- | :------------------------------------------------------------------------------------------------------------------------------------------ |
-| `ior`             | `number`                    | `1.52`     | Index of refraction (`1.0` – `2.5`). Examples: `1.47` borosilicate, `1.49` acrylic, `1.52` crown glass, `1.62` flint glass, `2.42` diamond. |
-| `dispersion`      | `number`                    | `0.5`      | Chromatic dispersion strength (`0` disables RGB splitting; `0.4` realistic diamond fire; `1.0+` vivid prism fire).                          |
-| `roughness`       | `number`                    | `0`        | Frosted glass amount (`0` = crystal clear, `1` = fully frosted 毛玻璃).                                                                     |
-| `frostScale`      | `number`                    | `4`        | Frosted grain density (`0.5` = coarse etched frost, `4`–`12` = fine sandblasted micro-particles).                                           |
-| `color`           | `THREE.ColorRepresentation` | `0xffffff` | Volumetric glass tint color (Beer–Lambert transmittance across `thickness`).                                                                |
-| `thickness`       | `number`                    | `1`        | Characteristic thickness in world units used for refraction & Beer–Lambert absorption.                                                      |
-| `transmission`    | `number`                    | `0`        | Automatic scene refraction (`0`–`1`), matching `MeshPhysicalMaterial` via Three.js `viewportOpaqueMipTexture` with roughness mipmaps.       |
-| `envMap`          | `THREE.Texture \| null`     | `null`     | Optional equirectangular HDRI / environment texture (overrides the neutral fallback studio; mip-blurred automatically by `roughness`).      |
-| `envMapIntensity` | `number`                    | `1`        | Intensity multiplier applied to `envMap`.                                                                                                   |
-| `backfaceMap`     | `THREE.Texture \| null`     | `null`     | Optional back-face normal & depth map from `GlassBackfacePass` for exact exit refraction & thickness on arbitrary concave meshes.           |
+| Property          | Type                        | Default    | Description                                                                                                                                                       |
+| :---------------- | :-------------------------- | :--------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ior`             | `number`                    | `1.52`     | Index of refraction (`1.0` – `2.5`). Examples: `1.47` borosilicate, `1.49` acrylic, `1.52` crown glass, `1.62` flint glass, `2.42` diamond.                       |
+| `dispersion`      | `number`                    | `0.5`      | Chromatic dispersion strength (`0` disables RGB splitting; `0.4` realistic diamond fire; `1.0+` vivid prism fire).                                                |
+| `roughness`       | `number`                    | `0`        | Frosted glass amount (`0` = crystal clear, `1` = fully frosted 毛玻璃).                                                                                           |
+| `frostScale`      | `number`                    | `4`        | Frosted grain density (`0.5` = coarse etched frost, `4`–`12` = fine sandblasted micro-particles).                                                                 |
+| `color`           | `THREE.ColorRepresentation` | `0xffffff` | Volumetric glass tint color (Beer–Lambert transmittance across `thickness`).                                                                                      |
+| `thickness`       | `number`                    | `1`        | Characteristic thickness in world units used for refraction & Beer–Lambert absorption.                                                                            |
+| `transmission`    | `number`                    | `0`        | Automatic scene refraction (`0`–`1`), matching `MeshPhysicalMaterial` via Three.js `viewportOpaqueMipTexture` with roughness mipmaps.                             |
+| `envMap`          | `THREE.Texture \| null`     | `null`     | Optional equirectangular HDRI / environment texture (overrides the neutral fallback studio; mip-blurred automatically by `roughness`).                            |
+| `envMapIntensity` | `number`                    | `1`        | Intensity multiplier applied to `envMap`.                                                                                                                         |
+| `backfaceMap`     | `THREE.Texture \| null`     | `null`     | Optional back-face normal & depth map from `GlassBackfacePass` for exact exit refraction & thickness on arbitrary concave meshes.                                 |
+| `volume`          | `GlassVolume \| null`       | `null`     | Baked 128³ signed-distance volume of the mesh (`{ texture, layer?, layerCount? }`, as written by `scripts/bake-*-sdf.ts`): exact exits for every internal bounce. |
+| `bounces`         | `number`                    | `6`        | Internal events followed per ray (`4` by default with a `volume`).                                                                                                |
+| `imperfections`   | `number`                    | `0`        | Faint surface waviness (`0` perfect glass, `1` clearly hand-made).                                                                                                |
 
 #### Methods
 
@@ -209,6 +212,16 @@ Extends `THREE.MeshBasicNodeMaterial`.
   Creates an independent clone with identical optical parameters and texture bindings.
 
 ---
+
+### Exits: how `MeshGlassMaterial` follows light inside any mesh
+
+`MeshGlassMaterial` shades with the same tracer as the instanced renderer (`src/glass/tsl/trace.ts`): every internal event with exact Fresnel and total internal reflection, continuous spectral dispersion and Beer–Lambert absorption. Where a ray leaves the glass comes from the best source available:
+
+1. **`volume`** — a baked signed-distance volume: exact exits for every bounce (best for any closed mesh).
+2. **`backfaceMap`** — the `GlassBackfacePass` map: the exact first exit along the view ray, then estimates.
+3. **`thickness`** only — a smooth local-sphere estimate.
+
+See `mesh.html` (`npm run dev`, then open `/mesh.html`) for all three on plain meshes.
 
 ### `new GlassBackfacePass(options?: { resolutionScale?: number })`
 

@@ -10,7 +10,7 @@ import * as TSL from 'three/tsl';
 import { KIND } from '../objects';
 
 type N = any;
-const { Fn, clamp, float, floor, length, mix, normalize, vec3 } = TSL as N;
+const { Break, Fn, If, Loop, clamp, float, floor, int, length, max, mix, normalize, vec3 } = TSL as N;
 
 /** Each baked shape's layer in the stacked volume texture (the order its volumes are loaded in). */
 export const SDF_LAYER: Readonly<Record<number, number>> = {
@@ -21,19 +21,19 @@ export const SDF_LAYER: Readonly<Record<number, number>> = {
 /** How many 128^3 layers the stacked volume texture holds. */
 export const SDF_LAYER_COUNT = 3;
 
-/** Build fast (trilinear) and smooth (C^2 tricubic B-spline) SDF samplers for one mesh layer. */
-export function createSdfVolume(sdfTex: N, sdfLayer: number) {
+/**
+ * Build fast (trilinear) and smooth (C^2 tricubic B-spline) SDF samplers for one mesh layer
+ * of a stack of `layerCount` 128^3 volumes.
+ */
+export function createSdfVolume(sdfTex: N, sdfLayer: number, layerCount = SDF_LAYER_COUNT) {
+  const zCells = 128 * layerCount;
   /** Fast 1-tap hardware-trilinear SDF sample for sphere-tracing and internal exits. */
   const volumeFast = Fn(([p, scale]: N[]) => {
     const q = p.div(scale).toVar();
     const inner = 1.1 * (1 - 1 / 128);
     const clamped = clamp(q, vec3(-inner), vec3(inner)).toVar();
     const gridPos = clamp(clamped.div(2.2).add(0.5).mul(128), vec3(0.5), vec3(127.5)).toVar();
-    const uvw = vec3(
-      gridPos.x.mul(1 / 128),
-      gridPos.y.mul(1 / 128),
-      gridPos.z.add(128 * sdfLayer).mul(1 / (128 * SDF_LAYER_COUNT)),
-    );
+    const uvw = vec3(gridPos.x.mul(1 / 128), gridPos.y.mul(1 / 128), gridPos.z.add(128 * sdfLayer).mul(1 / zCells));
     return sdfTex
       .sample(uvw)
       .level(0)
@@ -104,7 +104,7 @@ export function createSdfVolume(sdfTex: N, sdfLayer: number) {
     const t0 = clamp(i.add(w1.div(g0)).sub(0.5), vec3(0.5), vec3(127.5)).toVar();
     const t1 = clamp(i.add(w3.div(g1)).add(1.5), vec3(0.5), vec3(127.5)).toVar();
     const invN = float(1 / 128);
-    const invZ = float(1 / (128 * SDF_LAYER_COUNT));
+    const invZ = float(1 / zCells);
     const zBase = float(128 * sdfLayer);
     const u0 = t0.x.mul(invN).toVar();
     const u1 = t1.x.mul(invN).toVar();
@@ -159,5 +159,44 @@ export function createSdfVolume(sdfTex: N, sdfLayer: number) {
     ],
   });
 
-  return { volumeFast, volumeFastNormal, volumeSmooth, volumeSmoothNormal };
+  /**
+   * Trace an internal ray from `pos` along `dir` (volume-local coordinates, object half-width
+   * `scale`) to where it leaves the solid: `{ pos, nrm, t }`. Steps inside first if the
+   * rasterized mesh slightly leads the isosurface, sphere-traces to the exit wall, bisects it,
+   * and takes the 4-tap trilinear normal there.
+   */
+  const exit = (pos: N, dir: N, scale: N) => {
+    const t = scale.mul(0.004).toVar();
+    Loop({ start: int(0), end: int(8), type: 'int', condition: '<', name: 'm0' }, () => {
+      const d = volumeFast(pos.add(dir.mul(t)), scale).toVar();
+      If(d.lessThan(0), () => {
+        Break();
+      });
+      t.addAssign(max(d, scale.mul(0.002)));
+    });
+    const tIn = float(t).toVar();
+    Loop({ start: int(0), end: int(32), type: 'int', condition: '<', name: 'm1' }, () => {
+      const d = volumeFast(pos.add(dir.mul(t)), scale)
+        .negate()
+        .toVar();
+      If(d.lessThan(scale.mul(0.0005)), () => {
+        Break();
+      });
+      tIn.assign(t);
+      t.addAssign(max(d, scale.mul(0.008)));
+    });
+    tIn.assign(max(tIn.sub(scale.mul(0.004)), 0));
+    t.addAssign(scale.mul(0.004));
+    Loop({ start: int(0), end: int(4), type: 'int', condition: '<', name: 'm2' }, () => {
+      const mid = tIn.add(t).mul(0.5).toVar();
+      If(volumeFast(pos.add(dir.mul(mid)), scale).lessThan(0), () => {
+        tIn.assign(mid);
+      }).Else(() => {
+        t.assign(mid);
+      });
+    });
+    return { pos: pos.add(dir.mul(t)).toVar(), nrm: volumeFastNormal(pos.add(dir.mul(t)), scale), t };
+  };
+
+  return { volumeFast, volumeFastNormal, volumeSmooth, volumeSmoothNormal, exit };
 }

@@ -2,25 +2,33 @@
 // (WebGPU & WebGL 2). Matches MeshPhysicalMaterial ergonomics: attach to any THREE.Mesh,
 // optionally set `envMap` for HDRI lighting and `transmission` (0–1) for automatic
 // mipmapped scene refraction via Three.js `viewportOpaqueMipTexture`.
+//
+// It shades with the same glass tracer as the instanced renderer (tsl/trace.ts): every
+// internal event with exact Fresnel and total internal reflection, continuous spectral
+// dispersion and Beer-Lambert absorption. Where each internal ray leaves the glass comes
+// from the best source it has: a baked signed-distance `volume` (exact, every bounce), a
+// `backfaceMap` from GlassBackfacePass (exact first exit), or else a smooth local-sphere
+// estimate from `thickness`.
 /* eslint-disable @typescript-eslint/no-explicit-any -- TSL node types are too loose to spell out */
 import * as THREE from 'three/webgpu';
 import * as TSL from 'three/tsl';
-import { applyFrostVeil, perturbFrostNormal } from './tsl/frost';
-import { fresnel, spectralJitter, spectralSample, spectralSampleCount } from './tsl/optics';
+import { applyFrostVeil, perturbFrostNormal, perturbImperfections } from './tsl/frost';
+import { spectralSampleCount } from './tsl/optics';
+import { createSdfVolume } from './tsl/sdf';
 import { makeStudioEnv } from './tsl/studioEnv';
+import { traceGlass, type GlassHit } from './tsl/trace';
 
 type N = any;
 const {
   Fn,
   If,
-  Loop,
-  abs,
   batchColor,
   cameraPosition,
+  cameraProjectionMatrix,
+  cameraViewMatrix,
   clamp,
   diffuseColor,
   dot,
-  exp,
   float,
   instanceColor,
   int,
@@ -29,15 +37,17 @@ const {
   materialOpacity,
   max,
   mix,
-  normalWorld,
+  modelWorldMatrix,
+  modelWorldMatrixInverse,
   normalize,
+  normalWorld,
   positionLocal,
   positionWorld,
   reflect,
-  refract,
   screenUV,
   select,
   texture,
+  texture3D,
   uniform,
   vec2,
   vec3,
@@ -74,6 +84,32 @@ export interface MeshGlassMaterialParameters {
    * `a = camera distance`) for exact exit refraction & thickness on arbitrary concave meshes.
    */
   backfaceMap?: THREE.Texture | null;
+  /**
+   * Optional baked signed-distance volume of the mesh (see `GlassVolume`): exact exits for
+   * every internal bounce, as the instanced renderer uses for Suzanne, the dragon and the
+   * torus knot. Takes precedence over `backfaceMap`.
+   */
+  volume?: GlassVolume | null;
+  /** Internal events followed per ray (default 6, or 4 with a `volume`; 1 exit + internal reflections). */
+  bounces?: number;
+  /** Faint surface waviness (0: perfect glass, the default; 1: clearly hand-made). */
+  imperfections?: number;
+}
+
+/**
+ * A baked 128^3 signed-distance volume (HalfFloat, red channel), as written by the bake
+ * scripts in `scripts/`: distances in units of the mesh's half-width, negative inside, covering
+ * +-1.1 half-widths around the origin of the mesh's local coordinates. Several volumes can be
+ * stacked along z in one texture (`layer` of `layerCount`). The mesh's local coordinates must
+ * be the volume's (half-width 1, as the meshes in `public/` are); scale it with the object.
+ * Supported on plain meshes with uniform scale (not instanced meshes).
+ */
+export interface GlassVolume {
+  texture: THREE.Data3DTexture;
+  /** Which stacked 128^3 layer holds this mesh (default 0). */
+  layer?: number;
+  /** How many layers are stacked in `texture` (default: its depth / 128). */
+  layerCount?: number;
 }
 
 /** Shared 1x1 white fallback texture so optional texture nodes bind cleanly without per-instance leaks. */
@@ -109,6 +145,7 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
   private _envMap: THREE.Texture | null = null;
   private _backfaceMap: THREE.Texture | null = null;
   private _transmission = 0;
+  private _volume: GlassVolume | null = null;
 
   private readonly uIor = uniform(1.52);
   private readonly uDispersion = uniform(0.5);
@@ -119,6 +156,8 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
   private readonly uHasEnvMap = uniform(0);
   private readonly uEnvMapIntensity = uniform(1);
   private readonly uHasBackface = uniform(0);
+  private readonly uBounces = uniform(6);
+  private readonly uImperfections = uniform(0);
   private readonly envTexNode: N;
   private readonly backfaceTexNode: N;
 
@@ -143,6 +182,12 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     this._backfaceMap = params.backfaceMap ?? null;
     this.backfaceTexNode = texture(this._backfaceMap ?? FALLBACK_ENV_TEXTURE);
     this.uHasBackface.value = this._backfaceMap ? 1 : 0;
+
+    this._volume = params.volume ?? null;
+    // Baked-volume meshes default to 4 events (as in the instanced renderer): their folded
+    // surfaces scatter deeper bounces chaotically from pixel to pixel.
+    this.uBounces.value = params.bounces ?? (this._volume ? 4 : 6);
+    this.uImperfections.value = params.imperfections ?? 0;
 
     this.colorNode = this.buildColorNode();
   }
@@ -219,6 +264,34 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     this.uEnvMapIntensity.value = v;
   }
 
+  /** Internal events followed per ray (1 exit + internal reflections). */
+  get bounces(): number {
+    return this.uBounces.value;
+  }
+  set bounces(v: number) {
+    this.uBounces.value = Math.max(1, Math.round(v));
+  }
+
+  /** Faint surface waviness (0: perfect glass; 1: clearly hand-made). */
+  get imperfections(): number {
+    return this.uImperfections.value;
+  }
+  set imperfections(v: number) {
+    this.uImperfections.value = Math.min(Math.max(v, 0), 1);
+  }
+
+  /** Baked signed-distance volume for exact exits (changing it rebuilds the shader). */
+  get volume(): GlassVolume | null {
+    return this._volume;
+  }
+  set volume(v: GlassVolume | null) {
+    this._volume = v;
+    if (this.uBounces) {
+      this.colorNode = this.buildColorNode();
+      this.needsUpdate = true;
+    }
+  }
+
   get backfaceMap(): THREE.Texture | null {
     return this._backfaceMap;
   }
@@ -243,6 +316,9 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
       envMap: this._envMap,
       envMapIntensity: this.envMapIntensity,
       backfaceMap: this._backfaceMap,
+      volume: this._volume,
+      bounces: this.bounces,
+      imperfections: this.imperfections,
     }) as this;
   }
 
@@ -269,7 +345,11 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     diffuseColor.a.assign(diffuseColor.a.mul(opacityNode));
   }
 
-  /** Two-interface dielectric refraction, TIR, Beer-Lambert absorption, 6-band CIE dispersion & frost. */
+  /**
+   * The glass shader: every internal event through the shared tracer (tsl/trace.ts), with
+   * exits from the baked volume, the back-face map or the local-sphere estimate, and what
+   * leaving rays see from the environment and (with transmission) the scene behind.
+   */
   private buildColorNode(tintNode: N = uniform(this.color)): N {
     const uTint = tintNode;
     const { env } = makeStudioEnv(this.uRoughness, {
@@ -279,19 +359,11 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     });
 
     const useTransmission = this._transmission > 0;
-    const uIor = this.uIor;
-    const uDispersion = this.uDispersion;
     const uRoughness = this.uRoughness;
-    const uFrostScale = this.uFrostScale;
     const uThickness = this.uThickness;
     const uTransmission = this.uTransmission;
-
-    const lookEnv = (rd: N, bendOffset: N) => {
-      if (!useTransmission) return env(rd);
-      const uv = clamp(screenUV.add(bendOffset), vec2(0.002), vec2(0.998));
-      const bg = viewportOpaqueMipTexture(uv, uRoughness.mul(5)).rgb;
-      return mix(env(rd), bg, uTransmission);
-    };
+    const volume = this._volume;
+    const viewProj = cameraProjectionMatrix.mul(cameraViewMatrix);
 
     return Fn(() => {
       const d0 = normalize(positionWorld.sub(cameraPosition)).toVar();
@@ -300,81 +372,109 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
         n0.assign(n0.negate());
       });
 
+      // Object scale: the characteristic thickness, and the radius of the local-sphere model.
       const reach = max(uThickness, 0.05).toVar();
+      const sphereRadius = reach.mul(0.5).toVar();
       const frostGrain = float(0.5).toVar();
-      perturbFrostNormal(n0, d0, positionLocal, reach, uRoughness, uFrostScale, frostGrain);
+      perturbFrostNormal(n0, d0, positionLocal, reach, uRoughness, this.uFrostScale, frostGrain);
+      perturbImperfections(n0, positionLocal, reach, this.uImperfections);
 
-      const ior = max(uIor, 1.0001).toVar();
-      const disp = uDispersion.div(12).toVar();
-      const layers = select(
-        disp.greaterThan(0).and(uRoughness.lessThan(0.35)),
-        spectralSampleCount(disp, false),
+      const ior = max(this.uIor, 1.0001).toVar();
+      const dispersionSpread = this.uDispersion.div(12).toVar();
+      // A plain three.js render shows each frame on its own (no frames averaged), so the
+      // wavelengths are evenly spaced and fixed rather than jittered per pixel (which would be
+      // static grain), and twice as many are taken to keep the fringes smooth.
+      const bandCount = select(
+        dispersionSpread.greaterThan(0).and(uRoughness.lessThan(0.35)),
+        spectralSampleCount(dispersionSpread.mul(2), false),
         int(1),
       ).toVar();
-      const spectralU = spectralJitter().toVar();
-      const weightSum = vec3(0).toVar();
-      const sigma = log(max(uTint, vec3(1e-4)))
+      // Beer-Lambert: `color` is what survives `thickness` of glass.
+      const absorptionSigma = log(max(uTint, vec3(1e-4)))
         .negate()
-        .div(max(reach, 1e-4))
+        .div(reach)
         .toVar();
-      const col = vec3(0).toVar();
 
-      const d0DotN0 = dot(d0, n0).toVar();
-      const outerRefl = env(reflect(d0, n0)).toVar();
-      const frontDist = length(positionWorld.sub(cameraPosition)).toVar();
-      const bfSample = vec4(0).toVar();
-      const hasExactExit = float(0).toVar();
-      If(this.uHasBackface.greaterThan(0.5), () => {
-        bfSample.assign(this.backfaceTexNode.sample(screenUV).level(0));
-        If(bfSample.a.greaterThan(frontDist.add(1e-4)).and(dot(bfSample.rgb, bfSample.rgb).greaterThan(1e-4)), () => {
-          hasExactExit.assign(1);
-        });
-      });
+      /**
+       * What a ray leaving the glass at `pos` along `dir` sees: the environment, and with
+       * transmission the opaque scene behind, read where the ray crosses the screen a little
+       * way past the glass (blurred by roughness and the ray's cone).
+       */
+      const look = (pos: N, dir: N, cone: N) => {
+        const seen = env(dir).toVar();
+        if (useTransmission) {
+          const clip = viewProj.mul(vec4(pos.add(dir.mul(reach.mul(1.5))), 1)).toVar();
+          If(clip.w.greaterThan(0.01), () => {
+            const ndc = clip.xy.div(clip.w);
+            const uv = clamp(vec2(ndc.x, ndc.y.negate()).mul(0.5).add(0.5), vec2(0.002), vec2(0.998));
+            const behind = viewportOpaqueMipTexture(uv, max(uRoughness.mul(5), cone.mul(8))).rgb;
+            seen.assign(mix(seen, behind, uTransmission));
+          });
+        }
+        return seen;
+      };
 
-      Loop({ start: int(0), end: layers, type: 'int', condition: '<', name: 'lc' }, ({ lc }: { lc: N }) => {
-        const sample = spectralSample(lc, layers, spectralU);
-        const bandOffset = select(layers.equal(1), float(0), sample.cauchy);
-        const iorIn = max(ior.add(disp.mul(bandOffset)), 1.0001).toVar();
-        const f0 = fresnel(d0DotN0, iorIn).toVar();
-        const layer = f0.mul(outerRefl).toVar();
-        const thr = float(1).sub(f0).toVar();
-        const t1 = refract(d0, n0, float(1).div(iorIn)).toVar();
-        If(dot(t1, t1).greaterThan(1e-6), () => {
-          // Use exact back-face chord thickness & outward normal when `backfaceMap` is bound;
-          // otherwise fall back to analytic chord estimation from `thickness`.
-          const dist = select(
-            hasExactExit.greaterThan(0.5),
-            max(bfSample.a.sub(frontDist), 0.01),
-            reach.mul(mix(0.35, 1, abs(dot(t1, n0)))),
-          ).toVar();
-          const nExit = select(
-            hasExactExit.greaterThan(0.5),
-            normalize(bfSample.rgb),
-            normalize(mix(t1, n0.negate(), 0.55)),
-          ).toVar();
-          const absorb = exp(sigma.mul(dist.negate())).toVar();
-          const t2 = refract(t1, nExit.negate(), iorIn).toVar();
-          const f1 = fresnel(dot(t1, nExit), float(1).div(iorIn)).toVar();
-          If(dot(t2, t2).lessThan(1e-6), () => {
-            f1.assign(1);
-          });
-          const outW = thr.mul(float(1).sub(f1)).toVar();
-          If(outW.greaterThan(0.004), () => {
-            const bend = t2.sub(d0).xy.mul(0.12);
-            layer.addAssign(absorb.mul(outW).mul(lookEnv(t2, bend)));
-          });
-          const bounceW = thr.mul(f1).toVar();
-          If(bounceW.greaterThan(0.004), () => {
-            const rInt = reflect(t1, nExit.negate());
-            const bend = rInt.sub(d0).xy.mul(0.12);
-            layer.addAssign(absorb.mul(absorb).mul(bounceW).mul(lookEnv(rInt, bend)));
-          });
-        });
-        const weight = select(layers.equal(1), vec3(1), sample.weight).toVar();
-        weightSum.addAssign(weight);
-        col.addAssign(layer.mul(weight));
+      /** Local-sphere model: from a point with outward normal `n`, a ray `dir` crosses a sphere of the object's size. */
+      const sphereExit = (pos: N, dir: N, n: N): GlassHit => {
+        const t = sphereRadius.mul(max(dot(dir, n).negate().mul(2), 0.05)).toVar();
+        return { pos: pos.add(dir.mul(t)).toVar(), nrm: normalize(n.sub(dir.mul(dot(dir, n).mul(2)))), t };
+      };
+
+      // The normal of the last surface met, for the local-sphere model's next exit.
+      const lastNormal = vec3(n0).toVar();
+      let exit: (pos: N, dir: N, ev: N) => GlassHit;
+      if (volume) {
+        // Exact exits through the baked volume, in the mesh's local (volume) coordinates.
+        const layerCount = volume.layerCount ?? Math.max(1, Math.round(volume.texture.image.depth / 128));
+        const sdf = createSdfVolume(texture3D(volume.texture), volume.layer ?? 0, layerCount);
+        const worldScale = length(modelWorldMatrix[0].xyz).toVar();
+        exit = (pos: N, dir: N) => {
+          const localPos = modelWorldMatrixInverse.mul(vec4(pos, 1)).xyz;
+          const localDir = normalize(modelWorldMatrixInverse.mul(vec4(dir, 0)).xyz);
+          const hit = sdf.exit(localPos, localDir, float(1));
+          return {
+            pos: modelWorldMatrix.mul(vec4(hit.pos, 1)).xyz.toVar(),
+            nrm: normalize(modelWorldMatrix.mul(vec4(hit.nrm, 0)).xyz),
+            t: hit.t.mul(worldScale),
+          };
+        };
+      } else {
+        // The back-face map's exit (exact where it is bound and found behind this pixel) for
+        // the first event, then the local-sphere model from the last surface met.
+        const frontDist = length(positionWorld.sub(cameraPosition)).toVar();
+        const backface = this.backfaceTexNode.sample(screenUV).level(0).toVar();
+        const exactFirst = this.uHasBackface
+          .greaterThan(0.5)
+          .and(backface.a.greaterThan(frontDist.add(1e-4)))
+          .and(dot(backface.rgb, backface.rgb).greaterThan(1e-4))
+          .toVar();
+        exit = (pos: N, dir: N, ev: N) => {
+          const fromNormal = select(ev.equal(1), n0, lastNormal);
+          const estimate = sphereExit(pos, dir, fromNormal);
+          const useMap = exactFirst.and(ev.equal(1));
+          const t = select(useMap, max(backface.a.sub(frontDist), 0.01), estimate.t).toVar();
+          const nrm = select(useMap, normalize(backface.rgb), estimate.nrm).toVar();
+          lastNormal.assign(nrm);
+          return { pos: pos.add(dir.mul(t)).toVar(), nrm, t };
+        };
+      }
+
+      const traced = traceGlass({
+        entryPos: positionWorld,
+        entryNormal: n0,
+        viewDir: d0,
+        ior,
+        dispersionSpread,
+        bandCount,
+        spectralJitter: float(0.5),
+        absorptionSigma,
+        maxEvents: this.uBounces.toInt(),
+        outerReflection: env(reflect(d0, n0)),
+        exit,
+        look,
+        perturbNormal: (normal: N, pos: N) => perturbImperfections(normal, pos, reach, this.uImperfections),
       });
-      col.divAssign(max(weightSum, vec3(1e-6)));
+      const col = traced.color.div(max(traced.weightSum, vec3(1e-6))).toVar();
 
       // Creamy frosted veil + crisp Fresnel rim when roughness > 0.
       applyFrostVeil(col, d0, n0, uTint, vec3(0.75), uRoughness, frostGrain);

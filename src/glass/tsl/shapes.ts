@@ -191,10 +191,13 @@ export function shapeFunctions(shape: number, uniforms: ShapeUniforms, diamondPl
   };
 
   /* Baked 128^3 SDF volume sampling (Suzanne, dragon and torus knot layers; see sdf.ts) */
-  const { volumeFast, volumeFastNormal, volumeSmooth, volumeSmoothNormal } = createSdfVolume(
-    sdfTex,
-    SDF_LAYER[shape] ?? 0,
-  );
+  const {
+    volumeFast,
+    volumeFastNormal,
+    volumeSmooth,
+    volumeSmoothNormal,
+    exit: volumeExit,
+  } = createSdfVolume(sdfTex, SDF_LAYER[shape] ?? 0);
 
   /** Snap a rasterized surface point onto the exact shape and compute its outward normal. */
   const entry = (posIn: N, size: N, meshNormal: N) => {
@@ -446,39 +449,9 @@ export function shapeFunctions(shape: number, uniforms: ShapeUniforms, diamondPl
       const rho = max(length(q.xz), 1e-6);
       n.assign(normalize(q.sub(vec3(q.x.div(rho), 0, q.z.div(rho)).mul(size.x))));
     } else if (isBakedMesh(shape)) {
-      const scale = size.x.toVar();
-      t.assign(scale.mul(0.004));
-      // Step inside if the rasterized mesh slightly leads the SDF isosurface.
-      Loop({ start: int(0), end: int(8), type: 'int', condition: '<', name: 'm0' }, () => {
-        const d = volumeFast(pos.add(dir.mul(t)), scale).toVar();
-        If(d.lessThan(0), () => {
-          Break();
-        });
-        t.addAssign(max(d, scale.mul(0.002)));
-      });
-      // Sphere-trace to the exit wall, then bisect and evaluate 4-tap trilinear normal.
-      const tIn = float(t).toVar();
-      Loop({ start: int(0), end: int(32), type: 'int', condition: '<', name: 'm1' }, () => {
-        const d = volumeFast(pos.add(dir.mul(t)), scale)
-          .negate()
-          .toVar();
-        If(d.lessThan(scale.mul(0.0005)), () => {
-          Break();
-        });
-        tIn.assign(t);
-        t.addAssign(max(d, scale.mul(0.008)));
-      });
-      tIn.assign(max(tIn.sub(scale.mul(0.004)), 0));
-      t.addAssign(scale.mul(0.004));
-      Loop({ start: int(0), end: int(4), type: 'int', condition: '<', name: 'm2' }, () => {
-        const mid = tIn.add(t).mul(0.5).toVar();
-        If(volumeFast(pos.add(dir.mul(mid)), scale).lessThan(0), () => {
-          tIn.assign(mid);
-        }).Else(() => {
-          t.assign(mid);
-        });
-      });
-      n.assign(volumeFastNormal(pos.add(dir.mul(t)), scale));
+      const hit = volumeExit(pos, dir, size.x);
+      t.assign(hit.t);
+      n.assign(hit.nrm);
     } else if (shape === KIND.box) {
       If(bevel.greaterThan(0), exitPolyhedron).Else(() => {
         const tx = boxExitAlongAxis(dir.x, size.x, pos.x).toVar();

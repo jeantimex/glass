@@ -12,6 +12,7 @@ import { cmyTint } from './cmy';
 import { applyFrostVeil, perturbFrostNormal, perturbImperfections } from './frost';
 import { fresnel, rotateToLocal, rotateToWorld, spectralJitter, spectralSample, spectralSampleCount } from './optics';
 import { sceneFunctions, type SceneInputs } from './scene';
+import { traceGlass, type GlassHit } from './trace';
 import { isBakedMesh, isCurvedShape, shapeFunctions } from './shapes';
 
 // Re-export modular optical, CMY, frost, shape, and caustic primitives for backwards compatibility.
@@ -322,96 +323,46 @@ export function glassNode(
 
     const color = vec3(0).toVar();
 
+    // Every wavelength sample through every internal event: the shared glass tracer
+    // (trace.ts), with this shape's exits, lookups and filters.
     const tracePerBand = () => {
-      Loop({ start: int(0), end: bandCount, type: 'int', condition: '<', name: 'lc' }, ({ lc }: { lc: N }) => {
-        const sample = spectralSample(lc, bandCount, spectralU);
-        const bandOffset = select(bandCount.equal(1), float(0), sample.cauchy);
-        const bandIor = max(baseIor.add(dispersionSpread.mul(bandOffset)), 1.0001).toVar();
-        const entryFresnel = fresnel(viewDotNormal, bandIor).toVar();
-        const bandRadiance = entryFresnel.mul(outerReflection).toVar();
-        const throughput = float(1).sub(entryFresnel).toVar();
-        const rayDir = refract(viewDirLocal, entryNormal, float(1).div(bandIor)).toVar();
-        const rayPos = vec3(entryPos).toVar();
-        const rayCone = entryCone.mul(0.45).toVar();
-        const attenuation = vec3(entryFaceFilter).toVar();
-
-        If(throughput.greaterThan(0.012).and(dot(rayDir, rayDir).greaterThan(1e-6)), () => {
-          Loop({ start: int(1), end: maxEvents, type: 'int', condition: '<', name: 'ev' }, () => {
-            const hit = exit(rayPos, rayDir, size);
-            rayPos.assign(hit.pos);
-            const hitNormal = hit.nrm.toVar();
-            if (!mirrored) perturbImperfections(hitNormal, hit.pos, reach, imperfection);
-
-            if (isBakedMesh(shape)) {
-              rayCone.assign(
-                min(
-                  rayCone
-                    .mul(1.75)
-                    .add(hit.t.div(max(reach, 0.05)).mul(0.06))
-                    .add(0.03),
-                  0.85,
-                ),
-              );
-            } else if (curved) {
-              rayCone.assign(min(rayCone.mul(1.5).add(0.01), 0.85));
-            }
-
-            attenuation.mulAssign(exp(absorptionSigma.mul(hit.t.negate())));
-            const faceFilter = vec3(1).toVar();
-            if (isCmyBox) {
-              If(cmy.greaterThan(0), () => {
-                faceFilter.assign(cmyTint(hitNormal, cmy, g.cmyOrder));
-              });
-            }
-
-            const exitRefracted = refract(rayDir, hitNormal.negate(), bandIor).toVar();
-            const exitFresnel = fresnel(dot(rayDir, hitNormal), float(1).div(bandIor)).toVar();
-            If(dot(exitRefracted, exitRefracted).lessThan(1e-6), () => {
-              exitFresnel.assign(1);
-            });
-
-            const exitWeight = throughput.mul(float(1).sub(exitFresnel)).toVar();
-            If(exitWeight.greaterThan(0.01), () => {
-              const seen = lookThrough(
-                center.add(rotateToWorld(rayPos.add(hitNormal.mul(0.003)), quat)),
-                rotateToWorld(exitRefracted, quat),
-                reach,
-                lampLit,
-                rayCone,
-              );
-              bandRadiance.addAssign(attenuation.mul(faceFilter).mul(exitWeight.mul(seen)));
-            });
-
-            throughput.mulAssign(exitFresnel);
-            If(throughput.lessThan(0.015), () => {
-              Break();
-            });
-            rayDir.assign(reflect(rayDir, hitNormal.negate()));
-            attenuation.mulAssign(faceFilter);
-          });
-
-          // Release any residual trapped energy after max bounces so interiors don't go black.
-          If(throughput.greaterThanEqual(0.015), () => {
-            bandRadiance.addAssign(
-              attenuation.mul(
-                throughput.mul(
-                  lookThrough(
-                    center.add(rotateToWorld(rayPos, quat)),
-                    rotateToWorld(rayDir, quat),
-                    reach,
-                    lampLit,
-                    rayCone,
-                  ),
-                ),
-              ),
-            );
-          });
-        });
-
-        const bandWeight = select(bandCount.equal(1), vec3(1), sample.weight).toVar();
-        color.addAssign(bandRadiance.mul(bandWeight));
-        weightSum.addAssign(bandWeight);
+      const traced = traceGlass({
+        entryPos,
+        entryNormal,
+        viewDir: viewDirLocal,
+        ior: baseIor,
+        dispersionSpread,
+        bandCount,
+        spectralJitter: spectralU,
+        absorptionSigma,
+        maxEvents,
+        outerReflection,
+        exit: (pos: N, dir: N) => exit(pos, dir, size),
+        look: (pos: N, dir: N, cone: N) =>
+          lookThrough(center.add(rotateToWorld(pos, quat)), rotateToWorld(dir, quat), reach, lampLit, cone),
+        entryCone,
+        growCone: isBakedMesh(shape)
+          ? (cone: N, hit: GlassHit) =>
+              min(
+                cone
+                  .mul(1.75)
+                  .add(hit.t.div(max(reach, 0.05)).mul(0.06))
+                  .add(0.03),
+                0.85,
+              )
+          : curved
+            ? (cone: N) => min(cone.mul(1.5).add(0.01), 0.85)
+            : undefined,
+        entryFilter: entryFaceFilter,
+        surfaceFilter: isCmyBox
+          ? (normal: N) => select(cmy.greaterThan(0), cmyTint(normal, cmy, g.cmyOrder), vec3(1))
+          : undefined,
+        perturbNormal: mirrored
+          ? undefined
+          : (normal: N, pos: N) => perturbImperfections(normal, pos, reach, imperfection),
       });
+      color.addAssign(traced.color);
+      weightSum.addAssign(traced.weightSum);
     };
 
     if (shape === KIND.diamond) {

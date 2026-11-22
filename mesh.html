@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MeshGlassMaterial</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #10141c;
+        font:
+          13px/1.4 system-ui,
+          sans-serif;
+        color: #dfe6f0;
+      }
+      #view {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+        touch-action: none;
+      }
+      #caption {
+        position: fixed;
+        left: 12px;
+        bottom: 12px;
+        opacity: 0.7;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="view"></canvas>
+    <div id="caption">
+      MeshGlassMaterial on plain THREE.Mesh objects. Exits: sphere (thickness estimate), torus knot (back-face map),
+      Suzanne and the Stanford dragon (baked volumes)
+    </div>
+    <script type="module" src="/src/demo/meshDemo.ts"></script>
+  </body>
+</html>
