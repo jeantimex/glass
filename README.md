@@ -264,6 +264,7 @@ npm run typecheck    # TypeScript check (tsc --noEmit)
 npm run build        # Production build
 npm run deploy       # Build and deploy demo to GitHub Pages
 node scripts/bake-torusknot-sdf.ts  # Re-bake public/torusknot_sdf_128.bin after changing src/glass/torusKnot.ts
+node scripts/bake-suzanne-sdf.ts    # Re-bake public/suzanne_sdf_128.bin (subdivided, eyes merged into a solid head)
 ```
 
 ---

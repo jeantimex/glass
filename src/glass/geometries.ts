@@ -3,6 +3,7 @@
 import * as THREE from 'three/webgpu';
 import { diamondGeometry } from './diamond';
 import { KIND } from './objects';
+import { loopSubdivide } from './subdivide';
 import { TORUS_KNOT, UNIT_TORUS_KNOT } from './torusKnot';
 
 /** Tube radius of the unit torus geometry (ring radius = 1). */
@@ -30,6 +31,23 @@ function buildUnitTorusKnot(tubularSegments: number, radialSegments: number): TH
   const { centerY, scale } = UNIT_TORUS_KNOT;
   const geometry = new THREE.TorusKnotGeometry(radius, tube, tubularSegments, radialSegments, p, q);
   return geometry.translate(0, -centerY, 0).scale(scale, scale, scale);
+}
+
+/**
+ * The smooth surface of a low-poly indexed mesh (Loop subdivision, `levels` times), with
+ * smooth vertex normals: Suzanne as the subdivided model shows her, matching her baked
+ * distance volume (scripts/bake-suzanne-sdf.ts) instead of the cage's flat facets.
+ */
+export function subdividedGeometry(geometry: THREE.BufferGeometry, levels: number): THREE.BufferGeometry {
+  const smooth = loopSubdivide(
+    { positions: geometry.getAttribute('position').array, indices: geometry.index!.array },
+    levels,
+  );
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.BufferAttribute(Float32Array.from(smooth.positions), 3));
+  out.setIndex(new THREE.BufferAttribute(smooth.indices, 1));
+  out.computeVertexNormals();
+  return out;
 }
 
 /** Count triangles in an indexed or non-indexed BufferGeometry. */
@@ -74,6 +92,8 @@ export function createShapeGeometries(meshes: BakedMeshGeometries): {
   fineBases[KIND.cone] = new THREE.ConeGeometry(1, 2, 120, 1);
   fineBases[KIND.torus] = new THREE.TorusGeometry(1, UNIT_TUBE, 40, 144).rotateX(Math.PI / 2);
   fineBases[KIND.dragon] = meshes.dragon;
+  // Suzanne's low-poly cage, subdivided into her smooth surface for close-ups.
+  fineBases[KIND.suzanne] = subdividedGeometry(meshes.suzanne, 2);
   fineBases[KIND.torusknot] = buildUnitTorusKnot(220, 36);
 
   return { bases, fineBases };

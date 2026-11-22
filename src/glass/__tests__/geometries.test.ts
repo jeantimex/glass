@@ -27,7 +27,16 @@ describe('unit shape geometries (geometries.ts)', () => {
 
   it('uses higher tessellation in fineBases for curved shapes and full dragon mesh', () => {
     const { bases, fineBases } = createShapeGeometries(meshes);
-    for (const kind of [KIND.sphere, KIND.cylinder, KIND.capsule, KIND.cone, KIND.torus, KIND.dragon, KIND.torusknot]) {
+    for (const kind of [
+      KIND.sphere,
+      KIND.cylinder,
+      KIND.capsule,
+      KIND.cone,
+      KIND.torus,
+      KIND.suzanne,
+      KIND.dragon,
+      KIND.torusknot,
+    ]) {
       expect(triangleCount(fineBases[kind])).toBeGreaterThan(triangleCount(bases[kind]));
     }
   });
