@@ -95,7 +95,7 @@ export interface GlassInputs {
   meshEntry: N;
   /** vec4(ior, dispersion, maxBounces, lookThroughSteps). */
   glassP: N;
-  /** Stacked 128^3 signed-distance volumes (Suzanne, then Dragon). */
+  /** Stacked 128^3 signed-distance volumes (Suzanne, Dragon, torus knot; see sdf.ts). */
   sdfTex: N;
   /** Frosted glass roughness (0 = crystal clear, 1 = fully frosted). */
   roughness: N;
@@ -288,7 +288,8 @@ export function glassNode(
 
     const baseIor = max(glassP.x.add(vary.x), 1.0001).toVar();
     const dispersionSpread = glassP.y.mul(vary.y).div(12).toVar();
-    const maxEvents = isBakedMesh(shape) || shape === KIND.torusknot ? min(glassP.z.toInt(), int(4)) : glassP.z.toInt();
+    // Same bounce budget for every shape (the renderer lowers it for big piles and the floor mirror).
+    const maxEvents = glassP.z.toInt();
 
     // Heavily frosted glass blurs out chromatic splitting; mobile & far layers use 3-band CIE (s.spot.w > 0.5).
     const useFastSpectral = s.spot.w.greaterThan(0.5).toVar();

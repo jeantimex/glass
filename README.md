@@ -13,7 +13,7 @@ Real-time physical glass rendering in the browser with **Three.js** and **TSL** 
 - **Exact Optical Math** — unpolarized Cook–Torrance dielectric Fresnel, 6-band CIE 1931 spectral dispersion (Fraunhofer C/d/F Cauchy curve), Beer–Lambert volumetric absorption, ray-cone analytic filtering, and Total Internal Reflection (TIR).
 - **HDRI Environments & Firefly-Free Bloom** — equirectangular HDRI `envMap` support with roughness-driven mipmap LOD (with automatic procedural studio fallback), 4K/2K Poly Haven CC0 HDRI presets in the interactive `lil-gui` demo, and a quarter-res 4×4 prefiltered bloom pass with a hue-preserving soft firefly shoulder.
 - **Frosted Glass (毛玻璃)** — noise-free analytic environment softening, 3-octave organic micro-particle grain (`frostScale`), creamy translucent frost veil, and crisp Fresnel rim.
-- **Instanced Studio Renderer** — [`createInstancedGlass`](src/glass/renderer.ts) for rendering up to 20,000 glass objects (including 8-tap tricubic SDF meshes for Suzanne & Stanford Dragon) with glass-through-glass depth layering, real photon-traced caustics, floor reflections, half-res bilateral contact shadows, CMY dichroic face filters, depth of field, and bloom.
+- **Instanced Studio Renderer** — [`createInstancedGlass`](src/glass/renderer.ts) for rendering up to 20,000 glass objects (including 8-tap tricubic SDF meshes for Suzanne, the Stanford Dragon, and an exactly baked torus knot) with glass-through-glass depth layering, real photon-traced caustics, floor reflections, half-res bilateral contact shadows, CMY dichroic face filters, depth of field, and bloom.
 
 ---
 
@@ -263,6 +263,7 @@ npm run format:check # Verify Prettier formatting
 npm run typecheck    # TypeScript check (tsc --noEmit)
 npm run build        # Production build
 npm run deploy       # Build and deploy demo to GitHub Pages
+node scripts/bake-torusknot-sdf.ts  # Re-bake public/torusknot_sdf_128.bin after changing src/glass/torusKnot.ts
 ```
 
 ---

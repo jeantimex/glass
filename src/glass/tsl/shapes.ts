@@ -14,12 +14,12 @@
 //   9 suzanne     baked 128^3 SDF volume (layer 0); half-width size.x
 //  10 diamond     convex polyhedron facets (diamond.ts) of size size.x
 //  11 dragon      baked 128^3 SDF volume (layer 1); half-width size.x
-//  12 torusknot   smooth knot mesh with curved thick-shell exit estimate
+//  12 torusknot   baked 128^3 SDF volume (layer 2); half-width size.x (see torusKnot.ts)
 /* eslint-disable @typescript-eslint/no-explicit-any -- TSL node types are too loose to spell out */
 import * as TSL from 'three/tsl';
 import { DIAMOND_PLANES } from '../diamond';
 import { KIND } from '../objects';
-import { createSdfVolume } from './sdf';
+import { createSdfVolume, SDF_LAYER } from './sdf';
 
 type N = any;
 const {
@@ -45,7 +45,7 @@ const {
 } = TSL as N;
 
 /** Shapes whose internal volume is stored as a baked 128^3 signed-distance field. */
-export const isBakedMesh = (shape: number): boolean => shape === KIND.suzanne || shape === KIND.dragon;
+export const isBakedMesh = (shape: number): boolean => SDF_LAYER[shape] !== undefined;
 
 /** Shapes with non-zero surface curvature (used for physical ray-cone angular filtering). */
 export const isCurvedShape = (shape: number): boolean =>
@@ -54,8 +54,7 @@ export const isCurvedShape = (shape: number): boolean =>
   shape === KIND.capsule ||
   shape === KIND.cone ||
   shape === KIND.torus ||
-  isBakedMesh(shape) ||
-  shape === KIND.torusknot;
+  isBakedMesh(shape);
 
 const signBit = (k: number) => (k & 1 ? 1 : -1);
 const boxExitAlongAxis = (d: N, half: N, p: N) =>
@@ -148,10 +147,10 @@ export function shapeFunctions(shape: number, uniforms: ShapeUniforms, diamondPl
     }
   };
 
-  /* Baked 128^3 SDF volume sampling (Suzanne = layer 0, Dragon = layer 1) */
+  /* Baked 128^3 SDF volume sampling (Suzanne, dragon and torus knot layers; see sdf.ts) */
   const { volumeFast, volumeFastNormal, volumeSmooth, volumeSmoothNormal } = createSdfVolume(
     sdfTex,
-    shape === KIND.dragon ? 1 : 0,
+    SDF_LAYER[shape] ?? 0,
   );
 
   /** Snap a rasterized surface point onto the exact shape and compute its outward normal. */
@@ -182,8 +181,8 @@ export function shapeFunctions(shape: number, uniforms: ShapeUniforms, diamondPl
       }).Else(() => {
         n.assign(meshNormal);
       });
-    } else if (shape === KIND.torusknot || shape === KIND.diamond) {
-      // Torus knot uses smooth mesh normals; diamondGeometry() builds exact flat-shaded facets.
+    } else if (shape === KIND.diamond) {
+      // diamondGeometry() builds exact flat-shaded facets.
       n.assign(meshNormal);
     } else if (shape === KIND.cone) {
       // Cone surface `x² + z² = slope² * (H - y)²` where `slope = R / (2H)` yields quadratic `a t² + 2b t + c = 0`.
@@ -437,9 +436,6 @@ export function shapeFunctions(shape: number, uniforms: ShapeUniforms, diamondPl
         });
       });
       n.assign(volumeFastNormal(pos.add(dir.mul(t)), scale));
-    } else if (shape === KIND.torusknot) {
-      t.assign(size.x.mul(0.45));
-      n.assign(normalize(dir.add(normalize(pos).mul(0.35))));
     } else if (shape === KIND.box) {
       If(bevel.greaterThan(0), exitPolyhedron).Else(() => {
         const tx = boxExitAlongAxis(dir.x, size.x, pos.x).toVar();

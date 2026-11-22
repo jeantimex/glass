@@ -18,6 +18,7 @@ import { DIAMOND_CUTS, diamondGeometry, type DiamondCut } from './diamond';
 import { createShapeGeometries, triangleCount, UNIT_TUBE } from './geometries';
 import { MeshGlassMaterial } from './material';
 import {
+  abs,
   attribute,
   cross,
   normalLocal,
@@ -123,7 +124,7 @@ const MANY_OBJECTS = 3000;
  * @param renderer Initialized Three.js `WebGPURenderer` (WebGPU or WebGL 2 backend).
  * @param camera   Active scene perspective camera.
  * @param objects  Flat-array instance container read on each `render()` call.
- * @param meshes   Baked triangle meshes and stacked 128^3 SDF 3D texture for Suzanne and Dragon.
+ * @param meshes   Baked triangle meshes, and the stacked 128^3 SDF 3D texture for Suzanne, Dragon and the torus knot.
  */
 export function createInstancedGlass(
   renderer: THREE.WebGPURenderer,
@@ -132,7 +133,8 @@ export function createInstancedGlass(
   /**
    * The shapes made from meshes: Suzanne's mesh, the dragon's (in full, and
    * simplified for piles), and their baked distance volumes, one after the other in
-   * a single 3D texture (Suzanne's, then the dragon's).
+   * a single 3D texture (Suzanne's, the dragon's, then the torus knot's;
+   * see SDF_LAYER in tsl/sdf.ts).
    */
   meshes: {
     suzanne: THREE.BufferGeometry;
@@ -456,7 +458,6 @@ export function createInstancedGlass(
       uSunDir,
       uLightR,
       uLightU,
-      photonMapSize,
       diamondPlanes,
     );
     return material;
@@ -469,29 +470,68 @@ export function createInstancedGlass(
   openMaterial.fragmentNode = vec4(vec3(float(1).sub(photonNode.a.min(1))), 1);
   openMaterial.depthTest = openMaterial.depthWrite = false;
   const openQuad = new THREE.QuadMesh(openMaterial);
-  // ... then every ray that went through glass, as a square one texel wide (wider
-  // if the glass fanned it out: see photonNode in tsl/glass.ts), moved to where it landed and added on.
+  // ... then every ray that went through glass, spread over the patch of floor it
+  // lights and added on. Each ray stands for one texel of the lamp's view; the glass
+  // bends that texel into a parallelogram on the floor, spanned by where the rays on
+  // either side of it land. Its light is shared out over that area, so the patches of
+  // neighbouring rays tile the floor without gaps or overlaps (a fixed square per ray
+  // left a grid of gaps wherever the glass stretched the light one way).
   const rayIndex = float(instanceIndex);
   const rayRow = rayIndex.div(photonMapSize).floor();
-  const rayAt = vec2(rayIndex.sub(rayRow.mul(photonMapSize)), rayRow)
-    .add(0.5)
-    .div(photonMapSize);
-  const ray = texture(photonMap.texture, rayAt);
-  const landMaterial = new THREE.NodeMaterial();
-  const landPos = vec2(rayAt.x.mul(2).sub(1), float(1).sub(rayAt.y.mul(2)))
-    .add(ray.xy)
-    .add(
-      vec2(positionGeometry.x, positionGeometry.y).mul(
-        ray.a
-          .sub(1)
-          .max(1)
-          .mul(2 / photonMapSize),
-      ),
+  const rayTexel = vec2(rayIndex.sub(rayRow.mul(photonMapSize)), rayRow);
+  const texelStep = 1 / photonMapSize;
+  /** Where the ray of the texel `offset` texels away lands (lamp clip units), and whether it does. */
+  const landingOf = (offset: [number, number]) => {
+    const at = rayTexel.add(vec2(offset[0], offset[1])).add(0.5).mul(texelStep);
+    const r = texture(photonMap.texture, at.clamp(float(0), float(1))).level(float(0));
+    const inside = at.x.greaterThan(0).and(at.x.lessThan(1)).and(at.y.greaterThan(0)).and(at.y.lessThan(1));
+    return {
+      pos: vec2(at.x.mul(2).sub(1), float(1).sub(at.y.mul(2))).add(r.xy),
+      lands: inside.and(r.z.greaterThan(1e-5)),
+      light: r.z,
+    };
+  };
+  const self = landingOf([0, 0]);
+  /** Footprint edge along one axis of the lamp map: central difference, one-sided at an edge, else one texel. */
+  const footprintEdge = (axis: [number, number]) => {
+    const ahead = landingOf(axis);
+    const behind = landingOf([-axis[0], -axis[1]]);
+    // A neighbour that lands far away went round the other side of the object (or
+    // through another surface): not part of the same smooth bundle of rays.
+    const reach = 24 * 2 * texelStep;
+    const aheadOk = ahead.lands.and(ahead.pos.sub(self.pos).length().lessThan(reach));
+    const behindOk = behind.lands.and(behind.pos.sub(self.pos).length().lessThan(reach));
+    const oneTexel = vec2(axis[0] * 2 * texelStep, -axis[1] * 2 * texelStep);
+    return select(
+      aheadOk.and(behindOk),
+      ahead.pos.sub(behind.pos).mul(0.5),
+      select(aheadOk, ahead.pos.sub(self.pos), select(behindOk, self.pos.sub(behind.pos), oneTexel)),
     );
+  };
+  const edgeX = footprintEdge([1, 0]).toVar();
+  const edgeY = footprintEdge([0, 1]).toVar();
+  // Area in lamp-map texels (one clip unit is photonMapSize / 2 texels).
+  const texelsPerUnit = photonMapSize / 2;
+  const area = abs(edgeX.x.mul(edgeY.y).sub(edgeX.y.mul(edgeY.x))).mul(texelsPerUnit * texelsPerUnit);
+  // Light focused into a few texels or less is shared among the 4 texels nearest where
+  // it lands, by bilinear (tent) weights that always add up to 1. Drawn as a small
+  // square instead, it would snap to whole texels, and the rays of a bright, focused
+  // pool would beat against the texel grid in a moire of squares the blur cannot hide.
+  const focused = area.lessThan(4);
+  const corner = vec2(positionGeometry.x, positionGeometry.y);
+  const tentSquare = corner.mul(2 * 2 * texelStep); // 2 texels across
+  const landPos = self.pos.add(select(focused, tentSquare, edgeX.mul(corner.x).add(edgeY.mul(corner.y))));
+  const landLight = self.light.div(select(focused, float(1), area));
+  // Texels from where the ray lands (-1 to 1 across the tent), or 0 for a full footprint.
+  const tentAt = varying(select(focused, corner.mul(2), vec2(0)));
+  const tentWeight = float(1)
+    .sub(abs(tentAt.x))
+    .mul(float(1).sub(abs(tentAt.y)))
+    .max(0);
+  const landMaterial = new THREE.NodeMaterial();
   // Cull empty photon rays (no glass hit or zero carried light) offscreen before rasterization.
-  const landActive = ray.z.greaterThan(1e-5);
-  landMaterial.vertexNode = vec4(select(landActive, landPos.x, 2), select(landActive, landPos.y, 2), 0, 1);
-  landMaterial.fragmentNode = vec4(vec3(varying(ray.z)), 1);
+  landMaterial.vertexNode = vec4(select(self.lands, landPos.x, 2), select(self.lands, landPos.y, 2), 0, 1);
+  landMaterial.fragmentNode = vec4(vec3(varying(landLight).mul(tentWeight)), 1);
   landMaterial.transparent = true;
   landMaterial.blending = THREE.AdditiveBlending;
   landMaterial.depthTest = landMaterial.depthWrite = false;

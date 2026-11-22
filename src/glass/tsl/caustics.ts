@@ -15,16 +15,12 @@ const {
   Fn,
   If,
   Loop,
-  abs,
   bool,
   cross,
-  dFdx,
-  dFdy,
   dot,
   float,
   int,
   max,
-  min,
   mix,
   normalize,
   reflect,
@@ -39,7 +35,11 @@ const {
 /**
  * Real caustics, first pass: objects are rendered from the main lamp's direction so each
  * fragment traces one lamp ray through the glass down to y = 0.
- * Outputs `vec4(offsetX, offsetY, lightIntensity / spread, splatWidth + 1)`.
+ * Outputs `vec4(offsetX, offsetY, lightCarried, 1)`: where the ray lands relative to where
+ * it set out (in the lamp map's clip units), how much light it carries (0 if it never
+ * reaches the floor), and 1 in alpha to mark that glass was in the way. How widely each
+ * ray's light is spread on the floor is worked out when the rays are splatted
+ * (renderer.ts), from where its neighbours land.
  */
 export function photonNode(
   shape: number,
@@ -49,13 +49,12 @@ export function photonNode(
   sunDir: N,
   lightRight: N,
   lightUp: N,
-  raysAcross: number,
   diamondPlanes?: number[],
 ): N {
   const { center, quat, size, vary, tintOwn, tintAll, cmyAll, glassP } = g;
   const { declare, entry, exit } = shapeFunctions(shape, g, diamondPlanes);
 
-  return Fn((builder: N) => {
+  return Fn(() => {
     declare();
     const cmy = max(cmyAll, vary.z).toVar();
     const rayDir = rotateToLocal(sunDir.negate(), quat).toVar();
@@ -120,15 +119,7 @@ export function photonNode(
       });
     });
 
-    // Estimate ray-bundle divergence on the floor via screen-space derivatives to splat & conserve energy.
-    const across = dFdx(landingOffset)
-      .mul(0.5 * raysAcross)
-      .toVar();
-    const downward = dFdy(landingOffset)
-      .mul((builder.isFlipY?.() ? -0.5 : 0.5) * raysAcross)
-      .toVar();
-    const spread = max(abs(across.x.add(1).mul(float(1).sub(downward.y)).add(downward.x.mul(across.y))), 1).toVar();
-    return vec4(landingOffset, lightEnergy.div(spread), min(sqrt(spread), 6).add(1));
+    return vec4(landingOffset, lightEnergy, 1);
   })();
 }
 

@@ -3,6 +3,7 @@
 import * as THREE from 'three/webgpu';
 import { diamondGeometry } from './diamond';
 import { KIND } from './objects';
+import { TORUS_KNOT, UNIT_TORUS_KNOT } from './torusKnot';
 
 /** Tube radius of the unit torus geometry (ring radius = 1). */
 export const UNIT_TUBE = 0.25;
@@ -20,13 +21,14 @@ function makeFlatShaded(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
   return flat;
 }
 
-/** Build a unit torus knot centered vertically and scaled so its bottom rests at y = -1. */
+/**
+ * Build a unit torus knot centered vertically and scaled so its bottom rests at y = -1,
+ * in exactly the frame of its baked distance volume (see torusKnot.ts).
+ */
 function buildUnitTorusKnot(tubularSegments: number, radialSegments: number): THREE.BufferGeometry {
-  const geometry = new THREE.TorusKnotGeometry(0.62, 0.2, tubularSegments, radialSegments);
-  geometry.computeBoundingBox();
-  const bounds = geometry.boundingBox!;
-  const centerY = (bounds.min.y + bounds.max.y) * 0.5;
-  const scale = 2 / (bounds.max.y - bounds.min.y);
+  const { radius, tube, p, q } = TORUS_KNOT;
+  const { centerY, scale } = UNIT_TORUS_KNOT;
+  const geometry = new THREE.TorusKnotGeometry(radius, tube, tubularSegments, radialSegments, p, q);
   return geometry.translate(0, -centerY, 0).scale(scale, scale, scale);
 }
 

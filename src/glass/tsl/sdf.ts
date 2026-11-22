@@ -1,14 +1,25 @@
 // Baked 128^3 signed-distance field (SDF) volume sampling in TSL for complex meshes
-// (Suzanne = layer 0, Stanford Dragon = layer 1, stacked along Z in one 128x128x256 3D texture).
+// (Suzanne = layer 0, Stanford Dragon = layer 1, torus knot = layer 2, stacked along Z
+// in one 128x128x384 3D texture).
 //
 // Provides both:
 // - Fast 1-tap hardware-trilinear SDF & 4-tap tetrahedral normal (for sphere-tracing & internal exits)
 // - Sigg & Hadwiger (2005) 8-tap tricubic B-spline SDF & C^1-smooth normal (for entry projection)
 /* eslint-disable @typescript-eslint/no-explicit-any -- TSL node types are too loose to spell out */
 import * as TSL from 'three/tsl';
+import { KIND } from '../objects';
 
 type N = any;
 const { Fn, clamp, float, floor, length, mix, normalize, vec3 } = TSL as N;
+
+/** Each baked shape's layer in the stacked volume texture (the order its volumes are loaded in). */
+export const SDF_LAYER: Readonly<Record<number, number>> = {
+  [KIND.suzanne]: 0,
+  [KIND.dragon]: 1,
+  [KIND.torusknot]: 2,
+};
+/** How many 128^3 layers the stacked volume texture holds. */
+export const SDF_LAYER_COUNT = 3;
 
 /** Build fast (trilinear) and smooth (C^2 tricubic B-spline) SDF samplers for one mesh layer. */
 export function createSdfVolume(sdfTex: N, sdfLayer: number) {
@@ -18,7 +29,11 @@ export function createSdfVolume(sdfTex: N, sdfLayer: number) {
     const inner = 1.1 * (1 - 1 / 128);
     const clamped = clamp(q, vec3(-inner), vec3(inner)).toVar();
     const gridPos = clamp(clamped.div(2.2).add(0.5).mul(128), vec3(0.5), vec3(127.5)).toVar();
-    const uvw = vec3(gridPos.x.mul(1 / 128), gridPos.y.mul(1 / 128), gridPos.z.add(128 * sdfLayer).mul(1 / 256));
+    const uvw = vec3(
+      gridPos.x.mul(1 / 128),
+      gridPos.y.mul(1 / 128),
+      gridPos.z.add(128 * sdfLayer).mul(1 / (128 * SDF_LAYER_COUNT)),
+    );
     return sdfTex
       .sample(uvw)
       .level(0)
@@ -89,7 +104,7 @@ export function createSdfVolume(sdfTex: N, sdfLayer: number) {
     const t0 = clamp(i.add(w1.div(g0)).sub(0.5), vec3(0.5), vec3(127.5)).toVar();
     const t1 = clamp(i.add(w3.div(g1)).add(1.5), vec3(0.5), vec3(127.5)).toVar();
     const invN = float(1 / 128);
-    const invZ = float(1 / 256);
+    const invZ = float(1 / (128 * SDF_LAYER_COUNT));
     const zBase = float(128 * sdfLayer);
     const u0 = t0.x.mul(invN).toVar();
     const u1 = t1.x.mul(invN).toVar();

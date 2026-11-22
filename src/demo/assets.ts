@@ -1,7 +1,8 @@
 // Loading-screen progress indicator and binary mesh / 128^3 SDF volume loaders.
 import * as THREE from 'three/webgpu';
 
-const MESH_SDF_URLS = ['suzanne_sdf_128.bin', 'dragon_sdf_128.bin'];
+// In layer order (see SDF_LAYER in src/glass/tsl/sdf.ts).
+const MESH_SDF_URLS = ['suzanne_sdf_128.bin', 'dragon_sdf_128.bin', 'torusknot_sdf_128.bin'];
 const MESH_SDF_SIZE = 128;
 
 export interface LoadingProgress {
@@ -89,7 +90,7 @@ export function createLoadingScreen(): LoadingProgress {
   };
 }
 
-/** Load Suzanne & Dragon 128^3 HalfFloat SDF volumes stacked along Z in one 3D texture. */
+/** Load the Suzanne, dragon and torus knot 128^3 HalfFloat SDF volumes stacked along Z in one 3D texture. */
 export async function loadMeshVolumes(loading: LoadingProgress): Promise<THREE.Data3DTexture> {
   const size = MESH_SDF_SIZE;
   const stacked = new Uint16Array(size * size * size * MESH_SDF_URLS.length);

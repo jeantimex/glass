@@ -76,37 +76,25 @@ export interface ShapePreset {
   camera?: [number, number, number, number, number, number];
 }
 
+// Every glass shape is the same glass (crown glass, IOR 1.52) seen in the same studio,
+// so they can be compared side by side; only the diamond is a different material.
 export const SHAPES: Record<string, ShapePreset> = {
   'Mixed shapes': { kinds: null, ior: 1.52 },
   Diamond: { kinds: [KIND.diamond], ior: 2.42, dispersion: 0.4, camera: [3.0, 1.2, 4.1, 0.35, 0.4, 0] },
-  Sphere: {
-    kinds: [KIND.sphere],
-    ior: 1.52,
-    look: {
-      spotlight: true,
-      lamp: 1.7,
-      lampHeight: 32,
-      lampTurn: -93,
-      fog: 0,
-      causticSoftness: 0.26,
-      glow: 0.5,
-      depthOfField: 0,
-    },
-    camera: [2.35, 2.76, 3.1, 0.35, 0.3, 0.04],
-  },
+  Sphere: { kinds: [KIND.sphere], ior: 1.52 },
   Cube: { kinds: [KIND.box], cubic: true, ior: 1.52 },
-  'CMY cube': { kinds: [KIND.box], cubic: true, cmy: true, ior: 1.49 },
+  'CMY cube': { kinds: [KIND.box], cubic: true, cmy: true, ior: 1.52 },
   Box: { kinds: [KIND.box], ior: 1.52 },
-  Cylinder: { kinds: [KIND.cylinder], ior: 1.47 },
-  Capsule: { kinds: [KIND.capsule], ior: 1.47 },
+  Cylinder: { kinds: [KIND.cylinder], ior: 1.52 },
+  Capsule: { kinds: [KIND.capsule], ior: 1.52 },
   Cone: { kinds: [KIND.cone], ior: 1.52 },
   Torus: { kinds: [KIND.torus], ior: 1.52 },
   'Torus knot': { kinds: [KIND.torusknot], ior: 1.52 },
-  Octahedron: { kinds: [KIND.octahedron], ior: 1.55 },
-  Prism: { kinds: [KIND.prism], ior: 1.62 },
-  'Hex prism': { kinds: [KIND.hexprism], ior: 1.55 },
+  Octahedron: { kinds: [KIND.octahedron], ior: 1.52 },
+  Prism: { kinds: [KIND.prism], ior: 1.52 },
+  'Hex prism': { kinds: [KIND.hexprism], ior: 1.52 },
   Suzanne: { kinds: [KIND.suzanne], ior: 1.52 },
-  Dragon: { kinds: [KIND.dragon], ior: 1.66 },
+  Dragon: { kinds: [KIND.dragon], ior: 1.52 },
 };
 
 export const SINGLE_SHAPE_SPECS: Record<number, { labels: string[]; measures: number[]; turn: number }> = {

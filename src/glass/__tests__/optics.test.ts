@@ -176,16 +176,7 @@ describe('TSL shader node graph construction', () => {
     for (const kind of Object.values(KIND)) {
       const gn = glassNode(kind, false, vec3(0, 1, 0), vec3(0, 1, 0), gInputs, sInputs, vInputs);
       const gm = glassNode(kind, true, vec3(0, -1, 0), vec3(0, 1, 0), gInputs, sInputs, vInputs);
-      const pn = photonNode(
-        kind,
-        vec3(0, 1, 0),
-        vec3(0, 1, 0),
-        gInputs,
-        sInputs.lamp,
-        sInputs.lightR,
-        sInputs.lightU,
-        1024,
-      );
+      const pn = photonNode(kind, vec3(0, 1, 0), vec3(0, 1, 0), gInputs, sInputs.lamp, sInputs.lightR, sInputs.lightU);
       expect(gn).toBeTruthy();
       expect(gm).toBeTruthy();
       expect(pn).toBeTruthy();
@@ -206,7 +197,6 @@ describe('TSL shader node graph construction', () => {
         sInputs.lamp,
         sInputs.lightR,
         sInputs.lightU,
-        1024,
         planes,
       );
       expect(gn).toBeTruthy();
