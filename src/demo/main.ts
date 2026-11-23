@@ -856,6 +856,56 @@ async function main() {
   });
 
   /* Test automation hook for deterministic visual screenshot regression tests */
+  /** The standard-mesh stand-in for the single shape (see setScene's `standardGlass`). */
+  let standardMesh: THREE.Mesh | null = null;
+  let standardMeshFar: THREE.Mesh | null = null;
+  const placeStandardGlass = async (on: boolean) => {
+    if (standardMesh && standardMeshFar) {
+      instanced.studio.nearScene.remove(standardMesh);
+      instanced.studio.farScene.remove(standardMeshFar);
+      standardMesh.geometry.dispose();
+      (standardMesh.material as THREE.Material).dispose();
+      standardMesh = standardMeshFar = null;
+    }
+    instanced.setOwnGlassHidden(on);
+    if (!on) return;
+    const kind = glassObjects.kind[0];
+    const [a, b, c] = glassObjects.size.slice(0, 3);
+    // three.js's own geometry at the object's true size, as finely divided as the renderer's
+    // close-up meshes; the torus turned from three.js's z axis to the renderer's y axis.
+    const geometry =
+      kind === KIND.sphere
+        ? new THREE.IcosahedronGeometry(a, 12)
+        : kind === KIND.box
+          ? new THREE.BoxGeometry(2 * a, 2 * b, 2 * c)
+          : kind === KIND.cylinder
+            ? new THREE.CylinderGeometry(a, a, 2 * b, 120, 1)
+            : kind === KIND.cone
+              ? new THREE.ConeGeometry(a, 2 * b, 120, 1)
+              : kind === KIND.capsule
+                ? new THREE.CapsuleGeometry(a, 2 * b, 24, 96)
+                : kind === KIND.torus
+                  ? new THREE.TorusGeometry(a, b, 40, 144)
+                  : kind === KIND.octahedron
+                    ? new THREE.OctahedronGeometry(a)
+                    : null;
+    if (!geometry) throw new Error('standardGlass: not a built-in solid');
+    standardMesh = new THREE.Mesh(geometry, new MeshGlassMaterial({ studio: instanced.studio }));
+    standardMesh.position.fromArray(glassObjects.center, 0);
+    const quat = new THREE.Quaternion().fromArray(glassObjects.quat, 0);
+    if (kind === KIND.torus)
+      quat.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2));
+    standardMesh.quaternion.copy(quat);
+    standardMesh.frustumCulled = false;
+    // A single object is drawn in one pass from whichever half the renderer put it in (the
+    // other half's scene is skipped when empty): in both, it is drawn once.
+    standardMeshFar = standardMesh.clone();
+    instanced.studio.nearScene.add(standardMesh);
+    instanced.studio.farScene.add(standardMeshFar);
+    // Built before the frame average starts, so no frame is drawn without it.
+    await renderer.compileAsync(standardMesh, camera, instanced.studio.nearScene);
+  };
+
   (window as unknown as Record<string, unknown>).__glassTest = {
     /** GPU time (ms) per pass of the most recent timed frame (null without GPU timestamps). */
     gpuTimes: () => instanced.passTimes(),
@@ -877,6 +927,12 @@ async function main() {
       glass?: Partial<Pick<Single, 'ior' | 'dispersion' | 'roughness' | 'frostScale' | 'glassColor' | 'glassAlpha'>>;
       /** Scene and renderer settings to change (real caustics, imperfections, ...). */
       settings?: Partial<typeof settings>;
+      /**
+       * Draw the glass as a standard THREE.Mesh with MeshGlassMaterial in studio mode (in the
+       * renderer's own glass scene, the renderer's own glass hidden) instead of the renderer's
+       * instances: for the screenshot tests that check the two match (built-in solids only).
+       */
+      standardGlass?: boolean;
     }): Promise<void> {
       view.shape = opts.shape;
       view.count = 1;
@@ -906,8 +962,11 @@ async function main() {
         );
         orbit.update();
       }
+      await placeStandardGlass(opts.standardGlass === true);
       instanced.markChanged();
       instanced.resetHistory();
+      // Parity tests (standardGlass given) compare renders exactly: the same sequence each time.
+      if (opts.standardGlass !== undefined) instanced.restartSequence();
       dirtyFrames = 3;
       // Wait for at least 3 rendered animation frames, then until the frame average has
       // settled (deterministic screenshots), and GPU completion.

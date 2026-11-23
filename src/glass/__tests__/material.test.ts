@@ -198,3 +198,26 @@ describe('MeshGlassMaterial behindMap (glass seen through glass)', () => {
     expect(settingsPart(mat.customProgramCacheKey())).toBe(settingsPart(key0));
   });
 });
+
+describe('MeshGlassMaterial studio mode', () => {
+  it('rebuilds when a studio is given or taken, writes its output as is, and clones it', () => {
+    const studio = {
+      glassInputs: {},
+      sceneInputs: {},
+      viewInputs: {},
+      farScene: new THREE.Scene(),
+      nearScene: new THREE.Scene(),
+    };
+    const mat = new MeshGlassMaterial();
+    const key0 = settingsPart(mat.customProgramCacheKey());
+    mat.studio = studio;
+    expect(settingsPart(mat.customProgramCacheKey())).not.toBe(key0);
+    // The studio's glass writes distance in alpha for the renderer's finishing passes.
+    expect(mat.transparent).toBe(true);
+    expect(mat.blending).toBe(THREE.NoBlending);
+    expect(mat.clone().studio).toBe(studio);
+    expect(new MeshGlassMaterial({ studio }).blending).toBe(THREE.NoBlending);
+    mat.studio = null;
+    expect(settingsPart(mat.customProgramCacheKey())).toBe(key0);
+  });
+});

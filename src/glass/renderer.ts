@@ -789,12 +789,19 @@ export function createInstancedGlass(
    * with every shape's programs compiled up front the first frame took seconds on
    * WebGPU and over a minute on WebGL. A shape is compiled when it first appears.
    */
-  const drawn: { mesh: THREE.Mesh; batch: InstanceBatch; role: 'glass' | 'wire' | 'other' }[] = [];
+  const drawn: { mesh: THREE.Mesh; batch: InstanceBatch; role: 'glass' | 'mirror' | 'wire' | 'other' }[] = [];
   let wireOn = false;
+  /** The renderer's own glass hidden (glass drawn by MeshGlassMaterial meshes in its place). */
+  let ownGlassHidden = false;
   const updateVisibility = () => {
     for (const { mesh, batch, role } of drawn) {
       // Wireframe only: the edges in place of the glass, and nothing mirrored in the floor.
-      mesh.visible = batch.count > 0 && (role === 'other' || (role === 'wire') === wireOn);
+      const shown =
+        role === 'other' ||
+        (role === 'wire' && wireOn) ||
+        (role === 'mirror' && !wireOn) ||
+        (role === 'glass' && !wireOn && !ownGlassHidden);
+      mesh.visible = batch.count > 0 && shown;
     }
   };
   const fineFar: InstanceBatch[] = [];
@@ -847,7 +854,7 @@ export function createInstancedGlass(
         drawn.push({
           mesh: m,
           batch,
-          role: material === glass || material === mirrored ? 'glass' : material === wire ? 'wire' : 'other',
+          role: material === glass ? 'glass' : material === mirrored ? 'mirror' : material === wire ? 'wire' : 'other',
         });
         if (kind === KIND.diamond) {
           if (material === glass) diamondGlassMeshes.push(m);
@@ -1510,6 +1517,31 @@ export function createInstancedGlass(
   return {
     render,
     resize,
+    /**
+     * The studio's inputs to the glass shading, the very nodes this renderer's own glass reads
+     * (updated by `render()` every frame): for MeshGlassMaterial's studio mode, so glass on
+     * standard meshes shades with the same `glassNode`, floor and room.
+     */
+    studio: {
+      glassInputs,
+      sceneInputs,
+      viewInputs: {
+        camPos: uCamPos,
+        viewProj: uViewProj,
+        behindTex: behindNode,
+        behindBlurTex: frostNode,
+        lampDepthTex: lampDepthNode,
+        lampDepthSize,
+      },
+      /** The scenes the glass is drawn in (farther and nearer half; one object: either). */
+      farScene,
+      nearScene,
+    },
+    /** Hide this renderer's own glass (not its floor mirror image, shadows or caustics). */
+    setOwnGlassHidden: (hidden: boolean) => {
+      ownGlassHidden = hidden;
+      updateVisibility();
+    },
     markChanged: () => {
       lightDirty = true;
       lastStateKey = ''; // next frame counts as motion
@@ -1518,6 +1550,13 @@ export function createInstancedGlass(
     resetHistory: () => {
       historyValid = false;
       lastStateKey = '';
+    },
+    /**
+     * Start the sub-pixel jitter and wavelength sequence over (with `resetHistory`): the settled
+     * picture is then the same every time, for tests comparing renders exactly.
+     */
+    restartSequence: () => {
+      frameCounter = 0;
     },
     /** Whether the view is still settling (keep calling `render` until false). */
     accumulating: () => waitingForPrograms || !historyValid || stillCount < ACCUMULATION_SAMPLES,

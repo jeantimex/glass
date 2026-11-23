@@ -92,8 +92,14 @@ The migration is done when the demo, rebuilt on standard three.js meshes with
   ray-cone filtering, shadows between objects, frost blur, CMY faces, bevels, the diamond's facet
   tracing) then matches by construction. `glassNode` takes each object's frame as a pluggable
   `GlassFrame` (done), so object and instance matrices can drive it instead of the renderer's
-  per-instance attributes. Next: move the studio's uniforms and textures out of
-  `createInstancedGlass()` into a reusable studio context, then a studio mode on the material.
+  per-instance attributes. Done for the built-in solids: `createInstancedGlass(...).studio`
+  exposes the renderer's inputs, `MeshGlassMaterial({ studio })` shades with `glassNode` through
+  the mesh's matrices (`studioGlass.ts`), and `e2e/parity.spec.ts` draws each solid as a
+  standard mesh in the renderer's studio: it passes the shape suite's baselines, and against
+  the renderer's own render (jitter sequence restarted, so both repeat exactly) at most 0.003%
+  of pixels differ by more than 2/255. Next: the custom meshes (volumes), the diamond, CMY and
+  bevels, instancing in studio mode, shadows and caustics from standard meshes, then the
+  studio drawn entirely from standard meshes.
 
 ## Known physical limits
 

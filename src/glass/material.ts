@@ -16,6 +16,7 @@ import { applyFrostVeil, perturbFrostNormal, perturbImperfections } from './tsl/
 import { spectralSampleCount } from './tsl/optics';
 import { analyticShape, type AnalyticShape } from './analyticShapes';
 import { autoGlassVolume } from './autoVolume';
+import { studioGlassNode, type GlassStudio } from './studioGlass';
 import { createLookThrough } from './tsl/lookThrough';
 import { createSdfVolume } from './tsl/sdf';
 import { shapeFunctions } from './tsl/shapes';
@@ -140,6 +141,13 @@ export interface MeshGlassMaterialParameters {
    * seen through glass; otherwise `transmission` sees opaque objects only. Default null.
    */
   behindMap?: THREE.Texture | null;
+  /**
+   * Shade with the instanced renderer's own glass, floor and room
+   * (`createInstancedGlass(...).studio`): on three.js built-in solids drawn in that renderer's
+   * glass scenes, the glass matches its own pixel for pixel. Its IOR, dispersion and frost are
+   * the renderer's (set by `render()`); the mesh's colour tints it. Default null.
+   */
+  studio?: GlassStudio | null;
 }
 
 /**
@@ -240,6 +248,7 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
   private _temporal = false;
   private _spectralSamples = 0;
   private _behindMap: THREE.Texture | null = null;
+  private _studio: GlassStudio | null = null;
   private readonly behindTexNode: N = texture(FALLBACK_ENV_TEXTURE);
 
   private readonly uIor = uniform(1.52);
@@ -283,6 +292,8 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     this._temporal = params.temporal ?? false;
     this._spectralSamples = Math.max(0, Math.round(params.spectralSamples ?? 0));
     this._behindMap = params.behindMap ?? null;
+    this._studio = params.studio ?? null;
+    if (this._studio) this.setupStudioOutput();
     if (this._behindMap) this.behindTexNode.value = this._behindMap;
     // Baked-volume meshes default to 4 events (as in the instanced renderer): their folded
     // surfaces scatter deeper bounces chaotically from pixel to pixel.
@@ -397,7 +408,8 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     return (
       super.customProgramCacheKey() +
       `|glass:${this._exactShapes ? 1 : 0}${this._bouncesSet ? 1 : 0}${this._temporal ? 1 : 0}:` +
-      `${this._spectralSamples}:${volumeKind}:${this._autoVolumesReady}:${this._behindMap ? 1 : 0}`
+      `${this._spectralSamples}:${volumeKind}:${this._autoVolumesReady}:${this._behindMap ? 1 : 0}` +
+      `:${this._studio ? 1 : 0}`
     );
   }
 
@@ -435,6 +447,26 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     if (samples === this._spectralSamples) return;
     this._spectralSamples = samples;
     if (this.uBounces) this.rebuild();
+  }
+
+  /** The instanced renderer's studio to shade with (see `studio`); changing it rebuilds the shader. */
+  get studio(): GlassStudio | null {
+    return this._studio;
+  }
+  set studio(v: GlassStudio | null) {
+    if (v === this._studio) return;
+    this._studio = v;
+    if (v) this.setupStudioOutput();
+    this.needsUpdate = true;
+  }
+
+  /**
+   * The studio's glass writes each pixel's distance from the camera in alpha (its finishing
+   * passes read it), so it must be written as it is, as the renderer's own glass does.
+   */
+  private setupStudioOutput(): void {
+    this.transparent = true;
+    this.blending = THREE.NoBlending;
   }
 
   /** The glass layer behind this glass (GlassLayers); setting or clearing it rebuilds the shader. */
@@ -496,6 +528,7 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
       temporal: this._temporal,
       spectralSamples: this._spectralSamples,
       behindMap: this._behindMap,
+      studio: this._studio,
       bounces: this.bounces,
       imperfections: this.imperfections,
     });
@@ -540,9 +573,23 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     if (hasVertexColor) tint = tint.mul(vertexColor().rgb);
     if (hasInstanceColor) tint = tint.mul(instanceColor);
     if (hasBatchColor) tint = tint.mul(batchColor);
-    diffuseColor.assign(
-      this.buildColorNode(tint, instanced ? instanceMatrixNode(builder, object) : null, shape, autoVolume),
-    );
+    const instanceMatrix = instanced ? instanceMatrixNode(builder, object) : null;
+    if (this._studio && shape) {
+      // Studio mode: the renderer's own glassNode, through this mesh's frame.
+      const toWorld = instanceMatrix ? modelWorldMatrix.mul(instanceMatrix) : modelWorldMatrix;
+      const toGeometry = instanceMatrix
+        ? inverse(instanceMatrix).mul(modelWorldMatrixInverse)
+        : modelWorldMatrixInverse;
+      // The studio's own tint carries the glass colour (render() sets it from the material it is
+      // given), so only per-instance and vertex colours go in as this object's own tint.
+      let ownTint: N = vec3(1);
+      if (hasVertexColor) ownTint = ownTint.mul(vertexColor().rgb);
+      if (hasInstanceColor) ownTint = ownTint.mul(instanceColor);
+      if (hasBatchColor) ownTint = ownTint.mul(batchColor);
+      diffuseColor.assign(studioGlassNode(this._studio, shape, toWorld, toGeometry, ownTint));
+      return;
+    }
+    diffuseColor.assign(this.buildColorNode(tint, instanceMatrix, shape, autoVolume));
     const opacityNode = this.opacityNode ? float(this.opacityNode) : materialOpacity;
     diffuseColor.a.assign(diffuseColor.a.mul(opacityNode));
   }
