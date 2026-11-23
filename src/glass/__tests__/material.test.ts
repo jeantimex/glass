@@ -179,6 +179,9 @@ describe('MeshGlassMaterial temporal option', () => {
   });
 });
 
+/** The material's own settings part of its cache key. */
+const settingsPart = (key: string) => key.slice(key.indexOf('|glass:'));
+
 describe('MeshGlassMaterial behindMap (glass seen through glass)', () => {
   it('rebuilds when a layer is given or taken, not when it is swapped, and clones it', () => {
     const mat = new MeshGlassMaterial({ transmission: 1 });
@@ -192,7 +195,6 @@ describe('MeshGlassMaterial behindMap (glass seen through glass)', () => {
     expect(mat.clone().behindMap).toBe(mat.behindMap);
     mat.behindMap = null;
     // (Rebuilt, so three.js's own part of the key is new; the material's settings part is back.)
-    const settingsPart = (key: string) => key.slice(key.indexOf('|glass:'));
     expect(settingsPart(mat.customProgramCacheKey())).toBe(settingsPart(key0));
   });
 });
