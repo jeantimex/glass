@@ -18,13 +18,13 @@ scene.add(new THREE.InstancedMesh(anyGeometry, glass, 100));
 shades with the same tracer as the instanced renderer (`src/glass/tsl/trace.ts`). Compared with
 `createInstancedGlass()`, it still lacks:
 
-| Feature                     | `createInstancedGlass()`                  | `MeshGlassMaterial` today                                  |
-| :-------------------------- | :---------------------------------------- | :--------------------------------------------------------- |
-| Exact internal light paths  | Analytic exits for its 13 built-in shapes | Only with a baked `volume` (on `Mesh` and `InstancedMesh`) |
-| Glass seen through glass    | Yes (screen space)                        | No: transmission sees opaque objects only                  |
-| Caustics on the floor       | Yes (photon traced, per wavelength band)  | No (a scene-level effect, like shadows)                    |
-| Anti-aliasing               | Built in (TAA)                            | None: up to the app's render pipeline                      |
-| Contact shadows, bloom, DoF | Built in                                  | Up to the app's post-processing                            |
+| Feature                     | `createInstancedGlass()`                  | `MeshGlassMaterial` today                                          |
+| :-------------------------- | :---------------------------------------- | :----------------------------------------------------------------- |
+| Exact internal light paths  | Analytic exits for its 13 built-in shapes | Built-in solids traced exactly; other meshes with a baked `volume` |
+| Glass seen through glass    | Yes (screen space)                        | No: transmission sees opaque objects only                          |
+| Caustics on the floor       | Yes (photon traced, per wavelength band)  | No (a scene-level effect, like shadows)                            |
+| Anti-aliasing               | Built in (TAA)                            | None: up to the app's render pipeline                              |
+| Contact shadows, bloom, DoF | Built in                                  | Up to the app's post-processing                                    |
 
 ### Plan
 
@@ -36,10 +36,12 @@ shades with the same tracer as the instanced renderer (`src/glass/tsl/trace.ts`)
      (`bakeGlassVolumeAsync`) and cache the result per geometry. Until it is ready the mesh
      renders with the thickness estimate, then switches to exact exits. This geometry→volume
      cache is the "shape registry" this goal needs.
-   - Analytic exits for three.js built-in geometries (`SphereGeometry`, `BoxGeometry`,
-     `CylinderGeometry`, `CapsuleGeometry`, `ConeGeometry`, `TorusGeometry`, …): read their
-     parameters and use the exact formulas from `src/glass/tsl/shapes.ts` (no bake, sharper
-     than a voxel volume).
+   - ✅ Analytic exits for three.js built-in geometries (`SphereGeometry`, `BoxGeometry`,
+     `CylinderGeometry`, `ConeGeometry`, `CapsuleGeometry`, `TorusGeometry`,
+     `OctahedronGeometry`, `IcosahedronGeometry` of detail 3 and up as a sphere): their parameters
+     are read into the exact formulas of `src/glass/tsl/shapes.ts` (no bake, sharper than a voxel
+     volume), on `Mesh` and `InstancedMesh`, under any scale. `e2e/builtin-shapes.spec.ts`
+     checks each against a volume baked from the same geometry.
 2. **Temporal-friendly option.** `temporal: true` jitters the wavelengths per frame, so the
    material pairs with three.js's own TRAA post-processing (smooth dispersion, no speckle).
 3. **Caustics as an add-on.** A `GlassCaustics` helper usable with plain `renderer.render()`:
@@ -72,6 +74,7 @@ needed for this goal.
   high IOR, light and heavy frost, tinted glass, real caustics off, and imperfections.
 - `e2e/mesh.spec.ts`: `MeshGlassMaterial` on plain meshes (`mesh.html`).
 - `e2e/instancing.spec.ts`: `MeshGlassMaterial` on an `InstancedMesh` matches separate meshes (`instancing.html`).
+- `e2e/builtin-shapes.spec.ts`: built-in solids traced exactly agree with volumes baked from the same geometries, and on an `InstancedMesh` match a `Mesh` (`shapes-test.html`).
 
 Run `npm run test:screenshots`; after an intended visual change, regenerate with
 `npm run test:screenshots:update` and look through the new images before committing.

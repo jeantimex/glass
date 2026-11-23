@@ -14,7 +14,9 @@ import * as THREE from 'three/webgpu';
 import * as TSL from 'three/tsl';
 import { applyFrostVeil, perturbFrostNormal, perturbImperfections } from './tsl/frost';
 import { spectralSampleCount } from './tsl/optics';
+import { analyticShape, type AnalyticShape } from './analyticShapes';
 import { createSdfVolume } from './tsl/sdf';
+import { shapeFunctions } from './tsl/shapes';
 import { makeStudioEnv } from './tsl/studioEnv';
 import { traceGlass, type GlassHit } from './tsl/trace';
 
@@ -55,6 +57,7 @@ const {
   select,
   texture,
   texture3D,
+  transpose,
   uniform,
   vec2,
   vec3,
@@ -102,6 +105,13 @@ export interface MeshGlassMaterialParameters {
   bounces?: number;
   /** Faint surface waviness (0: perfect glass, the default; 1: clearly hand-made). */
   imperfections?: number;
+  /**
+   * Trace three.js built-in solids exactly (default true): on `SphereGeometry`, `BoxGeometry`,
+   * `CylinderGeometry`, `ConeGeometry`, `CapsuleGeometry`, `TorusGeometry`, `OctahedronGeometry`
+   * and `IcosahedronGeometry` (detail >= 3, as a sphere), light follows the exact shape read from
+   * the geometry's parameters, with no `volume` or estimate. A `volume` takes precedence.
+   */
+  exactShapes?: boolean;
 }
 
 /**
@@ -194,6 +204,7 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
   private _backfaceMap: THREE.Texture | null = null;
   private _transmission = 0;
   private _volume: GlassVolume | null = null;
+  private _exactShapes = true;
 
   private readonly uIor = uniform(1.52);
   private readonly uDispersion = uniform(0.5);
@@ -232,6 +243,7 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     this.uHasBackface.value = this._backfaceMap ? 1 : 0;
 
     this._volume = params.volume ?? null;
+    this._exactShapes = params.exactShapes ?? true;
     // Baked-volume meshes default to 4 events (as in the instanced renderer): their folded
     // surfaces scatter deeper bounces chaotically from pixel to pixel.
     this.uBounces.value = params.bounces ?? (this._volume ? 4 : 6);
@@ -328,6 +340,16 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     this.uImperfections.value = Math.min(Math.max(v, 0), 1);
   }
 
+  /** Trace three.js built-in solids exactly from their parameters (changing it rebuilds the shader). */
+  get exactShapes(): boolean {
+    return this._exactShapes;
+  }
+  set exactShapes(v: boolean) {
+    if (v === this._exactShapes) return;
+    this._exactShapes = v;
+    this.needsUpdate = true;
+  }
+
   /** Baked signed-distance volume for exact exits (changing it rebuilds the shader). */
   get volume(): GlassVolume | null {
     return this._volume;
@@ -365,6 +387,7 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
       envMapIntensity: this.envMapIntensity,
       backfaceMap: this._backfaceMap,
       volume: this._volume,
+      exactShapes: this._exactShapes,
       bounces: this.bounces,
       imperfections: this.imperfections,
     }) as this;
@@ -380,10 +403,15 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     const hasVertexColor = this.vertexColors === true && Boolean(geometry?.hasAttribute?.('color'));
     const hasInstanceColor = Boolean(object?.instanceColor);
     const hasBatchColor = Boolean(object?.isBatchedMesh && object?._colorsTexture);
-    // Exits that live in the geometry's own space (a baked volume) must follow each instance's
-    // matrix as well as the object's.
-    const instanced = Boolean(object?.isInstancedMesh && object?.instanceMatrix) && this._volume !== null;
-    if (!hasVertexColor && !hasInstanceColor && !hasBatchColor && !instanced) {
+    // A three.js built-in solid is traced exactly from its parameters (when no volume is given).
+    // Its size is per object, so this build is not shared with other objects.
+    const shape = this._volume === null && this._exactShapes ? analyticShape(geometry) : null;
+    if (shape) builder.objectSpecific = true;
+    // Exits that live in the geometry's own space (a baked volume, an exact shape) must follow
+    // each instance's matrix as well as the object's.
+    const instanced =
+      Boolean(object?.isInstancedMesh && object?.instanceMatrix) && (this._volume !== null || shape !== null);
+    if (!hasVertexColor && !hasInstanceColor && !hasBatchColor && !instanced && !shape) {
       super.setupDiffuseColor(builder);
       return;
     }
@@ -391,7 +419,7 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     if (hasVertexColor) tint = tint.mul(vertexColor().rgb);
     if (hasInstanceColor) tint = tint.mul(instanceColor);
     if (hasBatchColor) tint = tint.mul(batchColor);
-    diffuseColor.assign(this.buildColorNode(tint, instanced ? instanceMatrixNode(builder, object) : null));
+    diffuseColor.assign(this.buildColorNode(tint, instanced ? instanceMatrixNode(builder, object) : null, shape));
     const opacityNode = this.opacityNode ? float(this.opacityNode) : materialOpacity;
     diffuseColor.a.assign(diffuseColor.a.mul(opacityNode));
   }
@@ -401,7 +429,11 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
    * exits from the baked volume, the back-face map or the local-sphere estimate, and what
    * leaving rays see from the environment and (with transmission) the scene behind.
    */
-  private buildColorNode(tintNode: N = uniform(this.color), instanceMatrix: N = null): N {
+  private buildColorNode(
+    tintNode: N = uniform(this.color),
+    instanceMatrix: N = null,
+    shape: AnalyticShape | null = null,
+  ): N {
     const uTint = tintNode;
     const { env } = makeStudioEnv(this.uRoughness, {
       envTexNode: this.envTexNode,
@@ -419,6 +451,41 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     return Fn(() => {
       const d0 = normalize(positionWorld.sub(cameraPosition)).toVar();
       const n0 = normalize(normalWorld).toVar();
+      const entryWorld = vec3(positionWorld).toVar();
+      /** An exact shape's exits, and the transforms between it and the world (set below). */
+      let shapeExit: ((pos: N, dir: N) => GlassHit) | null = null;
+      if (shape) {
+        // Geometry space to world: the object's matrix, times the instance's on an InstancedMesh;
+        // normals go back through the inverse transpose. The shape's own frame may be turned
+        // from the geometry's (three.js builds the torus around z, tsl/shapes.ts around y).
+        const toWorld = instanceMatrix ? modelWorldMatrix.mul(instanceMatrix).toVar() : modelWorldMatrix;
+        const toGeometry = instanceMatrix
+          ? inverse(instanceMatrix).mul(modelWorldMatrixInverse).toVar()
+          : modelWorldMatrixInverse;
+        const toShape = (v: N) => (shape.axis === 'z' ? vec3(v.x, v.z.negate(), v.y) : v);
+        const fromShape = (v: N) => (shape.axis === 'z' ? vec3(v.x, v.z, v.y.negate()) : v);
+        const normalToWorld = (n: N) => normalize(transpose(toGeometry).mul(vec4(fromShape(n), 0)).xyz);
+        const size = uniform(new THREE.Vector3(...shape.size));
+        const fns = shapeFunctions(shape.kind, { bevel: float(0) });
+        // Snap the rasterized point onto the exact surface, with its exact normal.
+        const meshNormal = normalize(transpose(toWorld).mul(vec4(normalWorld, 0)).xyz);
+        const snapped = fns.entry(
+          toShape(toGeometry.mul(vec4(positionWorld, 1)).xyz),
+          size,
+          normalize(toShape(meshNormal)),
+        );
+        entryWorld.assign(toWorld.mul(vec4(fromShape(snapped.pos), 1)).xyz);
+        n0.assign(normalToWorld(snapped.nrm));
+        shapeExit = (pos: N, dir: N) => {
+          const hit = fns.exit(
+            toShape(toGeometry.mul(vec4(pos, 1)).xyz).toVar(),
+            normalize(toShape(toGeometry.mul(vec4(dir, 0)).xyz)).toVar(),
+            size,
+          );
+          const hitWorld = toWorld.mul(vec4(fromShape(hit.pos), 1)).xyz.toVar();
+          return { pos: hitWorld, nrm: normalToWorld(hit.nrm).toVar(), t: length(hitWorld.sub(pos)).toVar() };
+        };
+      }
       If(dot(d0, n0).greaterThan(0), () => {
         n0.assign(n0.negate());
       });
@@ -474,7 +541,9 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
       // The normal of the last surface met, for the local-sphere model's next exit.
       const lastNormal = vec3(n0).toVar();
       let exit: (pos: N, dir: N, ev: N) => GlassHit;
-      if (volume) {
+      if (shapeExit) {
+        exit = shapeExit;
+      } else if (volume) {
         // Exact exits through the baked volume: world -> mesh-local -> volume units and back.
         const layerCount = volume.layerCount ?? Math.max(1, Math.round(volume.texture.image.depth / 128));
         const sdf = createSdfVolume(texture3D(volume.texture), volume.layer ?? 0, layerCount);
@@ -522,7 +591,7 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
       }
 
       const traced = traceGlass({
-        entryPos: positionWorld,
+        entryPos: entryWorld,
         entryNormal: n0,
         viewDir: d0,
         ior,

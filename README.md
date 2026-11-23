@@ -220,6 +220,7 @@ Extends `THREE.MeshBasicNodeMaterial`.
 | `volume`          | `GlassVolume \| null`       | `null`     | Baked 128³ signed-distance volume of the mesh (`{ texture, layer?, layerCount? }`, as written by `scripts/bake-*-sdf.ts`): exact exits for every internal bounce. |
 | `bounces`         | `number`                    | `6`        | Internal events followed per ray (`4` by default with a `volume`).                                                                                                |
 | `imperfections`   | `number`                    | `0`        | Faint surface waviness (`0` perfect glass, `1` clearly hand-made).                                                                                                |
+| `exactShapes`     | `boolean`                   | `true`     | Trace three.js built-in solids (sphere, box, cylinder, cone, capsule, torus, octahedron) exactly from their geometry parameters, on `Mesh` and `InstancedMesh`.   |
 
 #### Methods
 
@@ -233,8 +234,9 @@ Extends `THREE.MeshBasicNodeMaterial`.
 `MeshGlassMaterial` shades with the same tracer as the instanced renderer (`src/glass/tsl/trace.ts`): every internal event with exact Fresnel and total internal reflection, continuous spectral dispersion and Beer–Lambert absorption. Where a ray leaves the glass comes from the best source available:
 
 1. **`volume`** — a baked signed-distance volume: exact exits for every bounce (bake one for any mesh with `bakeGlassVolumeAsync`).
-2. **`backfaceMap`** — the `GlassBackfacePass` map: the exact first exit along the view ray, then estimates.
-3. **`thickness`** only — a smooth local-sphere estimate.
+1. **Built-in solids** — `SphereGeometry`, `BoxGeometry`, `CylinderGeometry`, `ConeGeometry`, `CapsuleGeometry`, `TorusGeometry` and `OctahedronGeometry` are traced exactly from their parameters, with no setup (`exactShapes`, on by default).
+1. **`backfaceMap`** — the `GlassBackfacePass` map: the exact first exit along the view ray, then estimates.
+1. **`thickness`** only — a smooth local-sphere estimate.
 
 See `mesh.html` (`npm run dev`, then open `/mesh.html`) for all three on plain meshes.
 
