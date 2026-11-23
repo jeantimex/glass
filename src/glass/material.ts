@@ -16,6 +16,7 @@ import { applyFrostVeil, perturbFrostNormal, perturbImperfections } from './tsl/
 import { spectralSampleCount } from './tsl/optics';
 import { analyticShape, type AnalyticShape } from './analyticShapes';
 import { autoGlassVolume } from './autoVolume';
+import { createLookThrough } from './tsl/lookThrough';
 import { createSdfVolume } from './tsl/sdf';
 import { shapeFunctions } from './tsl/shapes';
 import { makeStudioEnv } from './tsl/studioEnv';
@@ -132,6 +133,13 @@ export interface MeshGlassMaterialParameters {
    * smoother and slower.
    */
   spectralSamples?: number;
+  /**
+   * What lies behind this glass, other glass included, as `GlassLayers` renders it (rgb, and
+   * each pixel's distance from the camera in alpha). When set, light leaving the glass looks it
+   * up with the instanced renderer's own screen-space march (tsl/lookThrough.ts), so glass is
+   * seen through glass; otherwise `transmission` sees opaque objects only. Default null.
+   */
+  behindMap?: THREE.Texture | null;
 }
 
 /**
@@ -231,6 +239,8 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
   private _exactShapes = true;
   private _temporal = false;
   private _spectralSamples = 0;
+  private _behindMap: THREE.Texture | null = null;
+  private readonly behindTexNode: N = texture(FALLBACK_ENV_TEXTURE);
 
   private readonly uIor = uniform(1.52);
   private readonly uDispersion = uniform(0.5);
@@ -272,6 +282,8 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     this._exactShapes = params.exactShapes ?? true;
     this._temporal = params.temporal ?? false;
     this._spectralSamples = Math.max(0, Math.round(params.spectralSamples ?? 0));
+    this._behindMap = params.behindMap ?? null;
+    if (this._behindMap) this.behindTexNode.value = this._behindMap;
     // Baked-volume meshes default to 4 events (as in the instanced renderer): their folded
     // surfaces scatter deeper bounces chaotically from pixel to pixel.
     this._bouncesSet = params.bounces !== undefined;
@@ -385,7 +397,7 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     return (
       super.customProgramCacheKey() +
       `|glass:${this._exactShapes ? 1 : 0}${this._bouncesSet ? 1 : 0}${this._temporal ? 1 : 0}:` +
-      `${this._spectralSamples}:${volumeKind}:${this._autoVolumesReady}`
+      `${this._spectralSamples}:${volumeKind}:${this._autoVolumesReady}:${this._behindMap ? 1 : 0}`
     );
   }
 
@@ -423,6 +435,18 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     if (samples === this._spectralSamples) return;
     this._spectralSamples = samples;
     if (this.uBounces) this.rebuild();
+  }
+
+  /** The glass layer behind this glass (GlassLayers); setting or clearing it rebuilds the shader. */
+  get behindMap(): THREE.Texture | null {
+    return this._behindMap;
+  }
+  set behindMap(tex: THREE.Texture | null) {
+    const wasSet = this._behindMap !== null;
+    this._behindMap = tex;
+    if (!this.behindTexNode) return;
+    if (tex) this.behindTexNode.value = tex;
+    if (wasSet !== (tex !== null) && this.uBounces) this.rebuild();
   }
 
   /** Rebuild the default shader and ask three.js to rebuild every object using this material. */
@@ -471,6 +495,7 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
       exactShapes: this._exactShapes,
       temporal: this._temporal,
       spectralSamples: this._spectralSamples,
+      behindMap: this._behindMap,
       bounces: this.bounces,
       imperfections: this.imperfections,
     });
@@ -625,7 +650,36 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
        * transmission the opaque scene behind, read where the ray crosses the screen a little
        * way past the glass (blurred by roughness and the ray's cone).
        */
+      // With a glass layer behind (GlassLayers): the instanced renderer's own lookup, so glass
+      // behind glass is seen exactly as it shows it.
+      // Beyond the march's reach (it looks for glass close behind), what the layer shows where
+      // the ray crosses it, as transmission reads the opaque scene; the environment without one.
+      // (It runs inside the march's own shader function: only uniforms and its arguments here.)
+      const behindFar = (ro: N, rd: N, cone: N) => {
+        const seen = env(rd).toVar();
+        const clip = viewProj.mul(vec4(ro.add(rd.mul(max(uThickness, 0.05).mul(1.5))), 1)).toVar();
+        If(clip.w.greaterThan(0.01), () => {
+          const ndc = clip.xy.div(clip.w);
+          const uv = clamp(vec2(ndc.x, ndc.y.negate()).mul(0.5).add(0.5), vec2(0.002), vec2(0.998));
+          const behind = this.behindTexNode.sample(uv).level(max(uRoughness.mul(5), cone.mul(8))).rgb;
+          seen.assign(mix(seen, behind, useTransmission ? uTransmission : float(1)));
+        });
+        return seen;
+      };
+      const lookThrough = this._behindMap
+        ? createLookThrough({
+            groundOn: float(0),
+            scene: (ro: N, rd: N, _lampLit: N, cone: N) => behindFar(ro, rd, cone),
+            viewProj,
+            camPos: cameraPosition,
+            behindTex: this.behindTexNode,
+            behindBlurTex: this.behindTexNode,
+            roughness: uRoughness,
+            marchSteps: float(6),
+          })
+        : null;
       const look = (pos: N, dir: N, cone: N) => {
+        if (lookThrough) return lookThrough(pos, dir, reach, float(1), cone);
         const seen = env(dir).toVar();
         if (useTransmission) {
           const clip = viewProj.mul(vec4(pos.add(dir.mul(reach.mul(1.5))), 1)).toVar();

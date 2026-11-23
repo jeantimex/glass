@@ -142,7 +142,7 @@ const cmyCube = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), [cyan, cyan, yell
 scene.add(cmyCube);
 ```
 
-For exact multi-bounce subtractive dichroic filtering and colored floor caustics, use `KIND.box` with `cmy` / `cmyOrder` in [`createInstancedGlass`](#10-high-scale-studio-caustics-renderer-createinstancedglass):
+For exact multi-bounce subtractive dichroic filtering and colored floor caustics, use `KIND.box` with `cmy` / `cmyOrder` in [`createInstancedGlass`](#11-high-scale-studio-caustics-renderer-createinstancedglass):
 
 ```ts
 instanced.render(glass, { ...lighting, cmy: 1, cmyOrder: 'cym', bevel: 0.02 }, false);
@@ -202,7 +202,20 @@ renderer.setAnimationLoop(() => {
 
 The floor is one horizontal plane; light through several glass objects in a row follows the first only. `caustics.lightAt()` gives the same lookup for a custom floor material.
 
-### 9. Standard Three.js `InstancedMesh` (with Per-Instance Colors)
+### 9. Glass Seen Through Glass (`GlassLayers`)
+
+Render with `GlassLayers` in place of `renderer.render()`, and nearer glass shows the glass behind it (the farther half is rendered into a layer that the nearer glass looks into, with the instanced renderer's own screen-space march):
+
+```ts
+import { GlassLayers } from './src/glass';
+
+const layers = new GlassLayers();
+renderer.setAnimationLoop(() => layers.render(renderer, scene, camera));
+```
+
+Meshes sharing one material share its layer: give glass that should see other glass its own material.
+
+### 10. Standard Three.js `InstancedMesh` (with Per-Instance Colors)
 
 `MeshGlassMaterial` works natively with `THREE.InstancedMesh` and `THREE.BatchedMesh`. Per-instance colors from `setColorAt()` are routed directly into Beer–Lambert volumetric absorption so outer Fresnel highlights stay crisp white:
 
@@ -214,7 +227,7 @@ spheres.setColorAt(1, new THREE.Color('#66ccff'));
 scene.add(spheres);
 ```
 
-### 10. High-Scale Studio Caustics Renderer (`createInstancedGlass`)
+### 11. High-Scale Studio Caustics Renderer (`createInstancedGlass`)
 
 For scenes with hundreds or thousands of glass objects, real caustics, floor reflections, and contact shadows, pass a `MeshGlassMaterial` directly to `instanced.render()`:
 

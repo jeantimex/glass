@@ -178,3 +178,21 @@ describe('MeshGlassMaterial temporal option', () => {
     expect(copy.spectralSamples).toBe(10);
   });
 });
+
+describe('MeshGlassMaterial behindMap (glass seen through glass)', () => {
+  it('rebuilds when a layer is given or taken, not when it is swapped, and clones it', () => {
+    const mat = new MeshGlassMaterial({ transmission: 1 });
+    const key0 = mat.customProgramCacheKey();
+    const a = new THREE.Texture();
+    mat.behindMap = a;
+    const key1 = mat.customProgramCacheKey();
+    expect(key1).not.toBe(key0);
+    mat.behindMap = new THREE.Texture(); // another layer: same shader, new texture
+    expect(mat.customProgramCacheKey()).toBe(key1);
+    expect(mat.clone().behindMap).toBe(mat.behindMap);
+    mat.behindMap = null;
+    // (Rebuilt, so three.js's own part of the key is new; the material's settings part is back.)
+    const settingsPart = (key: string) => key.slice(key.indexOf('|glass:'));
+    expect(settingsPart(mat.customProgramCacheKey())).toBe(settingsPart(key0));
+  });
+});
