@@ -22,6 +22,8 @@
 import * as THREE from 'three/webgpu';
 import { InstanceBatch } from './batch';
 import { DIAMOND_CUTS, diamondGeometry, type DiamondCut } from './diamond';
+import type { GlassStudio } from './studioGlass';
+import { StudioMeshes } from './studioMeshes';
 import { createShapeGeometries, triangleCount, UNIT_TUBE } from './geometries';
 import { MeshGlassMaterial } from './material';
 import {
@@ -797,6 +799,10 @@ export function createInstancedGlass(
   let ownGlassHidden = false;
   /** All of the renderer's own objects hidden, in every pass (standard meshes draw them all). */
   let ownObjectsHidden = false;
+  /** Standard meshes as the objects (see setMeshes; set up with the studio, below). */
+  let meshSource: StudioMeshes | null = null;
+  let meshMode = false;
+  let meshesDirty = false;
   const updateVisibility = () => {
     for (const { mesh, batch, role } of drawn) {
       // Wireframe only: the edges in place of the glass, and nothing mirrored in the floor.
@@ -808,6 +814,7 @@ export function createInstancedGlass(
           (role === 'glass' && !wireOn && !ownGlassHidden));
       mesh.visible = batch.count > 0 && shown;
     }
+    meshSource?.setVisibility(wireOn);
   };
   const fineFar: InstanceBatch[] = [];
   const fineNear: InstanceBatch[] = [];
@@ -1066,11 +1073,15 @@ export function createInstancedGlass(
     for (let i = 0; i < n; i++) order[slices[((depth[i] - nearest) * perSlice) | 0]++] = i;
     for (let k = 0; k < n; k++) {
       const i = order[k];
-      (depth[i] >= split ? farSet : nearSet)[objects.kind[i]].push(objects, i);
+      if (!meshMode) (depth[i] >= split ? farSet : nearSet)[objects.kind[i]].push(objects, i);
       inNearHalf[i] = depth[i] >= split ? 0 : 1;
     }
-    hasFar = farSet.some((b) => b.count > 0);
-    hasNear = nearSet.some((b) => b.count > 0);
+    if (meshMode) {
+      ({ hasNear, hasFar } = meshSource!.distribute(objects, order, inNearHalf));
+    } else {
+      hasFar = farSet.some((b) => b.count > 0);
+      hasNear = nearSet.some((b) => b.count > 0);
+    }
     for (const b of all) b.commit();
     updateVisibility();
   }
@@ -1147,10 +1158,16 @@ export function createInstancedGlass(
     const wireColor = wireColorOverride ?? (!isMat ? glass.wireColor : undefined) ?? [0.01, 0.01, 0.01, 1];
     setDiamondCut(diamondCut);
 
+    // Standard meshes: read them into the objects (after they changed), and keep the last
+    // picture up until their programs are built.
+    if (meshMode && meshesDirty) {
+      meshSource!.derive(objects);
+      meshesDirty = false;
+    }
     // A shape whose programs are not built yet: build them in the background and keep the
     // last picture up meanwhile, instead of freezing on building them in this frame.
-    waitingForPrograms = false;
-    for (let i = 0; i < objects.count; i++) {
+    waitingForPrograms = meshMode && !meshSource!.ready;
+    for (let i = 0; i < (meshMode ? 0 : objects.count); i++) {
       const kind = objects.kind[i];
       if (compiledKeys.has(programKey(kind))) continue;
       waitingForPrograms = true;
@@ -1276,7 +1293,7 @@ export function createInstancedGlass(
         trianglesOf[kind] * (far[kind].count + near[kind].count) +
         fineTrianglesOf[kind] * (fineFar[kind].count + fineNear[kind].count);
     }
-    lastTriangles = sceneTriangles;
+    lastTriangles = meshMode ? meshSource!.triangles() : sceneTriangles;
 
     // 1. Caustic map, from the main lamp's direction, covering everything.
     if (lightDirty) {
@@ -1531,6 +1548,72 @@ export function createInstancedGlass(
   const timer = createPassTimer(renderer);
   const mark = (name: string) => timer.mark(name);
 
+  const studio: GlassStudio = {
+    glassInputs,
+    sceneInputs,
+    viewInputs: {
+      camPos: uCamPos,
+      viewProj: uViewProj,
+      behindTex: behindNode,
+      behindBlurTex: frostNode,
+      lampDepthTex: lampDepthNode,
+      lampDepthSize,
+    },
+    /** The scenes the glass is drawn in (farther and nearer half; one object: either). */
+    farScene,
+    nearScene,
+    mirrorViewInputs: {
+      camPos: uMirrorCam,
+      viewProj: uViewProj,
+      behindTex: behindNode,
+      behindBlurTex: frostNode,
+      lampDepthTex: lampDepthNode,
+      lampDepthSize,
+    },
+    passScenes: { mirror: mirrorScene, light: lightScene, lampDepth: lampDepthScene, photon: photonScene },
+    passNodes: {
+      lampDepth: () => vec4(positionWorld.dot(uSunDir).add(100), 0, 0, 1),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      caustic: (normal: any, worldPos: any, inputs: any) => causticNode(normal, worldPos, inputs),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      photon: (kind: number, worldPos: any, normal: any, inputs: any, diamondPlanes?: number[]) =>
+        photonRayNode(kind, worldPos, normal, inputs, uSunDir, uLightR, uLightU, diamondPlanes, uPhotonBand),
+    },
+    /**
+     * Build the programs of a standard mesh (or pass proxy) in one of the glass scenes
+     * without blocking, with the camera and target its pass is drawn with.
+     */
+    compile: (object: THREE.Object3D): Promise<void> => {
+      const pass = passTargets().find(([scene]) => scene === object.parent);
+      if (!pass) return Promise.resolve();
+      const [scene, passCamera, target] = pass;
+      return withCompileLock(() => {
+        const previousTarget = renderer.getRenderTarget();
+        renderer.setRenderTarget(target);
+        try {
+          return renderer.compileAsync(object, passCamera, scene);
+        } finally {
+          renderer.setRenderTarget(previousTarget);
+        }
+      });
+    },
+    shapeGeometry: (kind: number, cut: string = 'round') => {
+      const diamondCut = cut as DiamondCut;
+      const geometry = kind === KIND.diamond ? diamondGeometry(diamondCut) : fineBases[kind].clone();
+      geometry.userData.glassShape = {
+        kind,
+        size: [1, 1, 1],
+        axis: 'y',
+        diamondPlanes: kind === KIND.diamond ? DIAMOND_CUTS[diamondCut].planes : undefined,
+      };
+      return geometry;
+    },
+  };
+
+  // Standard meshes as the objects (setMeshes): drawn through proxies, read into `objects`.
+  meshSource = new StudioMeshes(studio, () => makeWireMaterial(null));
+  const standardMeshes = meshSource;
+
   return {
     render,
     resize,
@@ -1539,67 +1622,7 @@ export function createInstancedGlass(
      * (updated by `render()` every frame): for MeshGlassMaterial's studio mode, so glass on
      * standard meshes shades with the same `glassNode`, floor and room.
      */
-    studio: {
-      glassInputs,
-      sceneInputs,
-      viewInputs: {
-        camPos: uCamPos,
-        viewProj: uViewProj,
-        behindTex: behindNode,
-        behindBlurTex: frostNode,
-        lampDepthTex: lampDepthNode,
-        lampDepthSize,
-      },
-      /** The scenes the glass is drawn in (farther and nearer half; one object: either). */
-      farScene,
-      nearScene,
-      mirrorViewInputs: {
-        camPos: uMirrorCam,
-        viewProj: uViewProj,
-        behindTex: behindNode,
-        behindBlurTex: frostNode,
-        lampDepthTex: lampDepthNode,
-        lampDepthSize,
-      },
-      passScenes: { mirror: mirrorScene, light: lightScene, lampDepth: lampDepthScene, photon: photonScene },
-      passNodes: {
-        lampDepth: () => vec4(positionWorld.dot(uSunDir).add(100), 0, 0, 1),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        caustic: (normal: any, worldPos: any, inputs: any) => causticNode(normal, worldPos, inputs),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        photon: (kind: number, worldPos: any, normal: any, inputs: any, diamondPlanes?: number[]) =>
-          photonRayNode(kind, worldPos, normal, inputs, uSunDir, uLightR, uLightU, diamondPlanes, uPhotonBand),
-      },
-      /**
-       * Build the programs of a standard mesh (or pass proxy) in one of the glass scenes
-       * without blocking, with the camera and target its pass is drawn with.
-       */
-      compile: (object: THREE.Object3D): Promise<void> => {
-        const pass = passTargets().find(([scene]) => scene === object.parent);
-        if (!pass) return Promise.resolve();
-        const [scene, passCamera, target] = pass;
-        return withCompileLock(() => {
-          const previousTarget = renderer.getRenderTarget();
-          renderer.setRenderTarget(target);
-          try {
-            return renderer.compileAsync(object, passCamera, scene);
-          } finally {
-            renderer.setRenderTarget(previousTarget);
-          }
-        });
-      },
-      shapeGeometry: (kind: number, cut: string = 'round') => {
-        const diamondCut = cut as DiamondCut;
-        const geometry = kind === KIND.diamond ? diamondGeometry(diamondCut) : fineBases[kind].clone();
-        geometry.userData.glassShape = {
-          kind,
-          size: [1, 1, 1],
-          axis: 'y',
-          diamondPlanes: kind === KIND.diamond ? DIAMOND_CUTS[diamondCut].planes : undefined,
-        };
-        return geometry;
-      },
-    },
+    studio,
     /**
      * Hide all of this renderer's own objects, in every pass (glass, mirror image, shadows,
      * light map, caustics): for standard meshes drawing all of them (`addStudioPasses`).
@@ -1616,8 +1639,24 @@ export function createInstancedGlass(
     },
     markChanged: () => {
       lightDirty = true;
+      meshesDirty = meshMode;
       lastStateKey = ''; // next frame counts as motion
     },
+    /**
+     * Draw these standard meshes as the objects (THREE.Mesh or InstancedMesh with
+     * MeshGlassMaterial in studio mode, on solids the studio can trace), in place of `objects`,
+     * which is then filled from them; null: back to `objects`. Call `markChanged()` after
+     * moving them. Their programs are built without blocking (`whenMeshesReady`).
+     */
+    setMeshes: (list: THREE.Mesh[] | null) => {
+      standardMeshes.set(list ?? []);
+      meshMode = list !== null && list.length > 0;
+      meshesDirty = meshMode;
+      lightDirty = true;
+      lastStateKey = '';
+      updateVisibility();
+    },
+    whenMeshesReady: () => standardMeshes.whenReady(),
     /** Forget the history (a new scene): the next frame starts it afresh. */
     resetHistory: () => {
       historyValid = false;

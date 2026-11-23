@@ -9,6 +9,7 @@
 import * as THREE from 'three/webgpu';
 import * as TSL from 'three/tsl';
 import type { AnalyticShape } from './analyticShapes';
+import { KIND } from './objects';
 import { glassNode, type GlassFrame } from './tsl/glass';
 
 const { abs, length, normalLocal, normalWorld, normalize, positionWorld, uniform, vec3, vec4 } = TSL as any;
@@ -75,7 +76,10 @@ export function studioShapeInputs(
     toWorldPoint: (p: any) => toWorld.mul(vec4(fromShape(p).div(scale), 1)).xyz,
     toWorldDir: (v: any) => toWorld.mul(vec4(fromShape(v).div(scale), 0)).xyz,
   };
-  const size = uniform(new THREE.Vector3(...shape.size)).mul(abs(toShape(scale)));
+  const sized = uniform(new THREE.Vector3(...shape.size)).mul(abs(toShape(scale)));
+  // A sphere or an octahedron is given by its radius alone: all three, as the renderer's own
+  // objects carry it (its lamp test reads the size's length).
+  const size = shape.kind === KIND.sphere || shape.kind === KIND.octahedron ? vec3(sized.x) : sized;
   const inputs = {
     ...studio.glassInputs,
     center,

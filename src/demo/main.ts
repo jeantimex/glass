@@ -3,8 +3,6 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import GUI from 'three/addons/libs/lil-gui.module.min.js';
 import {
   MeshGlassMaterial,
-  addStudioPasses,
-  type StudioPasses,
   KIND,
   createGlassObjects,
   createInstancedGlass,
@@ -888,19 +886,13 @@ async function main() {
   /* Test automation hook for deterministic visual screenshot regression tests */
   /** The standard meshes standing in for the objects (see setScene's `standardGlass`). */
   const standIns: THREE.Mesh[] = [];
-  /** Their proxies in the renderer's other passes (mirror image, shadows, light map, caustics). */
-  const standInPasses: StudioPasses[] = [];
   const placeStandardGlass = async (on: boolean) => {
+    instanced.setMeshes(null);
     for (const mesh of standIns) {
-      mesh.removeFromParent();
       mesh.geometry.dispose();
       (mesh.material as THREE.Material).dispose();
     }
     standIns.length = 0;
-    for (const passes of standInPasses) passes.dispose();
-    standInPasses.length = 0;
-    // The renderer's own objects hidden in every pass: the standard meshes draw them all.
-    instanced.setOwnObjectsHidden(on);
     if (!on) return;
     const material = new MeshGlassMaterial({ studio: instanced.studio });
     /** A kind's geometry: at `size` for a built-in solid, the studio's own at unit size otherwise. */
@@ -922,70 +914,51 @@ async function main() {
       return matrix.compose(position, quat, scale);
     };
     if (glassObjects.count === 1) {
-      // One object: a plain THREE.Mesh at its own size (its glass is the studio's own).
+      // One object: a plain THREE.Mesh (its glass is the studio's own).
       const kind = glassObjects.kind[0];
       const mesh = new THREE.Mesh(geometryOf(kind, glassObjects.size), material);
       poseOf(0, STUDIO_KINDS.includes(kind)).decompose(mesh.position, mesh.quaternion, mesh.scale);
-      mesh.frustumCulled = false;
       standIns.push(mesh);
-      (instanced.inNearHalf(0) ? instanced.studio.nearScene : instanced.studio.farScene).add(mesh);
-      await compileStandIns();
-      return;
-    }
-    // Each object goes in the half of the studio the renderer drew it in (nearer or farther).
-    const groups = new Map<string, number[]>();
-    for (let i = 0; i < glassObjects.count; i++) {
-      const key = `${glassObjects.kind[i]}:${instanced.inNearHalf(i) ? 'near' : 'far'}`;
-      groups.set(key, [...(groups.get(key) ?? []), i]);
-    }
-    for (const [key, members] of groups) {
-      const kind = Number(key.split(':')[0]);
-      const half = key.endsWith('near') ? instanced.studio.nearScene : instanced.studio.farScene;
-      if (scalable(kind)) {
-        // One InstancedMesh: each object's size in its instance matrix, its colour by
-        // setColorAt, its own glass in the per-instance `glassVary` attribute.
-        const geometry = geometryOf(kind, [1, 1, 1]);
-        const vary = new Float32Array(members.length * 3);
-        const mesh = new THREE.InstancedMesh(geometry, material, members.length);
-        members.forEach((i, k) => {
-          mesh.setMatrixAt(k, poseOf(i, true));
-          mesh.setColorAt(k, colour.fromArray(glassObjects.tint, i * 3));
-          vary.set(glassObjects.vary.subarray(i * 3, i * 3 + 3), k * 3);
-        });
-        geometry.setAttribute('glassVary', new THREE.InstancedBufferAttribute(vary, 3));
-        standIns.push(mesh);
-        half.add(mesh);
-      } else {
-        // Proportions that a scale cannot give: a mesh of its own (with its own glass as a
-        // one-instance InstancedMesh, as the attribute is per instance).
-        for (const i of members) {
-          const geometry = standInGeometry(kind, glassObjects.size.subarray(i * 3, i * 3 + 3));
-          geometry.setAttribute(
-            'glassVary',
-            new THREE.InstancedBufferAttribute(glassObjects.vary.slice(i * 3, i * 3 + 3), 3),
-          );
-          const mesh = new THREE.InstancedMesh(geometry, material, 1);
-          mesh.setMatrixAt(0, poseOf(i, false));
-          mesh.setColorAt(0, colour.fromArray(glassObjects.tint, i * 3));
+    } else {
+      const groups = new Map<number, number[]>();
+      for (let i = 0; i < glassObjects.count; i++) {
+        const kind = glassObjects.kind[i];
+        groups.set(kind, [...(groups.get(kind) ?? []), i]);
+      }
+      for (const [kind, members] of groups) {
+        if (scalable(kind)) {
+          // One InstancedMesh: each object's size in its instance matrix, its colour by
+          // setColorAt, its own glass in the per-instance `glassVary` attribute.
+          const geometry = geometryOf(kind, [1, 1, 1]);
+          const vary = new Float32Array(members.length * 3);
+          const mesh = new THREE.InstancedMesh(geometry, material, members.length);
+          members.forEach((i, k) => {
+            mesh.setMatrixAt(k, poseOf(i, true));
+            mesh.setColorAt(k, colour.fromArray(glassObjects.tint, i * 3));
+            vary.set(glassObjects.vary.subarray(i * 3, i * 3 + 3), k * 3);
+          });
+          geometry.setAttribute('glassVary', new THREE.InstancedBufferAttribute(vary, 3));
           standIns.push(mesh);
-          half.add(mesh);
+        } else {
+          // Proportions that a scale cannot give: a mesh of its own (with its own glass as a
+          // one-instance InstancedMesh, as the attribute is per instance).
+          for (const i of members) {
+            const geometry = standInGeometry(kind, glassObjects.size.subarray(i * 3, i * 3 + 3));
+            geometry.setAttribute(
+              'glassVary',
+              new THREE.InstancedBufferAttribute(glassObjects.vary.slice(i * 3, i * 3 + 3), 3),
+            );
+            const mesh = new THREE.InstancedMesh(geometry, material, 1);
+            mesh.setMatrixAt(0, poseOf(i, false));
+            mesh.setColorAt(0, colour.fromArray(glassObjects.tint, i * 3));
+            standIns.push(mesh);
+          }
         }
       }
     }
-    for (const mesh of standIns) mesh.frustumCulled = false;
-    await compileStandIns();
-  };
-  /** The stand-ins' passes, and every program built before the frame average starts. */
-  const compileStandIns = async () => {
-    for (const mesh of standIns) standInPasses.push(addStudioPasses(instanced.studio, mesh));
-    for (const mesh of standIns) mesh.userData.standIn = true;
-    const studio = instanced.studio;
-    for (const passScene of [studio.nearScene, studio.farScene, ...Object.values(studio.passScenes)]) {
-      // (Only the stand-ins and their proxies: the renderer builds its own programs itself.)
-      for (const object of passScene.children) {
-        if (object.userData.standIn || object.userData.studioProxy) await studio.compile(object);
-      }
-    }
+    // The studio draws them (split into its two halves, in every pass) in place of its own.
+    instanced.setMeshes(standIns);
+    await instanced.whenMeshesReady();
   };
 
   (window as unknown as Record<string, unknown>).__glassTest = {
@@ -1050,12 +1023,6 @@ async function main() {
         orbit.update();
       }
       if (opts.offset) for (let i = 0; i < glassObjects.count; i++) glassObjects.center[i * 3] += opts.offset;
-      if (opts.standardGlass) {
-        // A frame first, so the renderer has split the objects into its two halves.
-        instanced.markChanged();
-        await nextFrame();
-        await nextFrame();
-      }
       await placeStandardGlass(opts.standardGlass === true);
       instanced.markChanged();
       instanced.resetHistory();

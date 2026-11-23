@@ -73,7 +73,11 @@ const MIRROR = new THREE.Matrix4().makeScale(1, -1, 1);
 
 /** A standard mesh's proxies in the renderer's passes; `update()` after moving the mesh. */
 export interface StudioPasses {
+  /** The proxies, one per pass (the mirror image first). */
+  readonly proxies: THREE.Mesh[];
   update(): void;
+  /** Show or hide the mirror image (hidden while the glass is shown as a wireframe). */
+  setMirrorVisible(visible: boolean): void;
   dispose(): void;
 }
 
@@ -119,7 +123,13 @@ export function addStudioPasses(studio: GlassStudio, mesh: THREE.Mesh): StudioPa
   };
   update();
   return {
+    get proxies() {
+      return proxies.map((entry) => entry.proxy);
+    },
     update,
+    setMirrorVisible: (visible: boolean) => {
+      for (const { proxy, mirrored } of proxies) if (mirrored) proxy.visible = visible;
+    },
     dispose: () => {
       for (const { proxy } of proxies) {
         proxy.removeFromParent();
