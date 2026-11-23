@@ -86,10 +86,14 @@ The migration is done when the demo, rebuilt on standard three.js meshes with
 
 - the glass seen through glass by the renderer's own screen-space march (`tsl/lookThrough.ts`,
   shared since step 4);
-- an environment hook on `MeshGlassMaterial`, so the rebuilt studio plugs in exactly the floor and
-  room lookups the renderer uses (`tsl/scene.ts`), instead of the material's simple studio;
-- the renderer's other per-pixel details shared or ported exactly: outer reflections routed like
-  refraction, ray-cone filtering, shadows between objects, frost blur, the CMY faces and bevels.
+- the same glass shader: in the rebuilt studio, `MeshGlassMaterial` should shade with the
+  renderer's own `glassNode` (`tsl/glass.ts`), fed the studio's floor and room (`tsl/scene.ts`),
+  rather than a port of it. Every per-pixel detail (outer reflections routed like refraction,
+  ray-cone filtering, shadows between objects, frost blur, CMY faces, bevels, the diamond's facet
+  tracing) then matches by construction. `glassNode` takes each object's frame as a pluggable
+  `GlassFrame` (done), so object and instance matrices can drive it instead of the renderer's
+  per-instance attributes. Next: move the studio's uniforms and textures out of
+  `createInstancedGlass()` into a reusable studio context, then a studio mode on the material.
 
 ## Known physical limits
 

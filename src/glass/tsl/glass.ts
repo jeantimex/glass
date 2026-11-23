@@ -60,6 +60,30 @@ const {
   vec4,
 } = TSL as N;
 
+/**
+ * An object's frame: from world space to the shape's local space (where tsl/shapes.ts traces
+ * it) and back. Rigid (rotation and translation); the shape's size is given separately.
+ */
+export interface GlassFrame {
+  /** The object's centre (world). */
+  center: N;
+  toLocalPoint: (p: N) => N;
+  toLocalDir: (v: N) => N;
+  toWorldPoint: (p: N) => N;
+  toWorldDir: (v: N) => N;
+}
+
+/** The frame of an object at `center` turned by unit quaternion `quat` (the renderer's instances). */
+export function quaternionFrame(center: N, quat: N): GlassFrame {
+  return {
+    center,
+    toLocalPoint: (p: N) => rotateToLocal(p.sub(center), quat),
+    toLocalDir: (v: N) => rotateToLocal(v, quat),
+    toWorldPoint: (p: N) => center.add(rotateToWorld(p, quat)),
+    toWorldDir: (v: N) => rotateToWorld(v, quat),
+  };
+}
+
 /** Per-instance and global uniforms read by the glass and caustic passes. */
 export interface GlassInputs {
   /** Per-object instance attributes: center, quaternion, size, variation, own linear tint. */
@@ -86,6 +110,8 @@ export interface GlassInputs {
   roughness: N;
   /** Frosted glass micro-particle grain density. */
   frostScale: N;
+  /** The object's frame (default: `quaternionFrame(center, quat)`). */
+  frame?: GlassFrame;
   /** Faint surface waviness (0: perfect glass, 1: clearly hand-made; see perturbImperfections). */
   imperfection?: N;
 }
@@ -119,6 +145,7 @@ export function glassNode(
   diamondPlanes?: number[],
 ): N {
   const { center, quat, size, vary, tintOwn, tintAll, cmyAll, glassP, roughness, frostScale } = g;
+  const frame = g.frame ?? quaternionFrame(center, quat);
   const { camPos, viewProj, behindTex, behindBlurTex } = v;
   const { groundOn, scene } = sceneFunctions({ ...s, roughness }, false);
   // Mirror reflections are half-res and blurred: skip expensive tricubic mesh entry projection.
@@ -172,14 +199,14 @@ export function glassNode(
     const uprightPos = mirrored ? worldPos.mul(vec3(1, -1, 1)) : worldPos;
     const lampLit = float(1).toVar();
     If(s.spot.z.greaterThan(0.5), () => {
-      lampLit.assign(lampVisible(uprightPos, dot(center, s.lamp).add(length(size).mul(1.25))));
+      lampLit.assign(lampVisible(uprightPos, dot(frame.center, s.lamp).add(length(size).mul(1.25))));
     });
 
-    const viewDirLocal = rotateToLocal(normalize(worldPos.sub(camPos)), quat).toVar();
+    const viewDirLocal = frame.toLocalDir(normalize(worldPos.sub(camPos))).toVar();
     const { pos: entryPos, nrm: entryNormal } = entry(
-      rotateToLocal(worldPos.sub(center), quat),
+      frame.toLocalPoint(worldPos),
       size,
-      rotateToLocal(normalize(worldNormal), quat),
+      frame.toLocalDir(normalize(worldNormal)),
     );
     If(dot(viewDirLocal, entryNormal).greaterThan(0), () => {
       entryNormal.assign(entryNormal.negate());
@@ -237,8 +264,8 @@ export function glassNode(
     // on), then the rendered floor, then the studio, so neighbours show in the surface.
     const viewDotNormal = dot(viewDirLocal, entryNormal).toVar();
     const outerReflection = lookThrough(
-      worldPos.add(rotateToWorld(entryNormal, quat).mul(0.003)),
-      rotateToWorld(reflect(viewDirLocal, entryNormal), quat),
+      worldPos.add(frame.toWorldDir(entryNormal).mul(0.003)),
+      frame.toWorldDir(reflect(viewDirLocal, entryNormal)),
       reach,
       lampLit,
       reflCone,
@@ -262,7 +289,7 @@ export function glassNode(
         outerReflection,
         exit: (pos: N, dir: N) => exit(pos, dir, size),
         look: (pos: N, dir: N, cone: N) =>
-          lookThrough(center.add(rotateToWorld(pos, quat)), rotateToWorld(dir, quat), reach, lampLit, cone),
+          lookThrough(frame.toWorldPoint(pos), frame.toWorldDir(dir), reach, lampLit, cone),
         entryCone,
         growCone: isBakedMesh(shape)
           ? (cone: N, hit: GlassHit) =>
@@ -353,8 +380,8 @@ export function glassNode(
                 const exitWeight = throughput.mul(float(1).sub(exitFresnel)).toVar();
                 If(exitWeight.greaterThan(0.01), () => {
                   const seen = lookThrough(
-                    center.add(rotateToWorld(hitPos.add(hitNormal.mul(0.003)), quat)),
-                    rotateToWorld(exitRefracted, quat),
+                    frame.toWorldPoint(hitPos.add(hitNormal.mul(0.003))),
+                    frame.toWorldDir(exitRefracted),
                     reach,
                     lampLit,
                     float(0),
@@ -369,13 +396,7 @@ export function glassNode(
               bandRadiance.addAssign(
                 attenuation.mul(
                   throughput.mul(
-                    lookThrough(
-                      center.add(rotateToWorld(centerPos, quat)),
-                      rotateToWorld(rayDir, quat),
-                      reach,
-                      lampLit,
-                      float(0),
-                    ),
+                    lookThrough(frame.toWorldPoint(centerPos), frame.toWorldDir(rayDir), reach, lampLit, float(0)),
                   ),
                 ),
               );
