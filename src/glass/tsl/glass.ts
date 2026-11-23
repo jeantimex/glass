@@ -12,6 +12,7 @@ import { cmyTint } from './cmy';
 import { applyFrostVeil, perturbFrostNormal, perturbImperfections } from './frost';
 import { fresnel, rotateToLocal, rotateToWorld, spectralJitter, spectralSample, spectralSampleCount } from './optics';
 import { sceneFunctions, type SceneInputs } from './scene';
+import { createLookThrough } from './lookThrough';
 import { traceGlass, type GlassHit } from './trace';
 import { isBakedMesh, isCurvedShape, shapeFunctions } from './shapes';
 
@@ -33,12 +34,9 @@ export { causticNode, photonNode } from './caustics';
 
 type N = any;
 const {
-  Break,
   Fn,
   If,
   Loop,
-  abs,
-  bool,
   clamp,
   dFdx,
   dFdy,
@@ -56,7 +54,6 @@ const {
   reflect,
   refract,
   select,
-  smoothstep,
   sqrt,
   vec2,
   vec3,
@@ -151,92 +148,18 @@ export function glassNode(
   };
 
   // Sample what a refracted ray sees after exiting the glass: screen-space behind glass,
-  // rendered floor in `behindTex`, or analytic studio environment fallback.
-  const toScreenUv = (ndc: N) => vec2(ndc.x, ndc.y.negate()).mul(0.5).add(0.5);
+  // rendered floor in `behindTex`, or analytic studio environment fallback (tsl/lookThrough.ts).
   const lookThrough = mirrored
     ? (ro: N, rd: N, _reach: N, lampLit: N, cone: N) => scene(ro, rd, lampLit, cone)
-    : Fn(([rayOrigin, rayDir, reach, lampLit, cone]: N[]) => {
-        const out = vec3(0).toVar();
-        const found = bool(false).toVar();
-        const hitsFloor = groundOn.greaterThan(0.5).and(rayDir.y.lessThan(-1e-5));
-
-        // Optional screen-space march for glass-through-glass refraction.
-        If(glassP.w.greaterThan(0.5), () => {
-          const maxDist = float(1e9).toVar();
-          If(hitsFloor, () => {
-            maxDist.assign(max(rayOrigin.y.negate().div(rayDir.y), 0));
-          });
-          const dist = reach.mul(0.2).toVar();
-          Loop({ start: int(0), end: glassP.w.toInt(), type: 'int', condition: '<', name: 'ls' }, () => {
-            If(dist.greaterThanEqual(maxDist), () => {
-              Break();
-            });
-            const samplePos = rayOrigin.add(rayDir.mul(dist)).toVar();
-            const clip = viewProj.mul(vec4(samplePos, 1)).toVar();
-            If(clip.w.lessThan(0.01), () => {
-              Break();
-            });
-            const ndc = clip.xy.div(clip.w).toVar();
-            If(abs(ndc.x).greaterThan(0.98).or(abs(ndc.y).greaterThan(0.98)), () => {
-              Break();
-            });
-            const suv = toScreenUv(ndc).toVar();
-            const behindSample = behindTex.sample(suv).level(0).toVar();
-            const depthDelta = length(samplePos.sub(camPos)).sub(behindSample.a).toVar();
-            If(depthDelta.greaterThan(0).and(depthDelta.lessThan(reach.mul(1.5))), () => {
-              out.assign(behindSample.rgb);
-              If(roughness.greaterThan(0.001), () => {
-                const blurMix = clamp(
-                  sqrt(roughness).mul(float(0.65).add(smoothstep(0, reach.mul(2), dist).mul(0.35))),
-                  0,
-                  1,
-                );
-                out.assign(mix(behindSample.rgb, behindBlurTex.sample(suv).level(0).rgb, blurMix));
-              });
-              found.assign(true);
-              Break();
-            });
-            dist.mulAssign(1.6);
-          });
-        });
-
-        // Floor projection into `behindTex` (captures caustics, reflections, and grid).
-        If(found.not().and(hitsFloor), () => {
-          const floorDist = max(rayOrigin.y.negate().div(rayDir.y), 0);
-          const clip = viewProj.mul(vec4(rayOrigin.add(rayDir.mul(floorDist)), 1)).toVar();
-          If(clip.w.greaterThan(0.01), () => {
-            const ndc = clip.xy.div(clip.w).toVar();
-            If(abs(ndc.x).lessThan(0.98).and(abs(ndc.y).lessThan(0.98)), () => {
-              const suv = toScreenUv(ndc).toVar();
-              const sharp = behindTex.sample(suv).level(0).rgb;
-              out.assign(sharp);
-              If(roughness.greaterThan(0.001), () => {
-                const blurMix = clamp(
-                  sqrt(roughness).mul(float(0.65).add(smoothstep(0, reach.mul(2), floorDist).mul(0.35))),
-                  0,
-                  1,
-                );
-                out.assign(mix(sharp, behindBlurTex.sample(suv).level(0).rgb, blurMix));
-              });
-              found.assign(true);
-            });
-          });
-        });
-
-        If(found.not(), () => {
-          out.assign(scene(rayOrigin, rayDir, lampLit, cone));
-        });
-        return out;
-      }).setLayout({
-        name: 'icLookThrough',
-        type: 'vec3',
-        inputs: [
-          { name: 'ro', type: 'vec3' },
-          { name: 'rd', type: 'vec3' },
-          { name: 'reach', type: 'float' },
-          { name: 'lampLit', type: 'float' },
-          { name: 'cone', type: 'float' },
-        ],
+    : createLookThrough({
+        groundOn,
+        scene,
+        viewProj,
+        camPos,
+        behindTex,
+        behindBlurTex,
+        roughness,
+        marchSteps: glassP.w,
       });
 
   return Fn(() => {

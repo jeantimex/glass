@@ -74,6 +74,19 @@ After that, `createInstancedGlass()` becomes an optional "studio in a box", whic
 rebuilt from the same pieces. Extending it with a registry of new shape kinds is no longer
 needed for this goal.
 
+## Acceptance: a 100% visual match
+
+The migration is done when the demo, rebuilt on standard three.js meshes with
+`MeshGlassMaterial`, passes the existing screenshot suites against today's baselines (the images
+`createInstancedGlass()` renders now). That needs the same shading code, not similar code:
+
+- the glass seen through glass by the renderer's own screen-space march (`tsl/lookThrough.ts`,
+  shared since step 4);
+- an environment hook on `MeshGlassMaterial`, so the rebuilt studio plugs in exactly the floor and
+  room lookups the renderer uses (`tsl/scene.ts`), instead of the material's simple studio;
+- the renderer's other per-pixel details shared or ported exactly: outer reflections routed like
+  refraction, ray-cone filtering, shadows between objects, frost blur, the CMY faces and bevels.
+
 ## Known physical limits
 
 - **Caustics only follow the topmost object.** In piles and stacks, lower objects cast no
