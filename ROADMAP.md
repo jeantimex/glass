@@ -47,9 +47,12 @@ shades with the same tracer as the instanced renderer (`src/glass/tsl/trace.ts`)
    `spectralSamples` sets how many per frame. `e2e/temporal.spec.ts` checks TRAA's average gets
    closer to a 64-wavelength reference than the same number of fixed wavelengths. `mesh.html?taa=1`
    shows it.
-3. **Caustics as an add-on.** A `GlassCaustics` helper usable with plain `renderer.render()`:
-   given the lamp, it traces caustics from any `MeshGlassMaterial` meshes into a texture that a
-   floor material uses (reusing the photon pass from the instanced renderer).
+3. 🟡 **Caustics as an add-on.** `GlassCaustics` (`src/glass/glassCaustics.ts`) traces a
+   `DirectionalLight` through every `MeshGlassMaterial` mesh (same exits as the material, per
+   wavelength band) onto a floor plane and scales the light's colour there (`attach()`), so any
+   lit floor material gets caustics with plain `renderer.render()`. `e2e/caustics.spec.ts`
+   checks glass at IOR 1 leaves the floor unchanged. Still to do: unit tests, a comparison with
+   the instanced renderer's caustics, `InstancedMesh` coverage in the tests, and docs.
 4. **Glass seen through glass as an add-on.** A pass, like `GlassBackfacePass`, that captures
    the glass layers so glass refracts the glass behind it.
 

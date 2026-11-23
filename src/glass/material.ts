@@ -164,7 +164,7 @@ const MAX_VERTEX_BUFFERS = 8;
  * vertex buffers allow, else from a uniform buffer or the instance attribute directly. Passed
  * from the vertex stage as its four columns (WGSL cannot pass matrices between stages).
  */
-function instanceMatrixNode(builder: N, mesh: THREE.InstancedMesh): N {
+export function instanceMatrixNode(builder: N, mesh: THREE.InstancedMesh): N {
   const matrices = mesh.instanceMatrix;
   const count = Math.max(matrices.count, 1);
   const instanceBuffers = 1 + (mesh.instanceColor !== null ? 1 : 0) + (builder.needsPreviousData?.() ? 1 : 0);
