@@ -795,14 +795,17 @@ export function createInstancedGlass(
   let wireOn = false;
   /** The renderer's own glass hidden (glass drawn by MeshGlassMaterial meshes in its place). */
   let ownGlassHidden = false;
+  /** All of the renderer's own objects hidden, in every pass (standard meshes draw them all). */
+  let ownObjectsHidden = false;
   const updateVisibility = () => {
     for (const { mesh, batch, role } of drawn) {
       // Wireframe only: the edges in place of the glass, and nothing mirrored in the floor.
       const shown =
-        role === 'other' ||
-        (role === 'wire' && wireOn) ||
-        (role === 'mirror' && !wireOn) ||
-        (role === 'glass' && !wireOn && !ownGlassHidden);
+        !ownObjectsHidden &&
+        (role === 'other' ||
+          (role === 'wire' && wireOn) ||
+          (role === 'mirror' && !wireOn) ||
+          (role === 'glass' && !wireOn && !ownGlassHidden));
       mesh.visible = batch.count > 0 && shown;
     }
   };
@@ -909,6 +912,25 @@ export function createInstancedGlass(
   const programKey = (kind: number) => (kind === KIND.diamond ? `${kind}:${currentDiamondCut}` : String(kind));
   /** Shapes on show this frame are not compiled yet (the last picture is kept meanwhile). */
   let waitingForPrograms = false;
+  /** compileAsync calls run one at a time (three.js's precompilation is not reentrant). */
+  let compileLock: Promise<void> = Promise.resolve();
+  const withCompileLock = (fn: () => Promise<unknown>): Promise<void> => {
+    const run = compileLock.then(fn);
+    compileLock = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run.then(() => undefined);
+  };
+  /** Each glass pass's scene, with the camera and target it is drawn with. */
+  const passTargets = (): [THREE.Scene, THREE.Camera, THREE.RenderTarget][] => [
+    [farScene, camera, farLayer],
+    [nearScene, camera, nearLayer],
+    [mirrorScene, camera, mirrorLayer],
+    [lightScene, lightCamera, causticMap],
+    [lampDepthScene, lightCamera, lampDepth],
+    [photonScene, lightCamera, photonMap],
+  ];
   /**
    * Build the programs of shape `kind` (as it is now: the diamond in its current cut)
    * without blocking, pass by pass, each into the target and with the camera it is drawn
@@ -919,31 +941,23 @@ export function createInstancedGlass(
     if (compiledKeys.has(key)) return Promise.resolve();
     const pending = compiling.get(key);
     if (pending) return pending;
-    const passes: [THREE.Scene, THREE.Camera, THREE.RenderTarget][] = [
-      [farScene, camera, farLayer],
-      [nearScene, camera, nearLayer],
-      [mirrorScene, camera, mirrorLayer],
-      [lightScene, lightCamera, causticMap],
-      [lampDepthScene, lightCamera, lampDepth],
-      [photonScene, lightCamera, photonMap],
-    ];
     const job = (async () => {
-      for (const [scene, passCamera, target] of passes) {
+      for (const [scene, passCamera, target] of passTargets()) {
         const passMeshes = kindMeshes[kind].filter((entry) => entry.scene === scene).map((entry) => entry.mesh);
         if (passMeshes.length === 0) continue;
-        // compileAsync gathers what to build synchronously, from what is visible: show the
-        // shape's meshes just for that, then put everything back before anything is drawn.
-        const previousTarget = renderer.getRenderTarget();
-        renderer.setRenderTarget(target);
-        for (const mesh of passMeshes) mesh.visible = true;
-        let built: Promise<unknown>;
-        try {
-          built = renderer.compileAsync(scene, passCamera);
-        } finally {
-          updateVisibility();
-          renderer.setRenderTarget(previousTarget);
-        }
-        await built;
+        await withCompileLock(() => {
+          // compileAsync gathers what to build synchronously, from what is visible: show the
+          // shape's meshes just for that, then put everything back before anything is drawn.
+          const previousTarget = renderer.getRenderTarget();
+          renderer.setRenderTarget(target);
+          for (const mesh of passMeshes) mesh.visible = true;
+          try {
+            return renderer.compileAsync(scene, passCamera);
+          } finally {
+            updateVisibility();
+            renderer.setRenderTarget(previousTarget);
+          }
+        });
       }
       compiledKeys.add(key);
       compiling.delete(key);
@@ -1539,6 +1553,41 @@ export function createInstancedGlass(
       /** The scenes the glass is drawn in (farther and nearer half; one object: either). */
       farScene,
       nearScene,
+      mirrorViewInputs: {
+        camPos: uMirrorCam,
+        viewProj: uViewProj,
+        behindTex: behindNode,
+        behindBlurTex: frostNode,
+        lampDepthTex: lampDepthNode,
+        lampDepthSize,
+      },
+      passScenes: { mirror: mirrorScene, light: lightScene, lampDepth: lampDepthScene, photon: photonScene },
+      passNodes: {
+        lampDepth: () => vec4(positionWorld.dot(uSunDir).add(100), 0, 0, 1),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        caustic: (normal: any, worldPos: any, inputs: any) => causticNode(normal, worldPos, inputs),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        photon: (kind: number, worldPos: any, normal: any, inputs: any, diamondPlanes?: number[]) =>
+          photonRayNode(kind, worldPos, normal, inputs, uSunDir, uLightR, uLightU, diamondPlanes, uPhotonBand),
+      },
+      /**
+       * Build the programs of a standard mesh (or pass proxy) in one of the glass scenes
+       * without blocking, with the camera and target its pass is drawn with.
+       */
+      compile: (object: THREE.Object3D): Promise<void> => {
+        const pass = passTargets().find(([scene]) => scene === object.parent);
+        if (!pass) return Promise.resolve();
+        const [scene, passCamera, target] = pass;
+        return withCompileLock(() => {
+          const previousTarget = renderer.getRenderTarget();
+          renderer.setRenderTarget(target);
+          try {
+            return renderer.compileAsync(object, passCamera, scene);
+          } finally {
+            renderer.setRenderTarget(previousTarget);
+          }
+        });
+      },
       shapeGeometry: (kind: number, cut: string = 'round') => {
         const diamondCut = cut as DiamondCut;
         const geometry = kind === KIND.diamond ? diamondGeometry(diamondCut) : fineBases[kind].clone();
@@ -1550,6 +1599,15 @@ export function createInstancedGlass(
         };
         return geometry;
       },
+    },
+    /**
+     * Hide all of this renderer's own objects, in every pass (glass, mirror image, shadows,
+     * light map, caustics): for standard meshes drawing all of them (`addStudioPasses`).
+     */
+    setOwnObjectsHidden: (hidden: boolean) => {
+      ownObjectsHidden = hidden;
+      lightDirty = true;
+      updateVisibility();
     },
     /** Hide this renderer's own glass (not its floor mirror image, shadows or caustics). */
     setOwnGlassHidden: (hidden: boolean) => {

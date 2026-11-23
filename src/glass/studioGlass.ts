@@ -11,7 +11,7 @@ import * as TSL from 'three/tsl';
 import type { AnalyticShape } from './analyticShapes';
 import { glassNode, type GlassFrame } from './tsl/glass';
 
-const { abs, length, normalWorld, positionWorld, uniform, vec3, vec4 } = TSL as any;
+const { abs, length, normalLocal, normalWorld, normalize, positionWorld, uniform, vec3, vec4 } = TSL as any;
 
 /** What the renderer exposes as `studio`: the very nodes its own glass shading reads. */
 export interface GlassStudio {
@@ -25,22 +25,37 @@ export interface GlassStudio {
    * the diamond in `cut`), declaring its solid in `userData.glassShape`: scale it to size.
    */
   shapeGeometry: (kind: number, cut?: string) => THREE.BufferGeometry;
+  /** Build an object's programs in its pass, without blocking (see the renderer). */
+  compile: (object: THREE.Object3D) => Promise<void>;
+  /** The view of the glass's mirror image in the floor (the camera mirrored). */
+  mirrorViewInputs: any;
+  /** The renderer's other passes over the glass, with the scenes they draw. */
+  passScenes: { mirror: THREE.Scene; light: THREE.Scene; lampDepth: THREE.Scene; photon: THREE.Scene };
+  passNodes: {
+    /** Depth along the lamp (shadows on the glass). */
+    lampDepth: () => any;
+    /** The light map's multiplicative filter (shadows and tint on the floor). */
+    caustic: (normal: any, worldPos: any, inputs: any) => any;
+    /** The real caustics' rays, for this wavelength band. */
+    photon: (kind: number, worldPos: any, normal: any, inputs: any, diamondPlanes?: number[]) => any;
+  };
 }
 
 /**
- * The renderer's glass shading for one standard mesh: `toWorld` takes the geometry's space to
- * the world (object times instance matrix), `toGeometry` back; `tint` is the mesh's own colour;
- * `vary` its own glass, as the renderer's objects carry it (added to the IOR, multiplying the
- * dispersion, CMY strength).
+ * The renderer's per-object inputs for one standard mesh: `toWorld` takes the geometry's space
+ * to the world (object times instance matrix), `toGeometry` back; `tint` is the mesh's own
+ * colour; `vary` its own glass, as the renderer's objects carry it (added to the IOR,
+ * multiplying the dispersion, CMY strength). Also the surface normal as the renderer computes
+ * it (the geometry's, through the inverse scale, turned to the world).
  */
-export function studioGlassNode(
+export function studioShapeInputs(
   studio: GlassStudio,
   shape: AnalyticShape,
   toWorld: any,
   toGeometry: any,
   tint: any,
   vary: any,
-): any {
+): { inputs: any; normal: any } {
   // The shape's own frame may be turned from the geometry's (three.js builds the torus around z).
   const toShape = (v: any) => (shape.axis === 'z' ? vec3(v.x, v.z.negate(), v.y) : v);
   const fromShape = (v: any) => (shape.axis === 'z' ? vec3(v.x, v.z, v.y.negate()) : v);
@@ -50,8 +65,9 @@ export function studioGlassNode(
     length(toWorld.mul(vec4(1, 0, 0, 0)).xyz),
     length(toWorld.mul(vec4(0, 1, 0, 0)).xyz),
     length(toWorld.mul(vec4(0, 0, 1, 0)).xyz),
-  ).toVar();
-  const center = toWorld.mul(vec4(0, 0, 0, 1)).xyz.toVar();
+  );
+  // (Plain expressions, not variables: the tracer uses them inside shader functions of its own.)
+  const center = toWorld.mul(vec4(0, 0, 0, 1)).xyz;
   const frame: GlassFrame = {
     center,
     toLocalPoint: (p: any) => toShape(toGeometry.mul(vec4(p, 1)).xyz.mul(scale)),
@@ -69,14 +85,35 @@ export function studioGlassNode(
     tintOwn: tint,
     frame,
   };
+  const normal = toWorld.mul(vec4(normalize(normalLocal.div(scale)).div(scale), 0)).xyz;
+  return { inputs, normal };
+}
+
+/**
+ * The renderer's glass shading for one standard mesh (see `studioShapeInputs`). `mirrored`: its
+ * mirror image in the floor, drawn with the object's matrix mirrored (`toWorld` and
+ * `toGeometry` are then the object's own, unmirrored) and shaded as the object itself, seen
+ * from the mirrored camera, as the renderer draws it.
+ */
+export function studioGlassNode(
+  studio: GlassStudio,
+  shape: AnalyticShape,
+  toWorld: any,
+  toGeometry: any,
+  tint: any,
+  vary: any,
+  mirrored = false,
+): any {
+  const { inputs, normal } = studioShapeInputs(studio, shape, toWorld, toGeometry, tint, vary);
+  const upsideDown = vec3(1, -1, 1);
   return glassNode(
     shape.kind,
-    false,
-    positionWorld,
-    normalWorld,
-    inputs as any,
+    mirrored,
+    mirrored ? positionWorld.mul(upsideDown) : positionWorld,
+    mirrored ? normal : normalWorld,
+    inputs,
     studio.sceneInputs,
-    studio.viewInputs,
+    mirrored ? studio.mirrorViewInputs : studio.viewInputs,
     shape.diamondPlanes,
   );
 }

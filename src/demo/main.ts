@@ -3,6 +3,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import GUI from 'three/addons/libs/lil-gui.module.min.js';
 import {
   MeshGlassMaterial,
+  addStudioPasses,
+  type StudioPasses,
   KIND,
   createGlassObjects,
   createInstancedGlass,
@@ -886,6 +888,8 @@ async function main() {
   /* Test automation hook for deterministic visual screenshot regression tests */
   /** The standard meshes standing in for the objects (see setScene's `standardGlass`). */
   const standIns: THREE.Mesh[] = [];
+  /** Their proxies in the renderer's other passes (mirror image, shadows, light map, caustics). */
+  const standInPasses: StudioPasses[] = [];
   const placeStandardGlass = async (on: boolean) => {
     for (const mesh of standIns) {
       mesh.removeFromParent();
@@ -893,7 +897,10 @@ async function main() {
       (mesh.material as THREE.Material).dispose();
     }
     standIns.length = 0;
-    instanced.setOwnGlassHidden(on);
+    for (const passes of standInPasses) passes.dispose();
+    standInPasses.length = 0;
+    // The renderer's own objects hidden in every pass: the standard meshes draw them all.
+    instanced.setOwnObjectsHidden(on);
     if (!on) return;
     const material = new MeshGlassMaterial({ studio: instanced.studio });
     /** A kind's geometry: at `size` for a built-in solid, the studio's own at unit size otherwise. */
@@ -922,7 +929,7 @@ async function main() {
       mesh.frustumCulled = false;
       standIns.push(mesh);
       (instanced.inNearHalf(0) ? instanced.studio.nearScene : instanced.studio.farScene).add(mesh);
-      await renderer.compileAsync(mesh, camera, mesh.parent as THREE.Scene);
+      await compileStandIns();
       return;
     }
     // Each object goes in the half of the studio the renderer drew it in (nearer or farther).
@@ -965,10 +972,19 @@ async function main() {
         }
       }
     }
-    for (const mesh of standIns) {
-      mesh.frustumCulled = false;
-      // Built before the frame average starts, so no frame is drawn without it.
-      await renderer.compileAsync(mesh, camera, mesh.parent as THREE.Scene);
+    for (const mesh of standIns) mesh.frustumCulled = false;
+    await compileStandIns();
+  };
+  /** The stand-ins' passes, and every program built before the frame average starts. */
+  const compileStandIns = async () => {
+    for (const mesh of standIns) standInPasses.push(addStudioPasses(instanced.studio, mesh));
+    for (const mesh of standIns) mesh.userData.standIn = true;
+    const studio = instanced.studio;
+    for (const passScene of [studio.nearScene, studio.farScene, ...Object.values(studio.passScenes)]) {
+      // (Only the stand-ins and their proxies: the renderer builds its own programs itself.)
+      for (const object of passScene.children) {
+        if (object.userData.standIn || object.userData.studioProxy) await studio.compile(object);
+      }
     }
   };
 

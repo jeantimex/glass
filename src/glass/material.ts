@@ -153,6 +153,11 @@ export interface MeshGlassMaterialParameters {
    * strength) gives each its own glass as the renderer's objects have. Default null.
    */
   studio?: GlassStudio | null;
+  /**
+   * @internal The studio's mirror image of a mesh in the floor (see `addStudioPasses`): drawn
+   * with the mesh's matrix mirrored, shaded as the mesh itself from the mirrored camera.
+   */
+  studioMirror?: boolean;
 }
 
 /**
@@ -254,6 +259,7 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
   private _spectralSamples = 0;
   private _behindMap: THREE.Texture | null = null;
   private _studio: GlassStudio | null = null;
+  private _studioMirror = false;
   private readonly behindTexNode: N = texture(FALLBACK_ENV_TEXTURE);
 
   private readonly uIor = uniform(1.52);
@@ -298,6 +304,9 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     this._spectralSamples = Math.max(0, Math.round(params.spectralSamples ?? 0));
     this._behindMap = params.behindMap ?? null;
     this._studio = params.studio ?? null;
+    this._studioMirror = params.studioMirror ?? false;
+    // (Mirroring turns the triangles inside out, but a mirrored matrix (negative determinant)
+    // has three.js turn the winding back itself: the front side stays the one drawn.)
     if (this._studio) this.setupStudioOutput();
     if (this._behindMap) this.behindTexNode.value = this._behindMap;
     // Baked-volume meshes default to 4 events (as in the instanced renderer): their folded
@@ -414,7 +423,7 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
       super.customProgramCacheKey() +
       `|glass:${this._exactShapes ? 1 : 0}${this._bouncesSet ? 1 : 0}${this._temporal ? 1 : 0}:` +
       `${this._spectralSamples}:${volumeKind}:${this._autoVolumesReady}:${this._behindMap ? 1 : 0}` +
-      `:${this._studio ? 1 : 0}`
+      `:${this._studio ? 1 : 0}${this._studioMirror ? 'm' : ''}`
     );
   }
 
@@ -534,6 +543,7 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
       spectralSamples: this._spectralSamples,
       behindMap: this._behindMap,
       studio: this._studio,
+      studioMirror: this._studioMirror,
       bounces: this.bounces,
       imperfections: this.imperfections,
     });
@@ -584,10 +594,12 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     const instanceMatrix = instanced ? instanceMatrixNode(builder, object) : null;
     if (this._studio && shape) {
       // Studio mode: the renderer's own glassNode, through this mesh's frame.
-      const toWorld = instanceMatrix ? modelWorldMatrix.mul(instanceMatrix) : modelWorldMatrix;
-      const toGeometry = instanceMatrix
-        ? inverse(instanceMatrix).mul(modelWorldMatrixInverse)
-        : modelWorldMatrixInverse;
+      // (A mirror image is drawn with the mesh's matrix mirrored: its frame is the mesh's own.)
+      const unmirror = mat4(1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+      const objectToWorld = this._studioMirror ? unmirror.mul(modelWorldMatrix) : modelWorldMatrix;
+      const worldToObject = this._studioMirror ? modelWorldMatrixInverse.mul(unmirror) : modelWorldMatrixInverse;
+      const toWorld = instanceMatrix ? objectToWorld.mul(instanceMatrix) : objectToWorld;
+      const toGeometry = instanceMatrix ? inverse(instanceMatrix).mul(worldToObject) : worldToObject;
       // The studio's own tint carries the glass colour (render() sets it from the material it is
       // given), so only per-instance and vertex colours go in as this object's own tint.
       let ownTint: N = vec3(1);
@@ -597,7 +609,7 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
       // Its own glass, as the renderer's objects carry it, from an optional `glassVary`
       // attribute (per instance on an InstancedMesh); without it, exactly the studio's settings.
       const vary: N = object.geometry.getAttribute('glassVary') ? attribute('glassVary', 'vec3') : vec3(0, 1, 0);
-      diffuseColor.assign(studioGlassNode(this._studio, shape, toWorld, toGeometry, ownTint, vary));
+      diffuseColor.assign(studioGlassNode(this._studio, shape, toWorld, toGeometry, ownTint, vary, this._studioMirror));
       return;
     }
     diffuseColor.assign(this.buildColorNode(tint, instanceMatrix, shape, autoVolume));

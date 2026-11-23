@@ -13,3 +13,5 @@ export { bakeGlassVolumeAsync, createGlassVolume, createVolumeTexture, toGlassVo
 export { autoGlassVolumesSettled } from './autoVolume';
 export { GlassCaustics, type GlassCausticsOptions } from './glassCaustics';
 export { GlassLayers, type GlassLayersOptions } from './glassLayers';
+export { studioGlassNode, studioShapeInputs, type GlassStudio } from './studioGlass';
+export { addStudioPasses, StudioPassMaterial, type StudioPass, type StudioPasses } from './studioPasses';

@@ -109,8 +109,17 @@ The migration is done when the demo, rebuilt on standard three.js meshes with
   own inputs. Shapes traced by formula or facets match within 0.003% of pixels; the three
   traced through baked volumes cannot be bit-exact (moving the renderer's own object by 1 µm
   changes 0.05-1% of their pixels), and the test holds them to that floor, measured live (they
-  sit at 40-70% of it). Next: the floor mirror image, shadows and caustics drawn from standard
-  meshes, then the studio drawn entirely from standard meshes.
+  sit at 40-70% of it). The rest of the picture is drawn from standard meshes too:
+  `addStudioPasses(studio, mesh)` (`studioPasses.ts`) puts proxies of a mesh in the renderer's
+  other passes (the mirror image, depth along the lamp, the light map's filter, the real
+  caustics' rays), and the parity tests now hide every one of the renderer's own objects
+  (`setOwnObjectsHidden`): all 15 shapes, single and instanced, still match (90 measurements).
+  Removing the mirror proxy, or all proxies, fails them (4-11% of pixels). The renderer
+  serializes its `compileAsync` calls (`studio.compile`), as three.js's precompilation is not
+  reentrant. Known, unexplained: compiling the renderer's whole glass scenes with every hidden
+  kind in them reports a WGSL error in one of its own glass programs, which it never builds
+  that way itself. Next: the studio drawn from the user's standard meshes alone (its own split,
+  object data and no instanced batches), then retiring `createInstancedGlass()`.
 
 ## Known physical limits
 

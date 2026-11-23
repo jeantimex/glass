@@ -4,9 +4,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- TSL node types are too loose to spell out */
 import * as TSL from 'three/tsl';
 import { KIND } from '../objects';
-import type { GlassInputs } from './glass';
+import { quaternionFrame, type GlassInputs } from './glass';
 import { cmyTint } from './cmy';
-import { fresnel, rotateToLocal, rotateToWorld } from './optics';
+import { fresnel } from './optics';
 import { shapeFunctions } from './shapes';
 
 type N = any;
@@ -58,16 +58,17 @@ export function photonNode(
   band?: N,
 ): N {
   const { center, quat, size, vary, tintOwn, tintAll, cmyAll, glassP } = g;
+  const frame = g.frame ?? quaternionFrame(center, quat);
   const { declare, entry, exit } = shapeFunctions(shape, g, diamondPlanes);
 
   return Fn(() => {
     declare();
     const cmy = max(cmyAll, vary.z).toVar();
-    const rayDir = rotateToLocal(sunDir.negate(), quat).toVar();
+    const rayDir = frame.toLocalDir(sunDir.negate()).toVar();
     const { pos, nrm: entryNormal } = entry(
-      rotateToLocal(worldPos.sub(center), quat),
+      frame.toLocalPoint(worldPos),
       size,
-      rotateToLocal(normalize(worldNormal), quat),
+      frame.toLocalDir(normalize(worldNormal)),
     );
     If(dot(rayDir, entryNormal).greaterThan(0), () => {
       entryNormal.assign(entryNormal.negate());
@@ -117,8 +118,8 @@ export function photonNode(
     const landingOffset = vec2(0).toVar();
     const lightEnergy = float(0).toVar();
     If(escaped, () => {
-      const exitWorld = center.add(rotateToWorld(pos, quat)).toVar();
-      const downDir = rotateToWorld(exitDir, quat).toVar();
+      const exitWorld = frame.toWorldPoint(pos).toVar();
+      const downDir = frame.toWorldDir(exitDir).toVar();
       If(downDir.y.lessThan(-0.02), () => {
         const delta = exitWorld
           .add(downDir.mul(exitWorld.y.negate().div(downDir.y)))
@@ -151,7 +152,9 @@ export function causticNode(worldNormal: N, worldPos: N, g: GlassInputs): N {
     transmittance.mulAssign(sqrt(mix(vec3(1), tintAll.rgb.mul(tintOwn), tintAll.a)));
     If(cmy.greaterThan(0), () => {
       const invAxis = quat.xyz.negate();
-      const localNormal = normal.add(cross(invAxis, cross(invAxis, normal).add(normal.mul(quat.w))).mul(2));
+      const localNormal = g.frame
+        ? g.frame.toLocalDir(normal)
+        : normal.add(cross(invAxis, cross(invAxis, normal).add(normal.mul(quat.w))).mul(2));
       transmittance.mulAssign(cmyTint(localNormal, cmy, g.cmyOrder));
     });
     return vec4(transmittance, 1);

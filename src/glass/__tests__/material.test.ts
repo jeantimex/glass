@@ -208,6 +208,15 @@ describe('MeshGlassMaterial studio mode', () => {
       farScene: new THREE.Scene(),
       nearScene: new THREE.Scene(),
       shapeGeometry: () => new THREE.BufferGeometry(),
+      mirrorViewInputs: {},
+      compile: () => Promise.resolve(),
+      passScenes: {
+        mirror: new THREE.Scene(),
+        light: new THREE.Scene(),
+        lampDepth: new THREE.Scene(),
+        photon: new THREE.Scene(),
+      },
+      passNodes: { lampDepth: () => null, caustic: () => null, photon: () => null },
     };
     const mat = new MeshGlassMaterial();
     const key0 = settingsPart(mat.customProgramCacheKey());
