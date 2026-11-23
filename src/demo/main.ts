@@ -6,9 +6,11 @@ import {
   KIND,
   createGlassObjects,
   createInstancedGlass,
+  FINE_UP_TO,
   type CmyFaceOrder,
   type DiamondCut,
 } from '../glass';
+import { buildGlassMeshes, disposeGlassMeshes } from './glassMeshes';
 import { createLoadingScreen, loadBinaryMesh, loadMeshVolumes, showFatalError } from './assets';
 import { CMY_STRENGTH, layoutGrid, restingPose } from './grid';
 import { getCachedHdri, HDRI_PRESET_LABELS, loadHdriPreset } from './hdri';
@@ -35,34 +37,6 @@ const singleKind = (name: string): number => SHAPES[name].kinds?.[0] ?? KIND.box
 const FACETED_KINDS: number[] = [KIND.box, KIND.octahedron, KIND.prism, KIND.hexprism];
 /** Resolves on the next animation frame. */
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-
-/** Turns three.js's torus (built around z) onto the renderer's (around y). */
-const TORUS_TURN = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
-/**
- * three.js's own geometry for a kind, at `size` (the renderer's half-extents), as finely
- * divided as the renderer's close-up meshes. Kinds whose every size is the unit geometry
- * scaled along its axes come at unit size (`scalable`), the rest at the object's own size.
- */
-const standInGeometry = (kind: number, size: ArrayLike<number>): THREE.BufferGeometry => {
-  const [a, b, c] = [size[0], size[1], size[2]];
-  if (kind === KIND.sphere) return new THREE.IcosahedronGeometry(a, 12);
-  if (kind === KIND.box) return new THREE.BoxGeometry(2 * a, 2 * b, 2 * c);
-  if (kind === KIND.cylinder) return new THREE.CylinderGeometry(a, a, 2 * b, 120, 1);
-  if (kind === KIND.cone) return new THREE.ConeGeometry(a, 2 * b, 120, 1);
-  if (kind === KIND.capsule) return new THREE.CapsuleGeometry(a, 2 * b, 24, 96);
-  if (kind === KIND.torus) return new THREE.TorusGeometry(a, b, 40, 144);
-  if (kind === KIND.octahedron) return new THREE.OctahedronGeometry(a);
-  throw new Error('standardGlass: not a built-in solid');
-};
-/** Shapes that are no three.js built-in: the studio's own geometries (`studio.shapeGeometry`). */
-const STUDIO_KINDS: number[] = [KIND.prism, KIND.hexprism, KIND.suzanne, KIND.diamond, KIND.dragon, KIND.torusknot];
-const scalable = (kind: number) =>
-  kind === KIND.sphere ||
-  kind === KIND.box ||
-  kind === KIND.cylinder ||
-  kind === KIND.cone ||
-  kind === KIND.octahedron ||
-  STUDIO_KINDS.includes(kind);
 
 async function main() {
   const canvas = document.getElementById('view') as HTMLCanvasElement;
@@ -885,77 +859,16 @@ async function main() {
 
   /* Test automation hook for deterministic visual screenshot regression tests */
   /** The standard meshes standing in for the objects (see setScene's `standardGlass`). */
-  const standIns: THREE.Mesh[] = [];
+  let standIns: THREE.Mesh[] = [];
   const placeStandardGlass = async (on: boolean) => {
     instanced.setMeshes(null);
-    for (const mesh of standIns) {
-      mesh.geometry.dispose();
-      (mesh.material as THREE.Material).dispose();
-    }
-    standIns.length = 0;
+    disposeGlassMeshes(standIns);
+    standIns = [];
     if (!on) return;
-    const material = new MeshGlassMaterial({ studio: instanced.studio });
-    /** A kind's geometry: at `size` for a built-in solid, the studio's own at unit size otherwise. */
-    const geometryOf = (kind: number, size: ArrayLike<number>) =>
-      STUDIO_KINDS.includes(kind)
-        ? instanced.studio.shapeGeometry(kind, settings.diamondCut)
-        : standInGeometry(kind, size);
-    const position = new THREE.Vector3();
-    const quat = new THREE.Quaternion();
-    const scale = new THREE.Vector3();
-    const matrix = new THREE.Matrix4();
-    const colour = new THREE.Color();
-    const poseOf = (i: number, unit: boolean) => {
-      position.fromArray(glassObjects.center, i * 3);
-      quat.fromArray(glassObjects.quat, i * 4);
-      if (glassObjects.kind[i] === KIND.torus) quat.multiply(TORUS_TURN);
-      if (unit) scale.fromArray(glassObjects.size, i * 3);
-      else scale.set(1, 1, 1);
-      return matrix.compose(position, quat, scale);
-    };
-    if (glassObjects.count === 1) {
-      // One object: a plain THREE.Mesh (its glass is the studio's own).
-      const kind = glassObjects.kind[0];
-      const mesh = new THREE.Mesh(geometryOf(kind, glassObjects.size), material);
-      poseOf(0, STUDIO_KINDS.includes(kind)).decompose(mesh.position, mesh.quaternion, mesh.scale);
-      standIns.push(mesh);
-    } else {
-      const groups = new Map<number, number[]>();
-      for (let i = 0; i < glassObjects.count; i++) {
-        const kind = glassObjects.kind[i];
-        groups.set(kind, [...(groups.get(kind) ?? []), i]);
-      }
-      for (const [kind, members] of groups) {
-        if (scalable(kind)) {
-          // One InstancedMesh: each object's size in its instance matrix, its colour by
-          // setColorAt, its own glass in the per-instance `glassVary` attribute.
-          const geometry = geometryOf(kind, [1, 1, 1]);
-          const vary = new Float32Array(members.length * 3);
-          const mesh = new THREE.InstancedMesh(geometry, material, members.length);
-          members.forEach((i, k) => {
-            mesh.setMatrixAt(k, poseOf(i, true));
-            mesh.setColorAt(k, colour.fromArray(glassObjects.tint, i * 3));
-            vary.set(glassObjects.vary.subarray(i * 3, i * 3 + 3), k * 3);
-          });
-          geometry.setAttribute('glassVary', new THREE.InstancedBufferAttribute(vary, 3));
-          standIns.push(mesh);
-        } else {
-          // Proportions that a scale cannot give: a mesh of its own (with its own glass as a
-          // one-instance InstancedMesh, as the attribute is per instance).
-          for (const i of members) {
-            const geometry = standInGeometry(kind, glassObjects.size.subarray(i * 3, i * 3 + 3));
-            geometry.setAttribute(
-              'glassVary',
-              new THREE.InstancedBufferAttribute(glassObjects.vary.slice(i * 3, i * 3 + 3), 3),
-            );
-            const mesh = new THREE.InstancedMesh(geometry, material, 1);
-            mesh.setMatrixAt(0, poseOf(i, false));
-            mesh.setColorAt(0, colour.fromArray(glassObjects.tint, i * 3));
-            standIns.push(mesh);
-          }
-        }
-      }
-    }
+    standIns = buildGlassMeshes(glassObjects, instanced.studio, {
+      cut: settings.diamondCut,
+      coarse: glassObjects.count > FINE_UP_TO,
+    });
     // The studio draws them (split into its two halves, in every pass) in place of its own.
     instanced.setMeshes(standIns);
     await instanced.whenMeshesReady();

@@ -2,7 +2,7 @@
 // stand on. Whatever places or moves the objects writes their positions and
 // rotations into GlassObjects (the demo sets them out in a grid: src/demo/grid.ts).
 export { KIND, MAX_OBJECTS, createGlassObjects, type GlassObjects } from './objects';
-export { createInstancedGlass, type InstancedLighting } from './renderer';
+export { FINE_UP_TO, createInstancedGlass, type InstancedLighting } from './renderer';
 export { GlassBackfacePass, type GlassBackfacePassOptions } from './backfacePass';
 export { DIAMOND_CUTS, DIAMOND_LEAN, DIAMOND_REST, diamondGeometry, type DiamondCut } from './diamond';
 export { DiamondMesh, type DiamondMeshParameters } from './diamondMesh';

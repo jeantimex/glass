@@ -8,7 +8,7 @@ import * as THREE from 'three/webgpu';
 import * as TSL from 'three/tsl';
 import { analyticShape, type AnalyticShape } from './analyticShapes';
 import { instanceMatrixNode, MeshGlassMaterial } from './material';
-import { studioShapeInputs, type GlassStudio } from './studioGlass';
+import { studioDeformedPosition, studioShapeInputs, type GlassStudio } from './studioGlass';
 
 const { attribute, instanceColor, inverse, modelWorldMatrix, modelWorldMatrixInverse, positionWorld, vec3 } =
   TSL as any;
@@ -55,6 +55,8 @@ export class StudioPassMaterial extends THREE.NodeMaterial {
     const tint = object?.instanceColor ? instanceColor : vec3(1);
     const vary = object?.geometry?.getAttribute('glassVary') ? attribute('glassVary', 'vec3') : vec3(0, 1, 0);
     const { inputs, normal } = studioShapeInputs(this.studio, this.shape, toWorld, toGeometry, tint, vary);
+    // (A deformed capsule or torus is drawn as the renderer draws it.)
+    this.positionNode = studioDeformedPosition(this.shape, toWorld, instanceMatrix);
     const nodes = this.studio.passNodes;
     this.fragmentNode =
       this.pass === 'lampDepth'

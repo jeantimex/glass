@@ -16,7 +16,7 @@ import { applyFrostVeil, perturbFrostNormal, perturbImperfections } from './tsl/
 import { spectralSampleCount } from './tsl/optics';
 import { analyticShape, type AnalyticShape } from './analyticShapes';
 import { autoGlassVolume } from './autoVolume';
-import { studioGlassNode, type GlassStudio } from './studioGlass';
+import { studioDeformedPosition, studioGlassNode, type GlassStudio } from './studioGlass';
 import { createLookThrough } from './tsl/lookThrough';
 import { createSdfVolume } from './tsl/sdf';
 import { shapeFunctions } from './tsl/shapes';
@@ -557,6 +557,28 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
    * and vertex colors into volumetric Beer–Lambert absorption instead of post-multiplying
    * the final shaded output (which would tint white dielectric Fresnel highlights).
    */
+  /**
+   * Studio mode, a unit capsule or torus declaring a deformation: drawn as the renderer draws
+   * it (a scale moves its caps, or scales its ring and tube, instead of stretching it).
+   */
+  override setup(builder: N): N {
+    const { object, geometry } = builder;
+    const declared = this._studio ? (geometry?.userData?.glassShape as AnalyticShape | undefined) : undefined;
+    let deformed: N = null;
+    if (declared?.deform) {
+      const instanced = Boolean(object?.isInstancedMesh && object?.instanceMatrix);
+      const objectToWorld = this._studioMirror
+        ? mat4(1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1).mul(modelWorldMatrix)
+        : modelWorldMatrix;
+      const instanceMatrix = instanced ? instanceMatrixNode(builder, object) : null;
+      const toWorld = instanceMatrix ? objectToWorld.mul(instanceMatrix) : objectToWorld;
+      deformed = studioDeformedPosition(declared, toWorld, instanceMatrix);
+    }
+    // (Set or cleared for each build: the material may be shared between geometries.)
+    this.positionNode = deformed;
+    return super.setup(builder);
+  }
+
   override setupDiffuseColor(builder: N): void {
     const { object, geometry } = builder;
     const hasVertexColor = this.vertexColors === true && Boolean(geometry?.hasAttribute?.('color'));

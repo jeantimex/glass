@@ -10,9 +10,22 @@ import * as THREE from 'three/webgpu';
 import * as TSL from 'three/tsl';
 import type { AnalyticShape } from './analyticShapes';
 import { KIND } from './objects';
+import { UNIT_TUBE } from './geometries';
 import { glassNode, type GlassFrame } from './tsl/glass';
 
-const { abs, length, normalLocal, normalWorld, normalize, positionWorld, uniform, vec3, vec4 } = TSL as any;
+const {
+  abs,
+  length,
+  normalGeometry,
+  normalWorld,
+  normalize,
+  positionGeometry,
+  positionWorld,
+  uniform,
+  vec2,
+  vec3,
+  vec4,
+} = TSL as any;
 
 /** What the renderer exposes as `studio`: the very nodes its own glass shading reads. */
 export interface GlassStudio {
@@ -25,7 +38,7 @@ export interface GlassStudio {
    * The renderer's own geometry for a shape kind (unit size, as finely divided as its close-ups;
    * the diamond in `cut`), declaring its solid in `userData.glassShape`: scale it to size.
    */
-  shapeGeometry: (kind: number, cut?: string) => THREE.BufferGeometry;
+  shapeGeometry: (kind: number, cut?: string, coarse?: boolean) => THREE.BufferGeometry;
   /** Build an object's programs in its pass, without blocking (see the renderer). */
   compile: (object: THREE.Object3D) => Promise<void>;
   /** The view of the glass's mirror image in the floor (the camera mirrored). */
@@ -89,8 +102,42 @@ export function studioShapeInputs(
     tintOwn: tint,
     frame,
   };
-  const normal = toWorld.mul(vec4(normalize(normalLocal.div(scale)).div(scale), 0)).xyz;
+  // (A deformed capsule or torus keeps the unit shape's normals, turned.)
+  const normal = shape.deform
+    ? toWorld.mul(vec4(normalGeometry.div(scale), 0)).xyz
+    : toWorld.mul(vec4(normalize(normalGeometry.div(scale)).div(scale), 0)).xyz;
   return { inputs, normal };
+}
+
+/**
+ * The position (in the object's space, as a material's `positionNode`) a deformed unit capsule
+ * or torus (`shape.deform`) is drawn at, so that `toWorld` (whose scale along the geometry's
+ * axes is the object's size) takes it to the renderer's: the capsule's caps moved to the ends
+ * of its straight part, the torus's ring and tube scaled each to its own radius. Null for every
+ * other shape (drawn as it is). `instanceMatrix`: an InstancedMesh's (three.js applies a
+ * `positionNode` after its instancing, so the instance's transform is applied here).
+ */
+export function studioDeformedPosition(shape: AnalyticShape, toWorld: any, instanceMatrix: any = null): any {
+  if (!shape.deform) return null;
+  const s = vec3(
+    length(toWorld.mul(vec4(1, 0, 0, 0)).xyz),
+    length(toWorld.mul(vec4(0, 1, 0, 0)).xyz),
+    length(toWorld.mul(vec4(0, 0, 1, 0)).xyz),
+  );
+  const p = positionGeometry;
+  let local: any;
+  if (shape.deform === 'capsule') {
+    const capY = p.y.clamp(-1, 1);
+    local = vec3(p.x.mul(s.x), p.y.sub(capY).mul(s.x).add(capY.mul(s.y)), p.z.mul(s.x)).div(s);
+  } else {
+    const ringDir = vec2(p.x, p.z).normalize();
+    const ringPoint = vec3(ringDir.x, 0, ringDir.y);
+    local = ringPoint
+      .mul(s.x)
+      .add(p.sub(ringPoint).mul(s.y.div(UNIT_TUBE)))
+      .div(s);
+  }
+  return instanceMatrix ? instanceMatrix.mul(vec4(local, 1)).xyz : local;
 }
 
 /**
@@ -114,7 +161,7 @@ export function studioGlassNode(
     shape.kind,
     mirrored,
     mirrored ? positionWorld.mul(upsideDown) : positionWorld,
-    mirrored ? normal : normalWorld,
+    mirrored || shape.deform ? normal : normalWorld,
     inputs,
     studio.sceneInputs,
     mirrored ? studio.mirrorViewInputs : studio.viewInputs,

@@ -137,7 +137,8 @@ const SHADE_FAR_SIZE = 256;
 /** Real caustics: this many rays of light each way (so its square in all). */
 const PHOTON_MAP_SIZE = 768;
 /** Up to this many objects, the round shapes are drawn with their fine meshes. */
-const FINE_UP_TO = 64;
+/** Up to this many objects, the fine shapes are drawn (more: the coarse ones). */
+export const FINE_UP_TO = 64;
 /** Above this many objects, the less visible passes are drawn more cheaply. */
 const MANY_OBJECTS = 3000;
 /** Frames the still view is averaged over before it is considered settled. */
@@ -1597,14 +1598,15 @@ export function createInstancedGlass(
         }
       });
     },
-    shapeGeometry: (kind: number, cut: string = 'round') => {
+    shapeGeometry: (kind: number, cut: string = 'round', coarse = false) => {
       const diamondCut = cut as DiamondCut;
-      const geometry = kind === KIND.diamond ? diamondGeometry(diamondCut) : fineBases[kind].clone();
+      const geometry = kind === KIND.diamond ? diamondGeometry(diamondCut) : (coarse ? bases : fineBases)[kind].clone();
       geometry.userData.glassShape = {
         kind,
         size: [1, 1, 1],
         axis: 'y',
         diamondPlanes: kind === KIND.diamond ? DIAMOND_CUTS[diamondCut].planes : undefined,
+        deform: kind === KIND.capsule ? 'capsule' : kind === KIND.torus ? 'torus' : undefined,
       };
       return geometry;
     },

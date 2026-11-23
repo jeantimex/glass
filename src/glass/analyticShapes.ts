@@ -17,6 +17,12 @@ export interface AnalyticShape {
   axis: 'y' | 'z';
   /** The diamond's facet planes (the cut), for KIND.diamond (default: the round brilliant). */
   diamondPlanes?: number[];
+  /**
+   * A unit capsule or torus that a scale must not stretch (studio mode): its caps, or its tube,
+   * keep their round section, as the renderer draws them. The scale along the geometry's axes
+   * is the object's size (capsule: radius, half length; torus: ring radius, tube radius).
+   */
+  deform?: 'capsule' | 'torus';
 }
 
 const FULL_TURN = Math.PI * 2;
