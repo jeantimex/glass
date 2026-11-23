@@ -15,6 +15,8 @@ export interface AnalyticShape {
    * 'z' when three.js builds it around z (the torus), which tsl/shapes.ts has around y.
    */
   axis: 'y' | 'z';
+  /** The diamond's facet planes (the cut), for KIND.diamond (default: the round brilliant). */
+  diamondPlanes?: number[];
 }
 
 const FULL_TURN = Math.PI * 2;

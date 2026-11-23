@@ -555,7 +555,10 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     // A three.js built-in solid is traced exactly from its parameters (when no volume is given).
     // Its size is per object, so this build is not shared with other objects.
     const explicitVolume = this.explicitVolume;
-    const shape = explicitVolume === null && this._exactShapes ? analyticShape(geometry) : null;
+    // In studio mode, a geometry may declare its solid (`userData.glassShape`: the studio's own
+    // shapes, from `studio.shapeGeometry`), traced by the renderer's formula or baked volume.
+    const declared = this._studio ? (geometry?.userData?.glassShape as AnalyticShape | undefined) : undefined;
+    const shape = declared ?? (explicitVolume === null && this._exactShapes ? analyticShape(geometry) : null);
     // Any other geometry gets its own volume, baked once ('auto'), unless a back-face map is given.
     const autoVolume =
       this._volume === 'auto' && shape === null && this._backfaceMap === null && geometry

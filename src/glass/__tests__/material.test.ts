@@ -207,6 +207,7 @@ describe('MeshGlassMaterial studio mode', () => {
       viewInputs: {},
       farScene: new THREE.Scene(),
       nearScene: new THREE.Scene(),
+      shapeGeometry: () => new THREE.BufferGeometry(),
     };
     const mat = new MeshGlassMaterial();
     const key0 = settingsPart(mat.customProgramCacheKey());

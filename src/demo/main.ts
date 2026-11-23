@@ -54,8 +54,15 @@ const standInGeometry = (kind: number, size: ArrayLike<number>): THREE.BufferGeo
   if (kind === KIND.octahedron) return new THREE.OctahedronGeometry(a);
   throw new Error('standardGlass: not a built-in solid');
 };
+/** Shapes that are no three.js built-in: the studio's own geometries (`studio.shapeGeometry`). */
+const STUDIO_KINDS: number[] = [KIND.prism, KIND.hexprism, KIND.suzanne, KIND.diamond, KIND.dragon, KIND.torusknot];
 const scalable = (kind: number) =>
-  kind === KIND.sphere || kind === KIND.box || kind === KIND.cylinder || kind === KIND.cone || kind === KIND.octahedron;
+  kind === KIND.sphere ||
+  kind === KIND.box ||
+  kind === KIND.cylinder ||
+  kind === KIND.cone ||
+  kind === KIND.octahedron ||
+  STUDIO_KINDS.includes(kind);
 
 async function main() {
   const canvas = document.getElementById('view') as HTMLCanvasElement;
@@ -889,6 +896,11 @@ async function main() {
     instanced.setOwnGlassHidden(on);
     if (!on) return;
     const material = new MeshGlassMaterial({ studio: instanced.studio });
+    /** A kind's geometry: at `size` for a built-in solid, the studio's own at unit size otherwise. */
+    const geometryOf = (kind: number, size: ArrayLike<number>) =>
+      STUDIO_KINDS.includes(kind)
+        ? instanced.studio.shapeGeometry(kind, settings.diamondCut)
+        : standInGeometry(kind, size);
     const position = new THREE.Vector3();
     const quat = new THREE.Quaternion();
     const scale = new THREE.Vector3();
@@ -904,8 +916,9 @@ async function main() {
     };
     if (glassObjects.count === 1) {
       // One object: a plain THREE.Mesh at its own size (its glass is the studio's own).
-      const mesh = new THREE.Mesh(standInGeometry(glassObjects.kind[0], glassObjects.size), material);
-      poseOf(0, false).decompose(mesh.position, mesh.quaternion, mesh.scale);
+      const kind = glassObjects.kind[0];
+      const mesh = new THREE.Mesh(geometryOf(kind, glassObjects.size), material);
+      poseOf(0, STUDIO_KINDS.includes(kind)).decompose(mesh.position, mesh.quaternion, mesh.scale);
       mesh.frustumCulled = false;
       standIns.push(mesh);
       (instanced.inNearHalf(0) ? instanced.studio.nearScene : instanced.studio.farScene).add(mesh);
@@ -924,7 +937,7 @@ async function main() {
       if (scalable(kind)) {
         // One InstancedMesh: each object's size in its instance matrix, its colour by
         // setColorAt, its own glass in the per-instance `glassVary` attribute.
-        const geometry = standInGeometry(kind, [1, 1, 1]);
+        const geometry = geometryOf(kind, [1, 1, 1]);
         const vary = new Float32Array(members.length * 3);
         const mesh = new THREE.InstancedMesh(geometry, material, members.length);
         members.forEach((i, k) => {
@@ -988,6 +1001,8 @@ async function main() {
       standardGlass?: boolean;
       /** How many objects (default 1), laid out flat on the floor as the count setting does. */
       count?: number;
+      /** Move every object this far along x (metres), after placing them and the camera. */
+      offset?: number;
     }): Promise<void> {
       view.shape = opts.shape;
       view.count = opts.count ?? 1;
@@ -1018,6 +1033,7 @@ async function main() {
         );
         orbit.update();
       }
+      if (opts.offset) for (let i = 0; i < glassObjects.count; i++) glassObjects.center[i * 3] += opts.offset;
       if (opts.standardGlass) {
         // A frame first, so the renderer has split the objects into its two halves.
         instanced.markChanged();

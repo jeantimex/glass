@@ -1539,6 +1539,17 @@ export function createInstancedGlass(
       /** The scenes the glass is drawn in (farther and nearer half; one object: either). */
       farScene,
       nearScene,
+      shapeGeometry: (kind: number, cut: string = 'round') => {
+        const diamondCut = cut as DiamondCut;
+        const geometry = kind === KIND.diamond ? diamondGeometry(diamondCut) : fineBases[kind].clone();
+        geometry.userData.glassShape = {
+          kind,
+          size: [1, 1, 1],
+          axis: 'y',
+          diamondPlanes: kind === KIND.diamond ? DIAMOND_CUTS[diamondCut].planes : undefined,
+        };
+        return geometry;
+      },
     },
     /** Hide this renderer's own glass (not its floor mirror image, shadows or caustics). */
     setOwnGlassHidden: (hidden: boolean) => {

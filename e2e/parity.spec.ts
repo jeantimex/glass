@@ -15,6 +15,13 @@ const SHAPES = [
   { name: 'Cone', slug: 'cone' },
   { name: 'Torus', slug: 'torus' },
   { name: 'Octahedron', slug: 'octahedron' },
+  { name: 'CMY cube', slug: 'cmy-cube' },
+  { name: 'Prism', slug: 'prism' },
+  { name: 'Hex prism', slug: 'hex-prism' },
+  { name: 'Diamond', slug: 'diamond' },
+  { name: 'Torus knot', slug: 'torus-knot' },
+  { name: 'Suzanne', slug: 'suzanne' },
+  { name: 'Dragon', slug: 'dragon' },
 ] as const;
 
 const LIGHTINGS = [
@@ -29,6 +36,9 @@ interface GlassTestHarness {
     hdri?: string;
     ground?: boolean;
     standardGlass?: boolean;
+    count?: number;
+    offset?: number;
+    settings?: Record<string, unknown>;
   }): Promise<void>;
 }
 
@@ -84,31 +94,42 @@ function compare(a: PNG, b: PNG): { share: number; max: number } {
   return { share: over / (a.width * a.height), max };
 }
 
+/** Shapes traced through a baked volume (their rays take many steps: see below). */
+const VOLUME_SHAPES = new Set<string>(['Torus knot', 'Suzanne', 'Dragon']);
+
+/** One settled render of the harness's scene. */
+async function shot(opts: Parameters<GlassTestHarness['setScene']>[0]): Promise<PNG> {
+  await page.evaluate((o) => (window as unknown as { __glassTest: GlassTestHarness }).__glassTest.setScene(o), opts);
+  return PNG.sync.read(await page.locator('#view').screenshot());
+}
+
 // Stricter than the baselines (whose tolerance suits images that differ run to run): with the
 // jitter sequence restarted, the renderer repeats itself exactly, so the standard mesh is held
 // to its render directly. Measured: at most 0.003% of pixels (about 14) differ by more than
-// 2/255, isolated pixels inside the glass (most likely floating-point rounding: the material
-// reaches the shape through matrices, the renderer through a quaternion).
+// 2/255 on the shapes traced by formula or facet planes (most likely floating-point rounding:
+// the material reaches the shape through matrices, the renderer through a quaternion).
+// Shapes traced through a baked volume amplify the last bits of where a ray starts: moving the
+// renderer's own object by a micrometre changes 0.05-1% of their pixels. Bit-exact output from
+// different (equivalent) arithmetic is not possible there, so they are held to that floor,
+// measured in the same run: the standard mesh may differ from the renderer no more than the
+// renderer differs from itself when the object moves 1 micrometre.
 for (const { name } of SHAPES) {
   test(`${name}: standard mesh and instanced renderer, pixel for pixel`, async () => {
     for (const lighting of LIGHTINGS) {
-      const shots: PNG[] = [];
-      for (const standardGlass of [false, true]) {
-        await page.evaluate(
-          ([shapeName, dark, standard]) =>
-            (window as unknown as { __glassTest: GlassTestHarness }).__glassTest.setScene({
-              shape: shapeName as string,
-              dark: dark as boolean,
-              hdri: 'none',
-              ground: true,
-              standardGlass: standard as boolean,
-            }),
-          [name, lighting.dark, standardGlass] as const,
-        );
-        shots.push(PNG.sync.read(await page.locator('#view').screenshot()));
+      const scene = { shape: name, dark: lighting.dark, hdri: 'none', ground: true };
+      const own = await shot({ ...scene, standardGlass: false });
+      const standard = await shot({ ...scene, standardGlass: true });
+      const { share, max } = compare(own, standard);
+      let limit = 0.0001;
+      if (VOLUME_SHAPES.has(name)) {
+        const moved = await shot({ ...scene, standardGlass: false, offset: 1e-6 });
+        limit = Math.max(limit, compare(own, moved).share);
       }
-      const { share } = compare(shots[0], shots[1]);
-      expect(share, `${name} ${lighting.name}`).toBeLessThan(0.0001);
+      console.log(
+        `parity ${name} ${lighting.name}: ${(share * 100).toFixed(4)}% over 2/255 ` +
+          `(limit ${(limit * 100).toFixed(4)}%), largest ${max}`,
+      );
+      expect.soft(share, `${name} ${lighting.name}`).toBeLessThan(limit);
     }
   });
 }
@@ -141,8 +162,26 @@ for (const { name } of SHAPES) {
           );
           shots.push(PNG.sync.read(await page.locator('#view').screenshot()));
         }
-        const { share } = compare(shots[0], shots[1]);
-        expect(share, `${name} x${count} ${lighting.name}`).toBeLessThan(0.0001);
+        const { share, max } = compare(shots[0], shots[1]);
+        let limit = 0.0001;
+        if (VOLUME_SHAPES.has(name)) {
+          const moved = await shot({
+            shape: name,
+            dark: lighting.dark,
+            hdri: 'none',
+            ground: true,
+            count,
+            settings: { colorize },
+            standardGlass: false,
+            offset: 1e-6,
+          });
+          limit = Math.max(limit, compare(shots[0], moved).share);
+        }
+        console.log(
+          `parity ${name} x${count} ${lighting.name}: ${(share * 100).toFixed(4)}% over 2/255 ` +
+            `(limit ${(limit * 100).toFixed(4)}%), largest ${max}`,
+        );
+        expect.soft(share, `${name} x${count} ${lighting.name}`).toBeLessThan(limit);
       }
     }
   });

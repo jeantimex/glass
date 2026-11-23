@@ -102,9 +102,15 @@ The migration is done when the demo, rebuilt on standard three.js meshes with
   per-instance `glassVary` attribute (the renderer's per-object IOR, dispersion and CMY);
   the renderer reports which half each object is drawn in (`inNearHalf`), and 9 and 16 of each
   solid (seeded layouts, random colours) match its render, at most 0.0023% of pixels over
-  2/255. Not covered yet: more than 64 objects (the renderer's coarse meshes). Next: the custom
-  meshes (volumes), the diamond, CMY and bevels, shadows and caustics from standard meshes,
-  then the studio drawn entirely from standard meshes.
+  2/255. Not covered yet: more than 64 objects (the renderer's coarse meshes). Every shape of
+  the demo is covered now: `studio.shapeGeometry(kind, cut)` gives the renderer's own geometry
+  for the shapes that are no three.js built-in (prisms, diamond cuts, Suzanne, dragon, torus
+  knot), declaring its solid in `userData.glassShape`; CMY and bevels come through the studio's
+  own inputs. Shapes traced by formula or facets match within 0.003% of pixels; the three
+  traced through baked volumes cannot be bit-exact (moving the renderer's own object by 1 µm
+  changes 0.05-1% of their pixels), and the test holds them to that floor, measured live (they
+  sit at 40-70% of it). Next: the floor mirror image, shadows and caustics drawn from standard
+  meshes, then the studio drawn entirely from standard meshes.
 
 ## Known physical limits
 

@@ -20,6 +20,11 @@ export interface GlassStudio {
   viewInputs: any;
   farScene: THREE.Scene;
   nearScene: THREE.Scene;
+  /**
+   * The renderer's own geometry for a shape kind (unit size, as finely divided as its close-ups;
+   * the diamond in `cut`), declaring its solid in `userData.glassShape`: scale it to size.
+   */
+  shapeGeometry: (kind: number, cut?: string) => THREE.BufferGeometry;
 }
 
 /**
@@ -64,5 +69,14 @@ export function studioGlassNode(
     tintOwn: tint,
     frame,
   };
-  return glassNode(shape.kind, false, positionWorld, normalWorld, inputs as any, studio.sceneInputs, studio.viewInputs);
+  return glassNode(
+    shape.kind,
+    false,
+    positionWorld,
+    normalWorld,
+    inputs as any,
+    studio.sceneInputs,
+    studio.viewInputs,
+    shape.diamondPlanes,
+  );
 }
