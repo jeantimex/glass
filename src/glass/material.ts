@@ -23,6 +23,7 @@ const {
   Fn,
   If,
   batchColor,
+  buffer,
   cameraPosition,
   cameraProjectionMatrix,
   cameraViewMatrix,
@@ -31,9 +32,14 @@ const {
   dot,
   float,
   instanceColor,
+  instancedBufferAttribute,
+  instancedDynamicBufferAttribute,
+  instanceIndex,
   int,
+  inverse,
   length,
   log,
+  mat4,
   materialOpacity,
   max,
   mix,
@@ -43,6 +49,7 @@ const {
   normalWorld,
   positionLocal,
   positionWorld,
+  referenceAttribute,
   reflect,
   screenUV,
   select,
@@ -53,6 +60,7 @@ const {
   vec3,
   vec4,
   vertexColor,
+  vertexStage,
   viewportOpaqueMipTexture,
 } = TSL as N;
 
@@ -102,8 +110,8 @@ export interface MeshGlassMaterialParameters {
  * negative inside, covering +-1.1 volume units. Volume units are the mesh's local coordinates
  * moved by -`center` and divided by `halfWidth`. Several volumes can be stacked along z in one
  * texture (`layer` of `layerCount`). `createGlassVolume` / `bakeGlassVolumeAsync`
- * (src/glass/volume.ts) bake one for any geometry. Supported on plain meshes with uniform
- * scale (not instanced meshes).
+ * (src/glass/volume.ts) bake one for any geometry. Works on `Mesh` and `InstancedMesh` (each
+ * instance's matrix is followed) with uniform scale.
  */
 export interface GlassVolume {
   texture: THREE.Data3DTexture;
@@ -115,6 +123,41 @@ export interface GlassVolume {
   center?: [number, number, number];
   /** Mesh-local units per volume unit (default 1: the mesh is already unit size). */
   halfWidth?: number;
+}
+
+/** Vertex buffers a render pipeline may bind (WebGPU's guaranteed minimum). */
+const MAX_VERTEX_BUFFERS = 8;
+
+/**
+ * This instance's matrix (geometry space to the object's space) in the fragment stage, read
+ * the way three.js reads it for instancing (r187 `Instance.js`): bound per object when the
+ * vertex buffers allow, else from a uniform buffer or the instance attribute directly. Passed
+ * from the vertex stage as its four columns (WGSL cannot pass matrices between stages).
+ */
+function instanceMatrixNode(builder: N, mesh: THREE.InstancedMesh): N {
+  const matrices = mesh.instanceMatrix;
+  const count = Math.max(matrices.count, 1);
+  const instanceBuffers = 1 + (mesh.instanceColor !== null ? 1 : 0) + (builder.needsPreviousData?.() ? 1 : 0);
+  let matrix: N;
+  if (
+    builder.renderer?.isRenderer === true &&
+    Object.keys(mesh.geometry.attributes).length + instanceBuffers <= MAX_VERTEX_BUFFERS
+  ) {
+    matrix = referenceAttribute('instanceMatrix', 'mat4');
+  } else if (count * 16 * 4 <= builder.getUniformBufferLimit()) {
+    matrix = buffer(matrices.array, 'mat4', count).element(instanceIndex);
+  } else {
+    const attributeFn =
+      matrices.usage === THREE.DynamicDrawUsage ? instancedDynamicBufferAttribute : instancedBufferAttribute;
+    matrix = mat4(
+      ...[0, 4, 8, 12].map((offset) =>
+        attributeFn(new THREE.InterleavedBufferAttribute(matrices as unknown as THREE.InterleavedBuffer, 4, offset)),
+      ),
+    );
+  }
+  const column = (k: number) =>
+    vertexStage(matrix.mul(vec4(k === 0 ? 1 : 0, k === 1 ? 1 : 0, k === 2 ? 1 : 0, k === 3 ? 1 : 0)));
+  return mat4(column(0), column(1), column(2), column(3));
 }
 
 /** Shared 1x1 white fallback texture so optional texture nodes bind cleanly without per-instance leaks. */
@@ -337,7 +380,10 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     const hasVertexColor = this.vertexColors === true && Boolean(geometry?.hasAttribute?.('color'));
     const hasInstanceColor = Boolean(object?.instanceColor);
     const hasBatchColor = Boolean(object?.isBatchedMesh && object?._colorsTexture);
-    if (!hasVertexColor && !hasInstanceColor && !hasBatchColor) {
+    // Exits that live in the geometry's own space (a baked volume) must follow each instance's
+    // matrix as well as the object's.
+    const instanced = Boolean(object?.isInstancedMesh && object?.instanceMatrix) && this._volume !== null;
+    if (!hasVertexColor && !hasInstanceColor && !hasBatchColor && !instanced) {
       super.setupDiffuseColor(builder);
       return;
     }
@@ -345,7 +391,7 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     if (hasVertexColor) tint = tint.mul(vertexColor().rgb);
     if (hasInstanceColor) tint = tint.mul(instanceColor);
     if (hasBatchColor) tint = tint.mul(batchColor);
-    diffuseColor.assign(this.buildColorNode(tint));
+    diffuseColor.assign(this.buildColorNode(tint, instanced ? instanceMatrixNode(builder, object) : null));
     const opacityNode = this.opacityNode ? float(this.opacityNode) : materialOpacity;
     diffuseColor.a.assign(diffuseColor.a.mul(opacityNode));
   }
@@ -355,7 +401,7 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
    * exits from the baked volume, the back-face map or the local-sphere estimate, and what
    * leaving rays see from the environment and (with transmission) the scene behind.
    */
-  private buildColorNode(tintNode: N = uniform(this.color)): N {
+  private buildColorNode(tintNode: N = uniform(this.color), instanceMatrix: N = null): N {
     const uTint = tintNode;
     const { env } = makeStudioEnv(this.uRoughness, {
       envTexNode: this.envTexNode,
@@ -435,15 +481,22 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
         const [cx, cy, cz] = volume.center ?? [0, 0, 0];
         const volumeCenter = vec3(cx, cy, cz);
         const halfWidth = float(volume.halfWidth ?? 1);
-        const worldScale = length(modelWorldMatrix[0].xyz).toVar();
+        // Geometry space to world: the object's matrix, times the instance's on an InstancedMesh.
+        const toWorld = instanceMatrix ? modelWorldMatrix.mul(instanceMatrix).toVar() : modelWorldMatrix;
+        const toGeometry = instanceMatrix
+          ? inverse(instanceMatrix).mul(modelWorldMatrixInverse).toVar()
+          : modelWorldMatrixInverse;
+        const worldScale = instanceMatrix
+          ? length(toWorld.mul(vec4(1, 0, 0, 0)).xyz).toVar()
+          : length(modelWorldMatrix[0].xyz).toVar();
         exit = (pos: N, dir: N) => {
-          const localPos = modelWorldMatrixInverse.mul(vec4(pos, 1)).xyz;
-          const localDir = normalize(modelWorldMatrixInverse.mul(vec4(dir, 0)).xyz);
+          const localPos = toGeometry.mul(vec4(pos, 1)).xyz;
+          const localDir = normalize(toGeometry.mul(vec4(dir, 0)).xyz);
           const hit = sdf.exit(localPos.sub(volumeCenter).div(halfWidth), localDir, float(1));
           const hitLocal = hit.pos.mul(halfWidth).add(volumeCenter);
           return {
-            pos: modelWorldMatrix.mul(vec4(hitLocal, 1)).xyz.toVar(),
-            nrm: normalize(modelWorldMatrix.mul(vec4(hit.nrm, 0)).xyz),
+            pos: toWorld.mul(vec4(hitLocal, 1)).xyz.toVar(),
+            nrm: normalize(toWorld.mul(vec4(hit.nrm, 0)).xyz),
             t: hit.t.mul(halfWidth).mul(worldScale),
           };
         };

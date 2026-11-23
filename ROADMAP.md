@@ -18,19 +18,20 @@ scene.add(new THREE.InstancedMesh(anyGeometry, glass, 100));
 shades with the same tracer as the instanced renderer (`src/glass/tsl/trace.ts`). Compared with
 `createInstancedGlass()`, it still lacks:
 
-| Feature                     | `createInstancedGlass()`                  | `MeshGlassMaterial` today                              |
-| :-------------------------- | :---------------------------------------- | :----------------------------------------------------- |
-| Exact internal light paths  | Analytic exits for its 13 built-in shapes | Only with a baked `volume`, and not on `InstancedMesh` |
-| Glass seen through glass    | Yes (screen space)                        | No: transmission sees opaque objects only              |
-| Caustics on the floor       | Yes (photon traced, per wavelength band)  | No (a scene-level effect, like shadows)                |
-| Anti-aliasing               | Built in (TAA)                            | None: up to the app's render pipeline                  |
-| Contact shadows, bloom, DoF | Built in                                  | Up to the app's post-processing                        |
+| Feature                     | `createInstancedGlass()`                  | `MeshGlassMaterial` today                                  |
+| :-------------------------- | :---------------------------------------- | :--------------------------------------------------------- |
+| Exact internal light paths  | Analytic exits for its 13 built-in shapes | Only with a baked `volume` (on `Mesh` and `InstancedMesh`) |
+| Glass seen through glass    | Yes (screen space)                        | No: transmission sees opaque objects only                  |
+| Caustics on the floor       | Yes (photon traced, per wavelength band)  | No (a scene-level effect, like shadows)                    |
+| Anti-aliasing               | Built in (TAA)                            | None: up to the app's render pipeline                      |
+| Contact shadows, bloom, DoF | Built in                                  | Up to the app's post-processing                            |
 
 ### Plan
 
 1. **Exact exits on any mesh, with no setup.**
-   - Instancing for `volume` exits: map rays through each instance's matrix as well as the
-     object's world matrix (what blocks `InstancedMesh` today).
+   - ✅ Instancing for `volume` exits: rays follow each instance's matrix as well as the
+     object's world matrix (`e2e/instancing.spec.ts` checks an `InstancedMesh` renders exactly
+     like the same objects as separate meshes).
    - `volume: 'auto'` (the default): bake each geometry once in a worker
      (`bakeGlassVolumeAsync`) and cache the result per geometry. Until it is ready the mesh
      renders with the thickness estimate, then switches to exact exits. This geometry→volume
@@ -70,6 +71,7 @@ needed for this goal.
 - `e2e/settings.spec.ts`: five representative shapes with no and strong dispersion, low and
   high IOR, light and heavy frost, tinted glass, real caustics off, and imperfections.
 - `e2e/mesh.spec.ts`: `MeshGlassMaterial` on plain meshes (`mesh.html`).
+- `e2e/instancing.spec.ts`: `MeshGlassMaterial` on an `InstancedMesh` matches separate meshes (`instancing.html`).
 
 Run `npm run test:screenshots`; after an intended visual change, regenerate with
 `npm run test:screenshots:update` and look through the new images before committing.
