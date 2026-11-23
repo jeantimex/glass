@@ -62,6 +62,8 @@ async function lightBalance(page: Page, query: string): Promise<number> {
       __caustics: { target: { width: number; height: number }; photonMap: unknown };
       __renderer: { readRenderTargetPixelsAsync: (...a: unknown[]) => Promise<ArrayLike<number>> };
     };
+    // (Defined here: this function runs in the page, which cannot see the test file's scope.)
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const half = (h: number) => {
       const e = (h >> 10) & 31;
       const m = h & 1023;
