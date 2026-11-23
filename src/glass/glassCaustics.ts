@@ -104,7 +104,8 @@ export class GlassCaustics {
   /** The lamp's light reaching each point of the floor, in the light's view (rgb, 1: unchanged). */
   readonly target: THREE.RenderTarget;
   private readonly resolution: number;
-  private readonly photonMap: THREE.RenderTarget;
+  /** Where each of the lamp's rays lands (alpha 1 where glass is in the way); read by tests. */
+  readonly photonMap: THREE.RenderTarget;
   private readonly openMap: THREE.RenderTarget;
   private readonly landedMap: THREE.RenderTarget;
   private readonly gathered: THREE.RenderTarget;
@@ -129,6 +130,7 @@ export class GlassCaustics {
   private readonly proxies = new Map<THREE.Mesh, { proxy: THREE.Mesh; material: THREE.NodeMaterial; key: string }>();
   private lastState = '';
   private originalColorNode: N = null;
+  private attached = false;
 
   constructor(options: GlassCausticsOptions) {
     this.light = options.light;
@@ -177,7 +179,8 @@ export class GlassCaustics {
 
   /** Scale the light's colour by `lightAt()`, so every lit material in the scene gets the caustics. */
   attach(): void {
-    if (this.originalColorNode !== null) return;
+    if (this.attached) return;
+    this.attached = true;
     const light = this.light as THREE.DirectionalLight & { colorNode?: N };
     this.originalColorNode = light.colorNode ?? null;
     const lightColor = uniform(light.color).mul(uniform(light.intensity).onObjectUpdate(() => light.intensity));
@@ -186,6 +189,8 @@ export class GlassCaustics {
 
   /** Undo `attach()`. */
   detach(): void {
+    if (!this.attached) return;
+    this.attached = false;
     const light = this.light as THREE.DirectionalLight & { colorNode?: N };
     light.colorNode = this.originalColorNode ?? undefined;
     this.originalColorNode = null;

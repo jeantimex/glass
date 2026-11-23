@@ -47,12 +47,12 @@ shades with the same tracer as the instanced renderer (`src/glass/tsl/trace.ts`)
    `spectralSamples` sets how many per frame. `e2e/temporal.spec.ts` checks TRAA's average gets
    closer to a 64-wavelength reference than the same number of fixed wavelengths. `mesh.html?taa=1`
    shows it.
-3. 🟡 **Caustics as an add-on.** `GlassCaustics` (`src/glass/glassCaustics.ts`) traces a
-   `DirectionalLight` through every `MeshGlassMaterial` mesh (same exits as the material, per
-   wavelength band) onto a floor plane and scales the light's colour there (`attach()`), so any
-   lit floor material gets caustics with plain `renderer.render()`. `e2e/caustics.spec.ts`
-   checks glass at IOR 1 leaves the floor unchanged. Still to do: unit tests, a comparison with
-   the instanced renderer's caustics, `InstancedMesh` coverage in the tests, and docs.
+3. ✅ **Caustics as an add-on.** `GlassCaustics` (`src/glass/glassCaustics.ts`) traces a
+   `DirectionalLight` through every `MeshGlassMaterial` mesh, on `Mesh` and `InstancedMesh` (same
+   exits as the material, per wavelength band), onto a floor plane, and folds the result into the
+   light (`attach()`), so any lit floor material gets caustics with plain `renderer.render()`.
+   `e2e/caustics.spec.ts` checks energy: glass at IOR 1 leaves the floor unchanged, a glass ball
+   passes what Fresnel predicts (balance -0.196 against -0.170 exact), and no light is made.
 4. **Glass seen through glass as an add-on.** A pass, like `GlassBackfacePass`, that captures
    the glass layers so glass refracts the glass behind it.
 
@@ -95,6 +95,7 @@ needed for this goal.
 - `e2e/mesh.spec.ts`: `MeshGlassMaterial` on plain meshes (`mesh.html`).
 - `e2e/instancing.spec.ts`: `MeshGlassMaterial` on an `InstancedMesh` matches separate meshes (`instancing.html`).
 - `e2e/temporal.spec.ts`: `temporal` wavelengths under three.js TRAA converge closer to a continuous spectrum than fixed ones (`temporal-test.html`).
+- `e2e/caustics.spec.ts`: `GlassCaustics` conserves light (IOR 1 unchanged, a ball matches Fresnel), casts caustics, and matches on `InstancedMesh` (`caustics-test.html`).
 - `e2e/auto-volume.spec.ts`: automatic volumes render exactly like explicit ones, on `Mesh` and `InstancedMesh` (`auto-test.html`).
 - `e2e/builtin-shapes.spec.ts`: built-in solids traced exactly agree with volumes baked from the same geometries, and on an `InstancedMesh` match a `Mesh` (`shapes-test.html`).
 

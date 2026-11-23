@@ -5,6 +5,9 @@
 //   ?ior=1.0001   glass that bends nothing: the caustics must leave the floor as it is
 //   ?glass=0      no glass objects drawn (they still feed GlassCaustics)
 //   ?dispersion=N dispersion of the glass (default 1)
+//   ?instanced=1  each piece as a one-instance InstancedMesh
+//   ?only=N      only piece N (0 sphere, 1 box, 2 teapot)
+//   ?debug=1      expose the caustics and renderer on window (for read-back tests)
 import * as THREE from 'three/webgpu';
 import { TeapotGeometry } from 'three/addons/geometries/TeapotGeometry.js';
 import { autoGlassVolumesSettled, GlassCaustics, MeshGlassMaterial } from '../glass';
@@ -14,6 +17,7 @@ const withCaustics = query.get('caustics') !== '0';
 const ior = Number(query.get('ior') ?? 1.52);
 const dispersion = Number(query.get('dispersion') ?? 1);
 const drawGlass = query.get('glass') !== '0';
+const instanced = query.get('instanced') === '1';
 
 /** The glass of every piece. */
 const glass = (color = 0xffffff) => new MeshGlassMaterial({ ior, dispersion, color, thickness: 0.8 });
@@ -44,10 +48,22 @@ async function main() {
     [new THREE.BoxGeometry(0.7, 0.7, 0.7), 0, 0.35, 0.5],
     [new TeapotGeometry(0.35, 8), 1.4, 0.35 * 0.78, -0.4],
   ];
-  for (const [geometry, x, y, turn] of pieces) {
-    const mesh = new THREE.Mesh(geometry, glass());
-    mesh.position.set(x, y, 0);
-    mesh.rotation.y = turn;
+  const only = query.get('only');
+  for (const [geometry, x, y, turn] of pieces.filter((_, i) => only === null || String(i) === only)) {
+    const matrix = new THREE.Matrix4().compose(
+      new THREE.Vector3(x, y, 0),
+      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), turn),
+      new THREE.Vector3(1, 1, 1),
+    );
+    let mesh: THREE.Mesh;
+    if (instanced) {
+      const one = new THREE.InstancedMesh(geometry, glass(), 1);
+      one.setMatrixAt(0, matrix);
+      mesh = one;
+    } else {
+      mesh = new THREE.Mesh(geometry, glass());
+      mesh.applyMatrix4(matrix);
+    }
     if (!drawGlass) mesh.layers.set(1); // still in the scene (for GlassCaustics), not drawn
     scene.add(mesh);
   }
@@ -61,6 +77,7 @@ async function main() {
 
   const caustics = withCaustics ? new GlassCaustics({ light: sun, extent: 3, softness: 0.04 }) : null;
   caustics?.attach();
+  if (query.get('debug') === '1') Object.assign(window, { __caustics: caustics, __renderer: renderer });
 
   let frames = 0;
   let settled = false;

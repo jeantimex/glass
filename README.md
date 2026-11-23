@@ -142,7 +142,7 @@ const cmyCube = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), [cyan, cyan, yell
 scene.add(cmyCube);
 ```
 
-For exact multi-bounce subtractive dichroic filtering and colored floor caustics, use `KIND.box` with `cmy` / `cmyOrder` in [`createInstancedGlass`](#9-high-scale-studio-caustics-renderer-createinstancedglass):
+For exact multi-bounce subtractive dichroic filtering and colored floor caustics, use `KIND.box` with `cmy` / `cmyOrder` in [`createInstancedGlass`](#10-high-scale-studio-caustics-renderer-createinstancedglass):
 
 ```ts
 instanced.render(glass, { ...lighting, cmy: 1, cmyOrder: 'cym', bevel: 0.02 }, false);
@@ -185,7 +185,24 @@ pipeline.outputNode = traa(
 renderer.setAnimationLoop(() => pipeline.render());
 ```
 
-### 8. Standard Three.js `InstancedMesh` (with Per-Instance Colors)
+### 8. Caustics in Plain three.js Scenes (`GlassCaustics`)
+
+`GlassCaustics` traces a `DirectionalLight` through every `MeshGlassMaterial` mesh (including `InstancedMesh`) onto a floor plane, per wavelength band, with the same exits as the material, and folds the result into the light, so any lit floor material shows the shadows and caustics:
+
+```ts
+import { GlassCaustics } from './src/glass';
+
+const caustics = new GlassCaustics({ light: sun, floorY: 0, extent: 3, softness: 0.05 });
+caustics.attach(); // the light's colour now includes the caustics on the floor
+renderer.setAnimationLoop(() => {
+  caustics.update(renderer, scene); // redraws only when the glass, the light or the settings change
+  renderer.render(scene, camera);
+});
+```
+
+The floor is one horizontal plane; light through several glass objects in a row follows the first only. `caustics.lightAt()` gives the same lookup for a custom floor material.
+
+### 9. Standard Three.js `InstancedMesh` (with Per-Instance Colors)
 
 `MeshGlassMaterial` works natively with `THREE.InstancedMesh` and `THREE.BatchedMesh`. Per-instance colors from `setColorAt()` are routed directly into Beer–Lambert volumetric absorption so outer Fresnel highlights stay crisp white:
 
@@ -197,7 +214,7 @@ spheres.setColorAt(1, new THREE.Color('#66ccff'));
 scene.add(spheres);
 ```
 
-### 9. High-Scale Studio Caustics Renderer (`createInstancedGlass`)
+### 10. High-Scale Studio Caustics Renderer (`createInstancedGlass`)
 
 For scenes with hundreds or thousands of glass objects, real caustics, floor reflections, and contact shadows, pass a `MeshGlassMaterial` directly to `instanced.render()`:
 

@@ -42,3 +42,59 @@ test('real glass casts shadows and caustics on the floor', async ({ page }) => {
   expect(differingShare(caustics, none, 6)).toBeGreaterThan(0.01);
   expect(await render(page, '')).toMatchSnapshot('glass-caustics.png');
 });
+
+test('the same pieces as InstancedMesh objects cast the same caustics', async ({ page }) => {
+  const meshes = await render(page, 'glass=0');
+  const instanced = await render(page, 'glass=0&instanced=1');
+  expect(differingShare(meshes, instanced, 6)).toBeLessThan(0.0005);
+});
+
+/**
+ * Energy balance read back from the light map itself (light-space, 1 = the lamp's light
+ * unchanged): over the whole map, clear glass can only lose light (Fresnel reflection sends
+ * some back up, total internal reflection traps a little), never make it. Returns the mean of
+ * (map - 1) per texel the glass covers, as seen from the lamp.
+ */
+async function lightBalance(page: Page, query: string): Promise<number> {
+  await render(page, `${query}&debug=1`);
+  return page.evaluate(async () => {
+    const w = window as unknown as {
+      __caustics: { target: { width: number; height: number }; photonMap: unknown };
+      __renderer: { readRenderTargetPixelsAsync: (...a: unknown[]) => Promise<ArrayLike<number>> };
+    };
+    const half = (h: number) => {
+      const e = (h >> 10) & 31;
+      const m = h & 1023;
+      const v = e === 0 ? 2 ** -14 * (m / 1024) : 2 ** (e - 15) * (1 + m / 1024);
+      return h & 0x8000 ? -v : v;
+    };
+    const read = async (target: unknown) => {
+      const t = target as { width: number; height: number };
+      const raw = await w.__renderer.readRenderTargetPixelsAsync(target, 0, 0, t.width, t.height);
+      return raw instanceof Uint16Array ? Array.from(raw, half) : Array.from(raw);
+    };
+    const light = await read(w.__caustics.target);
+    const photons = await read(w.__caustics.photonMap);
+    let excess = 0;
+    let covered = 0;
+    for (let i = 0; i < light.length; i += 4) {
+      excess += (light[i] + light[i + 1] + light[i + 2]) / 3 - 1;
+      if (photons[i + 3] > 0.5) covered++;
+    }
+    return excess / Math.max(covered, 1);
+  });
+}
+
+test('light is conserved: none made, and a glass ball passes what Fresnel predicts', async ({ page }) => {
+  // IOR 1: nothing reflected or bent, so the light over the map is unchanged.
+  expect(Math.abs(await lightBalance(page, 'ior=1.0001&dispersion=0&glass=0'))).toBeLessThan(0.01);
+  // A crown-glass ball (n = 1.52) under parallel light: averaged over its disc, light refracted
+  // in and straight out keeps 83.0% (exact Fresnel at both surfaces; the photon pass does not
+  // follow light reflected inside), so the balance is -0.170. Measured -0.196 (texel rounding
+  // at the disc's edge).
+  const ball = await lightBalance(page, 'dispersion=0&glass=0&only=0');
+  expect(Math.abs(ball - -0.17)).toBeLessThan(0.05);
+  // All three pieces together: light lost (more through the box and teapot, whose sides send
+  // light up by total internal reflection off their bases), never made.
+  expect(await lightBalance(page, 'dispersion=0&glass=0')).toBeLessThan(-0.02);
+});
