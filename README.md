@@ -142,7 +142,7 @@ const cmyCube = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), [cyan, cyan, yell
 scene.add(cmyCube);
 ```
 
-For exact multi-bounce subtractive dichroic filtering and colored floor caustics, use `KIND.box` with `cmy` / `cmyOrder` in [`createInstancedGlass`](#8-high-scale-studio-caustics-renderer-createinstancedglass):
+For exact multi-bounce subtractive dichroic filtering and colored floor caustics, use `KIND.box` with `cmy` / `cmyOrder` in [`createInstancedGlass`](#9-high-scale-studio-caustics-renderer-createinstancedglass):
 
 ```ts
 instanced.render(glass, { ...lighting, cmy: 1, cmyOrder: 'cym', bevel: 0.02 }, false);
@@ -163,7 +163,29 @@ scene.add(new THREE.Mesh(geometry, new MeshGlassMaterial({ ior: 1.52, dispersion
 
 `bakeGlassVolume(positions, indices, options)` (`src/glass/bake.ts`) is the same pipeline as a plain function, dependency-free, for build scripts in Node (`scripts/bake-suzanne-sdf.ts` uses it).
 
-### 7. Standard Three.js `InstancedMesh` (with Per-Instance Colors)
+### 7. With three.js TRAA (`temporal`)
+
+`MeshGlassMaterial` pairs with three.js's temporal anti-aliasing: with `temporal: true` the wavelengths move every frame, so TRAA averages them into smooth, continuous dispersion (and anti-aliases edges):
+
+```ts
+import { traa } from 'three/addons/tsl/display/TRAANode.js';
+import { mrt, output, pass, velocity } from 'three/tsl';
+
+const glass = new MeshGlassMaterial({ ior: 1.52, dispersion: 1, transmission: 1, temporal: true });
+const renderer = new THREE.WebGPURenderer({ antialias: false }); // TRAA needs MSAA off
+const pipeline = new THREE.RenderPipeline(renderer);
+const scenePass = pass(scene, camera);
+scenePass.setMRT(mrt({ output, velocity }));
+pipeline.outputNode = traa(
+  scenePass.getTextureNode('output'),
+  scenePass.getTextureNode('depth'),
+  scenePass.getTextureNode('velocity'),
+  camera,
+);
+renderer.setAnimationLoop(() => pipeline.render());
+```
+
+### 8. Standard Three.js `InstancedMesh` (with Per-Instance Colors)
 
 `MeshGlassMaterial` works natively with `THREE.InstancedMesh` and `THREE.BatchedMesh`. Per-instance colors from `setColorAt()` are routed directly into Beer–Lambert volumetric absorption so outer Fresnel highlights stay crisp white:
 
@@ -175,7 +197,7 @@ spheres.setColorAt(1, new THREE.Color('#66ccff'));
 scene.add(spheres);
 ```
 
-### 8. High-Scale Studio Caustics Renderer (`createInstancedGlass`)
+### 9. High-Scale Studio Caustics Renderer (`createInstancedGlass`)
 
 For scenes with hundreds or thousands of glass objects, real caustics, floor reflections, and contact shadows, pass a `MeshGlassMaterial` directly to `instanced.render()`:
 
@@ -221,6 +243,8 @@ Extends `THREE.MeshBasicNodeMaterial`.
 | `bounces`         | `number`                        | `6`        | Internal events followed per ray (`4` by default with a `volume`).                                                                                                                                                      |
 | `imperfections`   | `number`                        | `0`        | Faint surface waviness (`0` perfect glass, `1` clearly hand-made).                                                                                                                                                      |
 | `exactShapes`     | `boolean`                       | `true`     | Trace three.js built-in solids (sphere, box, cylinder, cone, capsule, torus, octahedron) exactly from their geometry parameters, on `Mesh` and `InstancedMesh`.                                                         |
+| `temporal`        | `boolean`                       | `false`    | For renders that average frames (three.js TRAA): the wavelengths move every frame, so the average is a continuous spectrum. Off: fixed, evenly spaced wavelengths.                                                      |
+| `spectralSamples` | `number`                        | `0`        | Wavelengths per pixel and frame (`0`: as many as the dispersion needs).                                                                                                                                                 |
 
 #### Methods
 

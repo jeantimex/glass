@@ -37,7 +37,11 @@ describe('automatic glass volumes (autoVolume.ts)', { timeout: 30_000 }, () => {
     keys.add(mat.customProgramCacheKey());
     mat.volume = null;
     keys.add(mat.customProgramCacheKey());
-    expect(keys.size).toBe(4);
+    mat.temporal = true;
+    keys.add(mat.customProgramCacheKey());
+    mat.spectralSamples = 16;
+    keys.add(mat.customProgramCacheKey());
+    expect(keys.size).toBe(6);
   });
 
   it("defaults MeshGlassMaterial to 'auto', which null turns off", () => {

@@ -34,6 +34,8 @@ const {
   diffuseColor,
   dot,
   float,
+  fract,
+  frameId,
   instanceColor,
   instancedBufferAttribute,
   instancedDynamicBufferAttribute,
@@ -116,6 +118,20 @@ export interface MeshGlassMaterialParameters {
    * the geometry's parameters, with no `volume` or estimate. A `volume` takes precedence.
    */
   exactShapes?: boolean;
+  /**
+   * For renders that average frames, such as three.js's TRAA (`traa()` in
+   * `three/addons/tsl/display/TRAANode.js`): each pixel's wavelengths move on every frame, so
+   * the average is a continuous spectrum (smooth dispersion, no banding) for fewer samples per
+   * frame. Leave it off (the default) when each frame is shown on its own: the wavelengths are
+   * then fixed and evenly spaced. Default false.
+   */
+  temporal?: boolean;
+  /**
+   * Wavelengths traced per pixel and frame when there is dispersion (default 0: as many as the
+   * dispersion needs, 6 to 12 per frame, or 6 to 24 fixed without `temporal`). Higher is
+   * smoother and slower.
+   */
+  spectralSamples?: number;
 }
 
 /**
@@ -213,6 +229,8 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
   /** Automatic volume bakes finished for this material's geometries (a rebuild for each). */
   private _autoVolumesReady = 0;
   private _exactShapes = true;
+  private _temporal = false;
+  private _spectralSamples = 0;
 
   private readonly uIor = uniform(1.52);
   private readonly uDispersion = uniform(0.5);
@@ -252,6 +270,8 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
 
     this._volume = params.volume === undefined ? 'auto' : params.volume;
     this._exactShapes = params.exactShapes ?? true;
+    this._temporal = params.temporal ?? false;
+    this._spectralSamples = Math.max(0, Math.round(params.spectralSamples ?? 0));
     // Baked-volume meshes default to 4 events (as in the instanced renderer): their folded
     // surfaces scatter deeper bounces chaotically from pixel to pixel.
     this._bouncesSet = params.bounces !== undefined;
@@ -364,7 +384,8 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     const volumeKind = this._volume === 'auto' ? 'auto' : this._volume === null ? 'none' : 'given';
     return (
       super.customProgramCacheKey() +
-      `|glass:${this._exactShapes ? 1 : 0}${this._bouncesSet ? 1 : 0}:${volumeKind}:${this._autoVolumesReady}`
+      `|glass:${this._exactShapes ? 1 : 0}${this._bouncesSet ? 1 : 0}${this._temporal ? 1 : 0}:` +
+      `${this._spectralSamples}:${volumeKind}:${this._autoVolumesReady}`
     );
   }
 
@@ -380,6 +401,33 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
   set exactShapes(v: boolean) {
     if (v === this._exactShapes) return;
     this._exactShapes = v;
+    this.needsUpdate = true;
+  }
+
+  /** Wavelengths move on every frame, for renders that average frames such as TRAA (rebuilds the shader). */
+  get temporal(): boolean {
+    return this._temporal;
+  }
+  set temporal(v: boolean) {
+    if (v === this._temporal) return;
+    this._temporal = v;
+    if (this.uBounces) this.rebuild();
+  }
+
+  /** Wavelengths per pixel and frame (0: as many as the dispersion needs; rebuilds the shader). */
+  get spectralSamples(): number {
+    return this._spectralSamples;
+  }
+  set spectralSamples(v: number) {
+    const samples = Math.max(0, Math.round(v));
+    if (samples === this._spectralSamples) return;
+    this._spectralSamples = samples;
+    if (this.uBounces) this.rebuild();
+  }
+
+  /** Rebuild the default shader and ask three.js to rebuild every object using this material. */
+  private rebuild(): void {
+    this.colorNode = this.buildColorNode();
     this.needsUpdate = true;
   }
 
@@ -421,6 +469,8 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
       backfaceMap: this._backfaceMap,
       volume: this._volume,
       exactShapes: this._exactShapes,
+      temporal: this._temporal,
+      spectralSamples: this._spectralSamples,
       bounces: this.bounces,
       imperfections: this.imperfections,
     });
@@ -550,12 +600,20 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
       const dispersionSpread = this.uDispersion.div(12).toVar();
       // A plain three.js render shows each frame on its own (no frames averaged), so the
       // wavelengths are evenly spaced and fixed rather than jittered per pixel (which would be
-      // static grain), and twice as many are taken to keep the fringes smooth.
-      const bandCount = select(
-        dispersionSpread.greaterThan(0).and(uRoughness.lessThan(0.35)),
-        spectralSampleCount(dispersionSpread.mul(2), false),
-        int(1),
-      ).toVar();
+      // static grain), and twice as many are taken to keep the fringes smooth. With `temporal`
+      // (frames averaged, e.g. by TRAA) they move on every frame instead, so the average is a
+      // continuous spectrum for the usual number per frame. They move by the same amount for
+      // every pixel: per-pixel offsets leave grain within each frame that TRAA's neighbourhood
+      // clamping keeps from averaging out (worse than fixed wavelengths on curved glass).
+      const temporal = this._temporal;
+      const samples =
+        this._spectralSamples > 0
+          ? int(this._spectralSamples)
+          : spectralSampleCount(temporal ? dispersionSpread : dispersionSpread.mul(2), false);
+      const bandCount = select(dispersionSpread.greaterThan(0).and(uRoughness.lessThan(0.35)), samples, int(1)).toVar();
+      const wavelengthJitter = temporal
+        ? fract(float(0.5).add(float(frameId).mul(0.6180339887))).toVar() // golden-ratio steps
+        : float(0.5);
       // Beer-Lambert: `color` is what survives `thickness` of glass.
       const absorptionSigma = log(max(uTint, vec3(1e-4)))
         .negate()
@@ -646,7 +704,7 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
         ior,
         dispersionSpread,
         bandCount,
-        spectralJitter: float(0.5),
+        spectralJitter: wavelengthJitter,
         absorptionSigma,
         // Automatic volumes use the volume default of 4 events unless `bounces` was set.
         maxEvents: autoVolume && !this._bouncesSet ? min(this.uBounces.toInt(), int(4)) : this.uBounces.toInt(),

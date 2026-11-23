@@ -162,3 +162,19 @@ describe('MeshGlassMaterial exits and options', () => {
     expect(mat.volume).toBeNull();
   });
 });
+
+describe('MeshGlassMaterial temporal option', () => {
+  it('is off by default, clamps spectral samples, and clones both', () => {
+    const mat = new MeshGlassMaterial();
+    expect(mat.temporal).toBe(false);
+    expect(mat.spectralSamples).toBe(0);
+    mat.temporal = true;
+    mat.spectralSamples = -4;
+    expect(mat.spectralSamples).toBe(0);
+    mat.spectralSamples = 9.6;
+    expect(mat.spectralSamples).toBe(10);
+    const copy = mat.clone();
+    expect(copy.temporal).toBe(true);
+    expect(copy.spectralSamples).toBe(10);
+  });
+});

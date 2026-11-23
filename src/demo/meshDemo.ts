@@ -3,12 +3,16 @@
 // using each way the material finds its exits. Opened as /mesh.html.
 //   ?renderer=webgl  use WebGL 2 even where WebGPU is available
 //   ?transmission=0  environment only (no scene refraction)
+//   ?taa=1           three.js TRAA, with the glass's `temporal` option (smooth dispersion and edges)
 import * as THREE from 'three/webgpu';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { traa } from 'three/addons/tsl/display/TRAANode.js';
+import { mrt, output, pass, velocity } from 'three/tsl';
 import { TeapotGeometry } from 'three/addons/geometries/TeapotGeometry.js';
 import { bakeGlassVolumeAsync, GlassBackfacePass, MeshGlassMaterial } from '../glass';
 
 const query = new URLSearchParams(location.search);
+const useTaa = query.get('taa') === '1';
 
 /** A baked mesh from public/: [vertexCount, indexCount, pad] + positions + normals + indices. */
 async function loadMesh(url: string): Promise<THREE.BufferGeometry> {
@@ -40,7 +44,8 @@ async function main() {
   const canvas = document.getElementById('view') as HTMLCanvasElement;
   const renderer = new THREE.WebGPURenderer({
     canvas,
-    antialias: true,
+    // (TRAA needs MSAA off.)
+    antialias: !useTaa,
     forceWebGL: query.get('renderer') === 'webgl',
   });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -86,7 +91,7 @@ async function main() {
 
   /* Glass: one material setup, each way of finding exits. */
   const transmission = query.has('transmission') ? Number(query.get('transmission')) : 1;
-  const base = { ior: 1.52, dispersion: 1, transmission };
+  const base = { ior: 1.52, dispersion: 1, transmission, temporal: useTaa };
   // The Utah teapot as three.js builds it (open, unwelded patches; a separate lid, spout and
   // handle) baked into a solid glass volume right here, in a worker.
   const teapotGeometry = new TeapotGeometry(1, 10);
@@ -107,7 +112,7 @@ async function main() {
     pieces.push({ mesh, spin: 0 });
     return mesh;
   };
-  // Estimated exits: only `thickness` (here the ball's diameter) describes the shape.
+  // A three.js built-in solid: traced exactly from the geometry's parameters (`exactShapes`).
   place(new THREE.IcosahedronGeometry(1, 12), new MeshGlassMaterial({ ...base, thickness: 1.1 }), -2.4, 0.55, 0.55);
   // First exits read from the back-face map (exact along the view ray), then estimated.
   const backfacePass = new GlassBackfacePass({ resolutionScale: 1 });
@@ -154,11 +159,27 @@ async function main() {
   window.addEventListener('resize', resize);
   resize();
 
+  // With ?taa=1: the scene through three.js's TRAA, which averages frames (camera jitter for
+  // smooth edges; the glass's moving wavelengths for smooth dispersion).
+  let pipeline: THREE.RenderPipeline | null = null;
+  if (useTaa) {
+    pipeline = new THREE.RenderPipeline(renderer);
+    const scenePass = pass(scene, camera);
+    scenePass.setMRT(mrt({ output, velocity }));
+    pipeline.outputNode = traa(
+      scenePass.getTextureNode('output'),
+      scenePass.getTextureNode('depth'),
+      scenePass.getTextureNode('velocity'),
+      camera,
+    );
+  }
+
   let frames = 0;
   renderer.setAnimationLoop(() => {
     orbit.update();
     backfacePass.render(renderer, scene, camera);
-    renderer.render(scene, camera);
+    if (pipeline) pipeline.render();
+    else renderer.render(scene, camera);
     if (++frames === 3) document.documentElement.dataset.glassReady = 'true';
   });
 }

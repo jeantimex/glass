@@ -42,8 +42,11 @@ shades with the same tracer as the instanced renderer (`src/glass/tsl/trace.ts`)
      in a worker and cached per geometry; it renders with the thickness estimate until the volume
      is ready, then with exact exits. `autoGlassVolumesSettled()` waits for pending bakes.
      `e2e/auto-volume.spec.ts` checks automatic volumes render exactly like explicit ones.
-2. **Temporal-friendly option.** `temporal: true` jitters the wavelengths per frame, so the
-   material pairs with three.js's own TRAA post-processing (smooth dispersion, no speckle).
+2. ✅ **Temporal-friendly option.** `temporal: true` moves the wavelengths on every frame (the
+   same step for every pixel), so three.js's TRAA averages them into a continuous spectrum;
+   `spectralSamples` sets how many per frame. `e2e/temporal.spec.ts` checks TRAA's average gets
+   closer to a 64-wavelength reference than the same number of fixed wavelengths. `mesh.html?taa=1`
+   shows it.
 3. **Caustics as an add-on.** A `GlassCaustics` helper usable with plain `renderer.render()`:
    given the lamp, it traces caustics from any `MeshGlassMaterial` meshes into a texture that a
    floor material uses (reusing the photon pass from the instanced renderer).
@@ -88,6 +91,7 @@ needed for this goal.
   high IOR, light and heavy frost, tinted glass, real caustics off, and imperfections.
 - `e2e/mesh.spec.ts`: `MeshGlassMaterial` on plain meshes (`mesh.html`).
 - `e2e/instancing.spec.ts`: `MeshGlassMaterial` on an `InstancedMesh` matches separate meshes (`instancing.html`).
+- `e2e/temporal.spec.ts`: `temporal` wavelengths under three.js TRAA converge closer to a continuous spectrum than fixed ones (`temporal-test.html`).
 - `e2e/auto-volume.spec.ts`: automatic volumes render exactly like explicit ones, on `Mesh` and `InstancedMesh` (`auto-test.html`).
 - `e2e/builtin-shapes.spec.ts`: built-in solids traced exactly agree with volumes baked from the same geometries, and on an `InstancedMesh` match a `Mesh` (`shapes-test.html`).
 
