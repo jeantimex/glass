@@ -10,3 +10,4 @@ export { MeshGlassMaterial, type GlassVolume, type MeshGlassMaterialParameters }
 export { CMY_FACE_ORDERS, type CmyFaceOrder } from './tsl/cmy';
 export { bakeGlassVolume, type BakeOptions, type BakeResult } from './bake.ts';
 export { bakeGlassVolumeAsync, createGlassVolume, createVolumeTexture, toGlassVolume } from './volume';
+export { autoGlassVolumesSettled } from './autoVolume';

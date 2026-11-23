@@ -15,6 +15,7 @@ import * as TSL from 'three/tsl';
 import { applyFrostVeil, perturbFrostNormal, perturbImperfections } from './tsl/frost';
 import { spectralSampleCount } from './tsl/optics';
 import { analyticShape, type AnalyticShape } from './analyticShapes';
+import { autoGlassVolume } from './autoVolume';
 import { createSdfVolume } from './tsl/sdf';
 import { shapeFunctions } from './tsl/shapes';
 import { makeStudioEnv } from './tsl/studioEnv';
@@ -44,6 +45,7 @@ const {
   mat4,
   materialOpacity,
   max,
+  min,
   mix,
   modelWorldMatrix,
   modelWorldMatrixInverse,
@@ -96,12 +98,14 @@ export interface MeshGlassMaterialParameters {
    */
   backfaceMap?: THREE.Texture | null;
   /**
-   * Optional baked signed-distance volume of the mesh (see `GlassVolume`): exact exits for
-   * every internal bounce, as the instanced renderer uses for Suzanne, the dragon and the
-   * torus knot. Takes precedence over `backfaceMap`.
+   * Baked signed-distance volume of the mesh (see `GlassVolume`): exact exits for every
+   * internal bounce, as the instanced renderer uses for Suzanne, the dragon and the torus knot.
+   * `'auto'` (the default) bakes one for each geometry that has no exact formula and no
+   * `backfaceMap`, once, in a worker, and uses it when ready (the thickness estimate until
+   * then); `null` never bakes. An explicit volume takes precedence over everything else.
    */
-  volume?: GlassVolume | null;
-  /** Internal events followed per ray (default 6, or 4 with a `volume`; 1 exit + internal reflections). */
+  volume?: GlassVolume | 'auto' | null;
+  /** Internal events followed per ray (default 6, or 4 through a volume; 1 exit + internal reflections). */
   bounces?: number;
   /** Faint surface waviness (0: perfect glass, the default; 1: clearly hand-made). */
   imperfections?: number;
@@ -203,7 +207,11 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
   private _envMap: THREE.Texture | null = null;
   private _backfaceMap: THREE.Texture | null = null;
   private _transmission = 0;
-  private _volume: GlassVolume | null = null;
+  private _volume: GlassVolume | 'auto' | null = 'auto';
+  /** Whether `bounces` was set (otherwise volumes use 4 events, other exits 6). */
+  private _bouncesSet = false;
+  /** Automatic volume bakes finished for this material's geometries (a rebuild for each). */
+  private _autoVolumesReady = 0;
   private _exactShapes = true;
 
   private readonly uIor = uniform(1.52);
@@ -242,11 +250,12 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     this.backfaceTexNode = texture(this._backfaceMap ?? FALLBACK_ENV_TEXTURE);
     this.uHasBackface.value = this._backfaceMap ? 1 : 0;
 
-    this._volume = params.volume ?? null;
+    this._volume = params.volume === undefined ? 'auto' : params.volume;
     this._exactShapes = params.exactShapes ?? true;
     // Baked-volume meshes default to 4 events (as in the instanced renderer): their folded
     // surfaces scatter deeper bounces chaotically from pixel to pixel.
-    this.uBounces.value = params.bounces ?? (this._volume ? 4 : 6);
+    this._bouncesSet = params.bounces !== undefined;
+    this.uBounces.value = params.bounces ?? (this.explicitVolume ? 4 : 6);
     this.uImperfections.value = params.imperfections ?? 0;
 
     this.colorNode = this.buildColorNode();
@@ -330,6 +339,11 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
   }
   set bounces(v: number) {
     this.uBounces.value = Math.max(1, Math.round(v));
+    if (!this._bouncesSet) {
+      // Automatic volumes stop using their own default (needs a rebuild).
+      this._bouncesSet = true;
+      this.needsUpdate = true;
+    }
   }
 
   /** Faint surface waviness (0: perfect glass; 1: clearly hand-made). */
@@ -338,6 +352,25 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
   }
   set imperfections(v: number) {
     this.uImperfections.value = Math.min(Math.max(v, 0), 1);
+  }
+
+  /**
+   * Part of the key three.js caches this material's builds under. Its private settings (exact
+   * shapes, whether `bounces` was set, the kind of volume, and automatic volumes becoming ready)
+   * change the shader, but three.js leaves properties starting with `_` out of the key, so a
+   * change to them alone (with `needsUpdate`) would not rebuild anything without this.
+   */
+  override customProgramCacheKey(): string {
+    const volumeKind = this._volume === 'auto' ? 'auto' : this._volume === null ? 'none' : 'given';
+    return (
+      super.customProgramCacheKey() +
+      `|glass:${this._exactShapes ? 1 : 0}${this._bouncesSet ? 1 : 0}:${volumeKind}:${this._autoVolumesReady}`
+    );
+  }
+
+  /** The volume given explicitly (not `'auto'`), if any. */
+  private get explicitVolume(): GlassVolume | null {
+    return this._volume === 'auto' ? null : this._volume;
   }
 
   /** Trace three.js built-in solids exactly from their parameters (changing it rebuilds the shader). */
@@ -350,11 +383,11 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     this.needsUpdate = true;
   }
 
-  /** Baked signed-distance volume for exact exits (changing it rebuilds the shader). */
-  get volume(): GlassVolume | null {
+  /** Baked signed-distance volume for exact exits, `'auto'` or null (changing it rebuilds the shader). */
+  get volume(): GlassVolume | 'auto' | null {
     return this._volume;
   }
-  set volume(v: GlassVolume | null) {
+  set volume(v: GlassVolume | 'auto' | null) {
     this._volume = v;
     if (this.uBounces) {
       this.colorNode = this.buildColorNode();
@@ -375,7 +408,7 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
 
   /** Create an independent clone of this `MeshGlassMaterial` with identical optical parameters. */
   override clone(): this {
-    return new MeshGlassMaterial({
+    const copy = new MeshGlassMaterial({
       ior: this.ior,
       dispersion: this.dispersion,
       roughness: this.roughness,
@@ -390,7 +423,10 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
       exactShapes: this._exactShapes,
       bounces: this.bounces,
       imperfections: this.imperfections,
-    }) as this;
+    });
+    // The same bounce count, and whether it was set (automatic volumes use their own default when not).
+    copy._bouncesSet = this._bouncesSet;
+    return copy as this;
   }
 
   /**
@@ -405,13 +441,23 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     const hasBatchColor = Boolean(object?.isBatchedMesh && object?._colorsTexture);
     // A three.js built-in solid is traced exactly from its parameters (when no volume is given).
     // Its size is per object, so this build is not shared with other objects.
-    const shape = this._volume === null && this._exactShapes ? analyticShape(geometry) : null;
-    if (shape) builder.objectSpecific = true;
+    const explicitVolume = this.explicitVolume;
+    const shape = explicitVolume === null && this._exactShapes ? analyticShape(geometry) : null;
+    // Any other geometry gets its own volume, baked once ('auto'), unless a back-face map is given.
+    const autoVolume =
+      this._volume === 'auto' && shape === null && this._backfaceMap === null && geometry
+        ? autoGlassVolume(geometry, () => {
+            this._autoVolumesReady++;
+            this.needsUpdate = true;
+          })
+        : null;
+    // Exact shapes and automatic volumes are per geometry, so this build is not shared.
+    if (shape || autoVolume) builder.objectSpecific = true;
+    const volume = explicitVolume ?? autoVolume;
     // Exits that live in the geometry's own space (a baked volume, an exact shape) must follow
     // each instance's matrix as well as the object's.
-    const instanced =
-      Boolean(object?.isInstancedMesh && object?.instanceMatrix) && (this._volume !== null || shape !== null);
-    if (!hasVertexColor && !hasInstanceColor && !hasBatchColor && !instanced && !shape) {
+    const instanced = Boolean(object?.isInstancedMesh && object?.instanceMatrix) && (volume !== null || shape !== null);
+    if (!hasVertexColor && !hasInstanceColor && !hasBatchColor && !instanced && !shape && !autoVolume) {
       super.setupDiffuseColor(builder);
       return;
     }
@@ -419,7 +465,9 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     if (hasVertexColor) tint = tint.mul(vertexColor().rgb);
     if (hasInstanceColor) tint = tint.mul(instanceColor);
     if (hasBatchColor) tint = tint.mul(batchColor);
-    diffuseColor.assign(this.buildColorNode(tint, instanced ? instanceMatrixNode(builder, object) : null, shape));
+    diffuseColor.assign(
+      this.buildColorNode(tint, instanced ? instanceMatrixNode(builder, object) : null, shape, autoVolume),
+    );
     const opacityNode = this.opacityNode ? float(this.opacityNode) : materialOpacity;
     diffuseColor.a.assign(diffuseColor.a.mul(opacityNode));
   }
@@ -433,6 +481,7 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     tintNode: N = uniform(this.color),
     instanceMatrix: N = null,
     shape: AnalyticShape | null = null,
+    autoVolume: GlassVolume | null = null,
   ): N {
     const uTint = tintNode;
     const { env } = makeStudioEnv(this.uRoughness, {
@@ -445,7 +494,7 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
     const uRoughness = this.uRoughness;
     const uThickness = this.uThickness;
     const uTransmission = this.uTransmission;
-    const volume = this._volume;
+    const volume = autoVolume ?? this.explicitVolume;
     const viewProj = cameraProjectionMatrix.mul(cameraViewMatrix);
 
     return Fn(() => {
@@ -599,7 +648,8 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
         bandCount,
         spectralJitter: float(0.5),
         absorptionSigma,
-        maxEvents: this.uBounces.toInt(),
+        // Automatic volumes use the volume default of 4 events unless `bounces` was set.
+        maxEvents: autoVolume && !this._bouncesSet ? min(this.uBounces.toInt(), int(4)) : this.uBounces.toInt(),
         outerReflection: env(reflect(d0, n0)),
         exit,
         look,

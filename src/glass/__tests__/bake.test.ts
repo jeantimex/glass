@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three/webgpu';
 import { bakeGlassVolume, VOLUME_EXTENT, VOLUME_SIZE } from '../bake';
-import { MeshGlassMaterial } from '../material';
+import { MeshGlassMaterial, type GlassVolume } from '../material';
 
 /** Trilinear sample of a baked volume at volume-unit point (x, y, z). */
 function sample(data: Uint16Array, x: number, y: number, z: number): number {
@@ -72,7 +72,7 @@ describe('bakeGlassVolume (bake.ts): any mesh into a solid glass volume', { time
   it('gives MeshGlassMaterial a volume with its own centre and scale', () => {
     const texture = new THREE.Data3DTexture(new Uint16Array(8), 2, 2, 2);
     const mat = new MeshGlassMaterial({ volume: { texture, center: [5, 0, 0], halfWidth: 3 } });
-    expect(mat.volume?.halfWidth).toBe(3);
+    expect((mat.volume as GlassVolume).halfWidth).toBe(3);
     expect(mat.colorNode).toBeTruthy();
   });
 });
