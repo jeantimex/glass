@@ -36,6 +36,27 @@ const FACETED_KINDS: number[] = [KIND.box, KIND.octahedron, KIND.prism, KIND.hex
 /** Resolves on the next animation frame. */
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
+/** Turns three.js's torus (built around z) onto the renderer's (around y). */
+const TORUS_TURN = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+/**
+ * three.js's own geometry for a kind, at `size` (the renderer's half-extents), as finely
+ * divided as the renderer's close-up meshes. Kinds whose every size is the unit geometry
+ * scaled along its axes come at unit size (`scalable`), the rest at the object's own size.
+ */
+const standInGeometry = (kind: number, size: ArrayLike<number>): THREE.BufferGeometry => {
+  const [a, b, c] = [size[0], size[1], size[2]];
+  if (kind === KIND.sphere) return new THREE.IcosahedronGeometry(a, 12);
+  if (kind === KIND.box) return new THREE.BoxGeometry(2 * a, 2 * b, 2 * c);
+  if (kind === KIND.cylinder) return new THREE.CylinderGeometry(a, a, 2 * b, 120, 1);
+  if (kind === KIND.cone) return new THREE.ConeGeometry(a, 2 * b, 120, 1);
+  if (kind === KIND.capsule) return new THREE.CapsuleGeometry(a, 2 * b, 24, 96);
+  if (kind === KIND.torus) return new THREE.TorusGeometry(a, b, 40, 144);
+  if (kind === KIND.octahedron) return new THREE.OctahedronGeometry(a);
+  throw new Error('standardGlass: not a built-in solid');
+};
+const scalable = (kind: number) =>
+  kind === KIND.sphere || kind === KIND.box || kind === KIND.cylinder || kind === KIND.cone || kind === KIND.octahedron;
+
 async function main() {
   const canvas = document.getElementById('view') as HTMLCanvasElement;
   // Anti-aliased (4x multisampling): it smooths the edges of the glass.
@@ -856,54 +877,86 @@ async function main() {
   });
 
   /* Test automation hook for deterministic visual screenshot regression tests */
-  /** The standard-mesh stand-in for the single shape (see setScene's `standardGlass`). */
-  let standardMesh: THREE.Mesh | null = null;
-  let standardMeshFar: THREE.Mesh | null = null;
+  /** The standard meshes standing in for the objects (see setScene's `standardGlass`). */
+  const standIns: THREE.Mesh[] = [];
   const placeStandardGlass = async (on: boolean) => {
-    if (standardMesh && standardMeshFar) {
-      instanced.studio.nearScene.remove(standardMesh);
-      instanced.studio.farScene.remove(standardMeshFar);
-      standardMesh.geometry.dispose();
-      (standardMesh.material as THREE.Material).dispose();
-      standardMesh = standardMeshFar = null;
+    for (const mesh of standIns) {
+      mesh.removeFromParent();
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
     }
+    standIns.length = 0;
     instanced.setOwnGlassHidden(on);
     if (!on) return;
-    const kind = glassObjects.kind[0];
-    const [a, b, c] = glassObjects.size.slice(0, 3);
-    // three.js's own geometry at the object's true size, as finely divided as the renderer's
-    // close-up meshes; the torus turned from three.js's z axis to the renderer's y axis.
-    const geometry =
-      kind === KIND.sphere
-        ? new THREE.IcosahedronGeometry(a, 12)
-        : kind === KIND.box
-          ? new THREE.BoxGeometry(2 * a, 2 * b, 2 * c)
-          : kind === KIND.cylinder
-            ? new THREE.CylinderGeometry(a, a, 2 * b, 120, 1)
-            : kind === KIND.cone
-              ? new THREE.ConeGeometry(a, 2 * b, 120, 1)
-              : kind === KIND.capsule
-                ? new THREE.CapsuleGeometry(a, 2 * b, 24, 96)
-                : kind === KIND.torus
-                  ? new THREE.TorusGeometry(a, b, 40, 144)
-                  : kind === KIND.octahedron
-                    ? new THREE.OctahedronGeometry(a)
-                    : null;
-    if (!geometry) throw new Error('standardGlass: not a built-in solid');
-    standardMesh = new THREE.Mesh(geometry, new MeshGlassMaterial({ studio: instanced.studio }));
-    standardMesh.position.fromArray(glassObjects.center, 0);
-    const quat = new THREE.Quaternion().fromArray(glassObjects.quat, 0);
-    if (kind === KIND.torus)
-      quat.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2));
-    standardMesh.quaternion.copy(quat);
-    standardMesh.frustumCulled = false;
-    // A single object is drawn in one pass from whichever half the renderer put it in (the
-    // other half's scene is skipped when empty): in both, it is drawn once.
-    standardMeshFar = standardMesh.clone();
-    instanced.studio.nearScene.add(standardMesh);
-    instanced.studio.farScene.add(standardMeshFar);
-    // Built before the frame average starts, so no frame is drawn without it.
-    await renderer.compileAsync(standardMesh, camera, instanced.studio.nearScene);
+    const material = new MeshGlassMaterial({ studio: instanced.studio });
+    const position = new THREE.Vector3();
+    const quat = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    const matrix = new THREE.Matrix4();
+    const colour = new THREE.Color();
+    const poseOf = (i: number, unit: boolean) => {
+      position.fromArray(glassObjects.center, i * 3);
+      quat.fromArray(glassObjects.quat, i * 4);
+      if (glassObjects.kind[i] === KIND.torus) quat.multiply(TORUS_TURN);
+      if (unit) scale.fromArray(glassObjects.size, i * 3);
+      else scale.set(1, 1, 1);
+      return matrix.compose(position, quat, scale);
+    };
+    if (glassObjects.count === 1) {
+      // One object: a plain THREE.Mesh at its own size (its glass is the studio's own).
+      const mesh = new THREE.Mesh(standInGeometry(glassObjects.kind[0], glassObjects.size), material);
+      poseOf(0, false).decompose(mesh.position, mesh.quaternion, mesh.scale);
+      mesh.frustumCulled = false;
+      standIns.push(mesh);
+      (instanced.inNearHalf(0) ? instanced.studio.nearScene : instanced.studio.farScene).add(mesh);
+      await renderer.compileAsync(mesh, camera, mesh.parent as THREE.Scene);
+      return;
+    }
+    // Each object goes in the half of the studio the renderer drew it in (nearer or farther).
+    const groups = new Map<string, number[]>();
+    for (let i = 0; i < glassObjects.count; i++) {
+      const key = `${glassObjects.kind[i]}:${instanced.inNearHalf(i) ? 'near' : 'far'}`;
+      groups.set(key, [...(groups.get(key) ?? []), i]);
+    }
+    for (const [key, members] of groups) {
+      const kind = Number(key.split(':')[0]);
+      const half = key.endsWith('near') ? instanced.studio.nearScene : instanced.studio.farScene;
+      if (scalable(kind)) {
+        // One InstancedMesh: each object's size in its instance matrix, its colour by
+        // setColorAt, its own glass in the per-instance `glassVary` attribute.
+        const geometry = standInGeometry(kind, [1, 1, 1]);
+        const vary = new Float32Array(members.length * 3);
+        const mesh = new THREE.InstancedMesh(geometry, material, members.length);
+        members.forEach((i, k) => {
+          mesh.setMatrixAt(k, poseOf(i, true));
+          mesh.setColorAt(k, colour.fromArray(glassObjects.tint, i * 3));
+          vary.set(glassObjects.vary.subarray(i * 3, i * 3 + 3), k * 3);
+        });
+        geometry.setAttribute('glassVary', new THREE.InstancedBufferAttribute(vary, 3));
+        standIns.push(mesh);
+        half.add(mesh);
+      } else {
+        // Proportions that a scale cannot give: a mesh of its own (with its own glass as a
+        // one-instance InstancedMesh, as the attribute is per instance).
+        for (const i of members) {
+          const geometry = standInGeometry(kind, glassObjects.size.subarray(i * 3, i * 3 + 3));
+          geometry.setAttribute(
+            'glassVary',
+            new THREE.InstancedBufferAttribute(glassObjects.vary.slice(i * 3, i * 3 + 3), 3),
+          );
+          const mesh = new THREE.InstancedMesh(geometry, material, 1);
+          mesh.setMatrixAt(0, poseOf(i, false));
+          mesh.setColorAt(0, colour.fromArray(glassObjects.tint, i * 3));
+          standIns.push(mesh);
+          half.add(mesh);
+        }
+      }
+    }
+    for (const mesh of standIns) {
+      mesh.frustumCulled = false;
+      // Built before the frame average starts, so no frame is drawn without it.
+      await renderer.compileAsync(mesh, camera, mesh.parent as THREE.Scene);
+    }
   };
 
   (window as unknown as Record<string, unknown>).__glassTest = {
@@ -933,9 +986,11 @@ async function main() {
        * instances: for the screenshot tests that check the two match (built-in solids only).
        */
       standardGlass?: boolean;
+      /** How many objects (default 1), laid out flat on the floor as the count setting does. */
+      count?: number;
     }): Promise<void> {
       view.shape = opts.shape;
-      view.count = 1;
+      view.count = opts.count ?? 1;
       view.layout = 'flat';
       delete singles[opts.shape];
       Object.assign(settings, structuredClone(DEFAULTS), lookOf());
@@ -950,6 +1005,7 @@ async function main() {
       if (opts.glass) Object.assign(singleFor(opts.shape), opts.glass);
       placeObjects();
       if (opts.settings) Object.assign(settings, opts.settings);
+      if (opts.settings?.colorize !== undefined) colourObjects(); // (coloured after placing)
       frameScene();
       if (opts.view) {
         const distance = camera.position.distanceTo(orbit.target);
@@ -961,6 +1017,12 @@ async function main() {
           orbit.target.z + distance * Math.cos(elevation) * Math.cos(azimuth),
         );
         orbit.update();
+      }
+      if (opts.standardGlass) {
+        // A frame first, so the renderer has split the objects into its two halves.
+        instanced.markChanged();
+        await nextFrame();
+        await nextFrame();
       }
       await placeStandardGlass(opts.standardGlass === true);
       instanced.markChanged();

@@ -97,9 +97,14 @@ The migration is done when the demo, rebuilt on standard three.js meshes with
   the mesh's matrices (`studioGlass.ts`), and `e2e/parity.spec.ts` draws each solid as a
   standard mesh in the renderer's studio: it passes the shape suite's baselines, and against
   the renderer's own render (jitter sequence restarted, so both repeat exactly) at most 0.003%
-  of pixels differ by more than 2/255. Next: the custom meshes (volumes), the diamond, CMY and
-  bevels, instancing in studio mode, shadows and caustics from standard meshes, then the
-  studio drawn entirely from standard meshes.
+  of pixels differ by more than 2/255. Instancing in studio mode is done too: each instance's
+  matrix (per-axis scale where the shape stays itself), `setColorAt` colours and an optional
+  per-instance `glassVary` attribute (the renderer's per-object IOR, dispersion and CMY);
+  the renderer reports which half each object is drawn in (`inNearHalf`), and 9 and 16 of each
+  solid (seeded layouts, random colours) match its render, at most 0.0023% of pixels over
+  2/255. Not covered yet: more than 64 objects (the renderer's coarse meshes). Next: the custom
+  meshes (volumes), the diamond, CMY and bevels, shadows and caustics from standard meshes,
+  then the studio drawn entirely from standard meshes.
 
 ## Known physical limits
 

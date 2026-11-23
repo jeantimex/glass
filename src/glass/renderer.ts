@@ -620,6 +620,8 @@ export function createInstancedGlass(
   /** Still frames the history amounts to (motion leaves it at TAA_HISTORY_WEIGHT). */
   let stillCount = 0;
   let frameCounter = 0;
+  /** Per object, whether the last split put it in the nearer half (1) or the farther (0). */
+  const inNearHalf = new Uint8Array(MAX_OBJECTS);
   let lastStateKey = '';
   const viewProjNow = new THREE.Matrix4();
   const viewProjLast = new THREE.Matrix4();
@@ -1051,6 +1053,7 @@ export function createInstancedGlass(
     for (let k = 0; k < n; k++) {
       const i = order[k];
       (depth[i] >= split ? farSet : nearSet)[objects.kind[i]].push(objects, i);
+      inNearHalf[i] = depth[i] >= split ? 0 : 1;
     }
     hasFar = farSet.some((b) => b.count > 0);
     hasNear = nearSet.some((b) => b.count > 0);
@@ -1558,6 +1561,11 @@ export function createInstancedGlass(
     restartSequence: () => {
       frameCounter = 0;
     },
+    /**
+     * Whether the last frame drew object `i` in the nearer half (`studio.nearScene`) or the
+     * farther (`studio.farScene`): for standard meshes standing in for the objects.
+     */
+    inNearHalf: (i: number) => inNearHalf[i] === 1,
     /** Whether the view is still settling (keep calling `render` until false). */
     accumulating: () => waitingForPrograms || !historyValid || stillCount < ACCUMULATION_SAMPLES,
     /** Build the programs of the shapes now among the objects, without blocking (await it). */

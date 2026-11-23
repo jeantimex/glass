@@ -27,6 +27,7 @@ type N = any;
 const {
   Fn,
   If,
+  attribute,
   batchColor,
   buffer,
   cameraPosition,
@@ -145,7 +146,11 @@ export interface MeshGlassMaterialParameters {
    * Shade with the instanced renderer's own glass, floor and room
    * (`createInstancedGlass(...).studio`): on three.js built-in solids drawn in that renderer's
    * glass scenes, the glass matches its own pixel for pixel. Its IOR, dispersion and frost are
-   * the renderer's (set by `render()`); the mesh's colour tints it. Default null.
+   * the renderer's (set by `render()`); per-instance and vertex colours tint it. Instancing:
+   * each instance's matrix may scale along the geometry's axes where the shape stays what it is
+   * (any for a box; equal across for a cylinder or cone; uniform otherwise), and an optional
+   * per-instance `glassVary` attribute (vec3: added to the IOR, multiplying the dispersion, CMY
+   * strength) gives each its own glass as the renderer's objects have. Default null.
    */
   studio?: GlassStudio | null;
 }
@@ -586,7 +591,10 @@ export class MeshGlassMaterial extends THREE.MeshBasicNodeMaterial {
       if (hasVertexColor) ownTint = ownTint.mul(vertexColor().rgb);
       if (hasInstanceColor) ownTint = ownTint.mul(instanceColor);
       if (hasBatchColor) ownTint = ownTint.mul(batchColor);
-      diffuseColor.assign(studioGlassNode(this._studio, shape, toWorld, toGeometry, ownTint));
+      // Its own glass, as the renderer's objects carry it, from an optional `glassVary`
+      // attribute (per instance on an InstancedMesh); without it, exactly the studio's settings.
+      const vary: N = object.geometry.getAttribute('glassVary') ? attribute('glassVary', 'vec3') : vec3(0, 1, 0);
+      diffuseColor.assign(studioGlassNode(this._studio, shape, toWorld, toGeometry, ownTint, vary));
       return;
     }
     diffuseColor.assign(this.buildColorNode(tint, instanceMatrix, shape, autoVolume));

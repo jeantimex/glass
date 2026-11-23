@@ -112,3 +112,38 @@ for (const { name } of SHAPES) {
     }
   });
 }
+
+// Several objects of each solid (the demo's seeded layouts: their own sizes, turns, IOR and
+// dispersion; 16 in random colours): instanced standard meshes, each in the half of the studio
+// the renderer draws it in (`inNearHalf`), against the renderer's own render, held as strictly.
+// Measured: at most 0.0023% of pixels differ by more than 2/255 (16 octahedra, dark).
+for (const { name } of SHAPES) {
+  test(`${name}: many, instanced standard meshes and instanced renderer, pixel for pixel`, async () => {
+    for (const [count, colorize] of [
+      [9, false],
+      [16, true],
+    ] as const) {
+      for (const lighting of LIGHTINGS) {
+        const shots: PNG[] = [];
+        for (const standardGlass of [false, true]) {
+          await page.evaluate(
+            ([shapeName, dark, standard, n, colour]) =>
+              (window as unknown as { __glassTest: GlassTestHarness }).__glassTest.setScene({
+                shape: shapeName as string,
+                dark: dark as boolean,
+                hdri: 'none',
+                ground: true,
+                standardGlass: standard as boolean,
+                count: n as number,
+                settings: { colorize: colour as boolean },
+              }),
+            [name, lighting.dark, standardGlass, count, colorize] as const,
+          );
+          shots.push(PNG.sync.read(await page.locator('#view').screenshot()));
+        }
+        const { share } = compare(shots[0], shots[1]);
+        expect(share, `${name} x${count} ${lighting.name}`).toBeLessThan(0.0001);
+      }
+    }
+  });
+}
